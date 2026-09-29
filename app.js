@@ -85,14 +85,14 @@ function applyTheme(themeName) {
   const themeIcon = document.getElementById('themeIcon');
   if (themeIcon) {
     if (themeName === 'mushaira') {
-      themeIcon.textContent = '🌙';
-      themeIcon.title = 'शब-ए-महफ़िल (रात्रि थीम सक्रिय)';
+      themeIcon.innerHTML = `<svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:currentColor;"><path d="M12.3 2a10 10 0 0 0-.19 14 10 10 0 0 0 11.89 4 10.3 10.3 0 1 1-11.7-18z"/></svg>`;
+      themeIcon.title = 'कृष्ण-पक्ष / ताम्रपत्र पाण्डुलिपि सक्रिय';
     } else if (themeName === 'gulab') {
-      themeIcon.textContent = '🌸';
-      themeIcon.title = 'गुलाब (सैंडलवुड थीम सक्रिय)';
+      themeIcon.innerHTML = `<svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:currentColor;"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>`;
+      themeIcon.title = 'चन्दन-गुलाब पाण्डुलिपि सक्रिय';
     } else {
-      themeIcon.textContent = '☀️';
-      themeIcon.title = 'नूर (काग़ज़ी थीम सक्रिय)';
+      themeIcon.innerHTML = `<svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:currentColor;"><path d="M12 2c1.1 0 2 .9 2 2 0 1.5-2 4-2 4s-2-2.5-2-4c0-1.1.9-2 2-2zm-8 14c0 3.31 2.69 6 6 6h4c3.31 0 6-2.69 6-6 0-2.21-1.2-4.15-3-5.18V10h-2v1.1c-.63-.07-1.3-.1-2-.1s-1.37.03-2 .1V10H9v.82C7.2 11.85 6 13.79 6 16z"/></svg>`;
+      themeIcon.title = 'प्राचीन भोजपत्र (पाण्डुलिपि सक्रिय)';
     }
   }
 }
@@ -101,7 +101,12 @@ function toggleTheme() {
   const themes = ['noor', 'mushaira', 'gulab'];
   const nextIndex = (themes.indexOf(state.theme) + 1) % themes.length;
   applyTheme(themes[nextIndex]);
-  showToast(`थीम बदली: ${themes[nextIndex] === 'noor' ? 'नूर (Parchment)' : themes[nextIndex] === 'mushaira' ? 'शब-ए-महफ़िल (Midnight)' : 'गुलाब (Rose)'}`);
+  const themeLabels = {
+    noor: 'प्राचीन भोजपत्र (Antique Shastra)',
+    mushaira: 'ताम्रपत्र पाण्डुलिपि (Midnight Manuscript)',
+    gulab: 'चन्दन-गुलाब (Sandalwood Rose)'
+  };
+  showToast(`॥ पाण्डुलिपि शैली: ${themeLabels[themes[nextIndex]]} ॥`);
 }
 
 // ---------------- Daily Sher (आज का शेर) ----------------
@@ -484,63 +489,76 @@ function generateAestheticCard(poem) {
   canvas.height = height;
 
   const isDark = state.theme === 'mushaira';
-  const bgColor = isDark ? '#10131d' : '#f9f5ed';
-  const textColor = isDark ? '#f4eedb' : '#231d17';
-  const accentColor = isDark ? '#e5b369' : '#9b2226';
-  const mutedColor = isDark ? '#8d94a5' : '#7d7063';
-  const goldColor = '#c59b27';
+  const bgColor = isDark ? '#140d08' : '#f5edd9';
+  const textColor = isDark ? '#f6ede0' : '#23150b';
+  const accentRed = isDark ? '#d64b44' : '#9e2a2b';
+  const goldColor = isDark ? '#e2a643' : '#c98829';
+  const mutedColor = isDark ? '#9c8871' : '#725942';
 
-  // 1. Draw Background
+  // 1. Draw Ancient Paper Texture Background
   ctx.fillStyle = bgColor;
   ctx.fillRect(0, 0, width, height);
 
-  // Subtle radial gradient center
-  const radGrad = ctx.createRadialGradient(width/2, height/2, 100, width/2, height/2, 600);
-  radGrad.addColorStop(0, isDark ? '#1a1f30' : '#ffffff');
-  radGrad.addColorStop(1, bgColor);
+  // Multi-stop radial vignette for aged paper corners
+  const radGrad = ctx.createRadialGradient(width/2, height/2, 150, width/2, height/2, 650);
+  radGrad.addColorStop(0, isDark ? '#231810' : '#fffcf4');
+  radGrad.addColorStop(0.7, bgColor);
+  radGrad.addColorStop(1, isDark ? '#0b0604' : '#dfcca6');
   ctx.fillStyle = radGrad;
   ctx.fillRect(0, 0, width, height);
 
-  // 2. Draw Elegant Border Frame
-  ctx.strokeStyle = goldColor;
-  ctx.lineWidth = 3;
-  ctx.strokeRect(60, 60, width - 120, height - 120);
+  // 2. Draw Authentic Shastra Double Vermilion Margin Lines (हाशिया)
+  ctx.strokeStyle = accentRed;
+  ctx.lineWidth = 3.5;
+  ctx.strokeRect(55, 55, width - 110, height - 110);
 
-  ctx.strokeStyle = isDark ? 'rgba(229,179,105,0.3)' : 'rgba(155,34,38,0.2)';
+  ctx.strokeStyle = goldColor;
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(66, 66, width - 132, height - 132);
+
+  ctx.strokeStyle = accentRed;
   ctx.lineWidth = 1;
   ctx.strokeRect(74, 74, width - 148, height - 148);
 
-  // Corner Ornaments
-  drawCornerFloral(ctx, 60, 60, 1, 1, goldColor);
-  drawCornerFloral(ctx, width - 60, 60, -1, 1, goldColor);
-  drawCornerFloral(ctx, 60, height - 60, 1, -1, goldColor);
-  drawCornerFloral(ctx, width - 60, height - 60, -1, -1, goldColor);
+  // 3. Corner Mandalas
+  drawCornerFloral(ctx, 55, 55, 1, 1, goldColor);
+  drawCornerFloral(ctx, width - 55, 55, -1, 1, goldColor);
+  drawCornerFloral(ctx, 55, height - 55, 1, -1, goldColor);
+  drawCornerFloral(ctx, width - 55, height - 55, -1, -1, goldColor);
 
-  // 3. Header / Branding
-  ctx.font = '28px serif';
-  ctx.fillStyle = accentColor;
+  // 4. Sacred Shastra Top Invocation
+  ctx.font = 'bold 24px serif';
+  ctx.fillStyle = accentRed;
   ctx.textAlign = 'center';
-  ctx.fillText('❦  काव्य-कुंज  ❦', width / 2, 140);
+  ctx.fillText('॥ ॐ वाग्देव्यै नमः ॥', width / 2, 135);
+
+  ctx.font = '22px serif';
+  ctx.fillStyle = goldColor;
+  ctx.fillText('॥ काव्य-कुंज ✦ प्राचीन पाण्डुलिपि संग्रह ॥', width / 2, 172);
+
+  // 5. Poem Title
+  ctx.font = 'bold 52px serif';
+  ctx.fillStyle = textColor;
+  ctx.fillText('॥ ' + poem.title + ' ॥', width / 2, 265);
 
   ctx.font = 'italic 20px sans-serif';
   ctx.fillStyle = mutedColor;
-  ctx.fillText('मेरी क़लम से • ' + poem.category, width / 2, 175);
+  ctx.fillText(poem.category + ' • ' + (poem.tag || 'काव्य') + ' • ' + poem.date, width / 2, 305);
 
-  // 4. Poem Title
-  ctx.font = 'bold 54px serif';
-  ctx.fillStyle = textColor;
-  ctx.fillText(poem.title, width / 2, 260);
-
-  // Divider Line
-  ctx.strokeStyle = goldColor;
+  // Decorative Central Divider
+  ctx.strokeStyle = accentRed;
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(width / 2 - 120, 295);
-  ctx.lineTo(width / 2 + 120, 295);
+  ctx.moveTo(width / 2 - 140, 335);
+  ctx.lineTo(width / 2 + 140, 335);
   ctx.stroke();
 
-  // 5. Stanzas / Verses (Draw 1 or 2 core stanzas)
-  ctx.font = '38px serif';
+  ctx.fillStyle = goldColor;
+  ctx.font = '26px serif';
+  ctx.fillText('𑁍', width / 2, 342);
+
+  // 6. Verses
+  ctx.font = '37px serif';
   ctx.fillStyle = textColor;
   ctx.textAlign = 'center';
 
@@ -548,20 +566,20 @@ function generateAestheticCard(poem) {
   if (poem.stanzas && poem.stanzas.length > 0) {
     poem.stanzas[0].forEach(l => linesToDraw.push(l));
     if (poem.stanzas[1]) {
-      linesToDraw.push("❦");
+      linesToDraw.push('॥ 𑁍 ॥');
       poem.stanzas[1].slice(0, 2).forEach(l => linesToDraw.push(l));
     }
   }
 
-  let startY = 400;
-  const lineHeight = 64;
+  let startY = 445;
+  const lineHeight = 66;
   linesToDraw.forEach(line => {
-    if (line === "❦") {
+    if (line === '॥ 𑁍 ॥') {
       ctx.fillStyle = goldColor;
       ctx.font = '28px serif';
       ctx.fillText(line, width / 2, startY);
       ctx.fillStyle = textColor;
-      ctx.font = '38px serif';
+      ctx.font = '37px serif';
       startY += lineHeight - 10;
     } else {
       ctx.fillText(line, width / 2, startY);
@@ -569,21 +587,44 @@ function generateAestheticCard(poem) {
     }
   });
 
-  // 6. Footer / Signature
-  ctx.font = 'bold 24px sans-serif';
-  ctx.fillStyle = accentColor;
-  ctx.fillText('काव्य-कुंज डायरी', width / 2, height - 130);
+  // 7. Traditional Vermilion Circular Seal (मुद्रा)
+  ctx.save();
+  ctx.translate(width - 190, height - 190);
+  ctx.strokeStyle = accentRed;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.arc(0, 0, 52, 0, Math.PI * 2);
+  ctx.stroke();
 
-  ctx.font = '18px sans-serif';
+  ctx.beginPath();
+  ctx.arc(0, 0, 46, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.font = 'bold 15px serif';
+  ctx.fillStyle = accentRed;
+  ctx.textAlign = 'center';
+  ctx.fillText('काव्य-कुंज', 0, -10);
+  ctx.font = '12px serif';
+  ctx.fillText('ग्रंथ मुद्रा', 0, 10);
+  ctx.fillText('✦ स्वीकृत ✦', 0, 26);
+  ctx.restore();
+
+  // 8. Footer / Signature
+  ctx.font = 'bold 22px serif';
+  ctx.fillStyle = accentRed;
+  ctx.textAlign = 'center';
+  ctx.fillText('मेरी क़लम से • दिल की ज़ुबाँ', width / 2, height - 130);
+
+  ctx.font = '17px serif';
   ctx.fillStyle = mutedColor;
-  ctx.fillText('दिल के अल्फ़ाज़, रूह की ज़ुबाँ', width / 2, height - 100);
+  ctx.fillText('॥ शब्द अमर हैं, अनुभूतियाँ शाश्वत ॥', width / 2, height - 98);
 
   // Convert to image and prompt download
   const link = document.createElement('a');
-  link.download = `${poem.id}-card.png`;
+  link.download = `${poem.id}-shastra-manuscript.png`;
   link.href = canvas.toDataURL('image/png');
   link.click();
-  showToast('कलात्मक कार्ड डाउनलोड हो गया है! 📸');
+  showToast('पाण्डुलिपि कार्ड डाउनलोड हो गया है! 📜');
 }
 
 function drawCornerFloral(ctx, x, y, dirX, dirY, color) {
@@ -627,24 +668,30 @@ function initAmbianceAudio() {
       state.ambiance = 'rain';
       startRainAudio();
       btn.classList.add('active');
-      if (icon) icon.textContent = '🌧️';
-      btn.title = 'माहौल: बारिश (क्लिक करके तानपुरा सुनें)';
-      showToast('माहौल: सौंधी बारिश की फुहारें');
+      if (icon) {
+        icon.innerHTML = `<svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:currentColor;"><path d="M4.5 14C3.12 14 2 15.12 2 16.5S3.12 19 4.5 19H19c2.21 0 4-1.79 4-4 0-2.05-1.53-3.76-3.5-3.97C18.9 7.15 15.7 4 11.5 4 8.08 4 5.22 6.3 4.29 9.5 2.42 10.15 1 11.91 1 14h3.5zm7.5 7l-2 3h2v2l3-4h-2l1-1h-2z"/></svg>`;
+      }
+      btn.title = 'माहौल: सौंधी वर्षा (क्लिक करके तानपुरा सुनें)';
+      showToast('॥ माहौल: सौंधी वर्षा की फुहारें ॥');
     } else if (state.ambiance === 'rain') {
       stopAmbiance();
       state.ambiance = 'tanpura';
       startTanpuraAudio();
       btn.classList.add('active');
-      if (icon) icon.textContent = '🪕';
+      if (icon) {
+        icon.innerHTML = `<svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:currentColor;"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>`;
+      }
       btn.title = 'माहौल: तानपुरा (क्लिक करके बंद करें)';
-      showToast('माहौल: ध्यानमग्न तानपुरा धुन');
+      showToast('॥ माहौल: ध्यानमग्न तानपुरा धुन ॥');
     } else {
       stopAmbiance();
       state.ambiance = 'off';
       btn.classList.remove('active');
-      if (icon) icon.textContent = '🎵';
+      if (icon) {
+        icon.innerHTML = `<svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:currentColor;"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>`;
+      }
       btn.title = 'माहौल ध्वनि (बारिश / तानपुरा)';
-      showToast('माहौल: शांत');
+      showToast('॥ माहौल: मौन व शांत ॥');
     }
   });
 }
