@@ -2,462 +2,53 @@
 <html lang="hi">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>काव्य-कुंज | मेरी क़लम से — प्राचीन हिंदी पाण्डुलिपि व काव्य-संग्रह</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>अशब्द</title>
   
-  <meta name="description" content="एक व्यक्तिगत काव्य संग्रह — प्राचीन पाण्डुलिपि व पोथी शैली में रचित हिंदी कविताएँ, ग़ज़लें, नज़्में और मुक्तक का एक सुरुचिपूर्ण साहित्यिक मंच।">
-  <meta name="keywords" content="हिंदी कविता, शायरी, ग़ज़ल, नज़्म, पाण्डुलिपि, Hindi Poetry, Ghazal, Nazm, Kavita, Shastra">
-  <meta name="author" content="काव्य-कुंज">
-  
-  <!-- Open Graph / Social Sharing -->
-  <meta property="og:type" content="website">
-  <meta property="og:title" content="काव्य-कुंज | प्राचीन हिंदी पाण्डुलिपि व काव्य-संग्रह">
-  <meta property="og:description" content="प्राचीन ग्रंथ व पोथी शैली में सजी खूबसूरत हिंदी कविताएँ और ग़ज़लें।">
-  
-  <!-- Google Fonts: Cormorant Garamond, Rozha One, Yatra One, Tiro Devanagari Hindi, Noto Serif Devanagari, Plus Jakarta Sans, Cinzel Decorative -->
+  <meta name="description" content="अशब्द — An antique manuscript experience.">
+  <meta name="theme-color" content="#2b180d">
+
+  <!-- Traditional Classical Devanagari Web Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Noto+Serif+Devanagari:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Rozha+One&family=Tiro+Devanagari+Hindi:ital@0;1&family=Yatra+One&display=swap" rel="stylesheet">
-  
-  <!-- Stylesheet -->
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Devanagari:wght@400;500;600;700&family=Rozha+One&family=Tiro+Devanagari+Hindi:ital@0;1&family=Yatra+One&display=swap" rel="stylesheet">
+
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <!-- ================= SACRED SHASTRA INVOCATION CREST ================= -->
-  <div class="shastra-crest">
-    <span>॥ श्री गणेशाय नमः ॥</span>
-    <span class="divider-danda">✦</span>
-    <span>॥ ॐ वाग्देव्यै नमः ॥</span>
-    <span class="divider-danda">✦</span>
-    <span>॥ काव्य-शास्त्र-विनोद ॥</span>
-  </div>
+  <!-- Background Canvas for Organic Antique Staining, Creases, Tide Marks & Fibers -->
+  <canvas id="parchment-canvas"></canvas>
 
-  <!-- ================= HEADER / NAVIGATION ================= -->
-  <header class="site-header">
-    <div class="container nav-container">
-      
-      <!-- Brand Logo -->
-      <a href="#" class="site-logo">
-        <div class="logo-icon-wrap">
-          <svg viewBox="0 0 24 24">
-            <path d="M21 3C21 3 13.5 4.5 10 11C8.2 14.4 8.5 17.5 8.5 17.5L5 21H7.5L10 18.5C10 18.5 13.1 18.8 16.5 17C23 13.5 24.5 6 24.5 6L21 3ZM10.5 16C9.7 16 9 15.3 9 14.5C9 13.7 9.7 13 10.5 13C11.3 13 12 13.7 12 14.5C12 15.3 11.3 16 10.5 16Z"/>
-          </svg>
-        </div>
-        <div class="logo-text">
-          <span class="logo-title">काव्य-कुंज</span>
-          <span class="logo-subtitle">॥ मेरी क़लम से ✦ प्राचीन पाण्डुलिपि ॥</span>
-        </div>
-      </a>
+  <!-- Procedural Antique Paper Grain Overlay -->
+  <div class="paper-grain-overlay"></div>
 
-      <!-- Navigation Links -->
-      <nav>
-        <ul class="nav-links">
-          <li><a href="#hero" class="nav-link active">मुखपृष्ठ</a></li>
-          <li><a href="#poems" class="nav-link">काव्य-ग्रंथ</a></li>
-          <li><a href="#featured" class="nav-link">आज का कलाम</a></li>
-          <li><a href="#about" class="nav-link">ग्रंथकार परिचय</a></li>
-        </ul>
-      </nav>
+  <!-- Deep Antique Edge Vignette & Corner Scorches -->
+  <div class="vignette-overlay"></div>
 
-      <!-- Action Controls -->
-      <div class="header-actions">
-        <!-- Ambient Sound Toggle (Web Audio API) -->
-        <button id="ambianceBtn" class="action-btn" title="माहौल ध्वनि (बारिश / तानपुरा)">
-          <span id="ambianceIcon" style="display:flex; align-items:center; justify-content:center;">
-            <svg viewBox="0 0 24 24" style="width: 20px; height: 20px; fill: currentColor;">
-              <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
-            </svg>
-          </span>
-        </button>
-
-        <!-- Theme Toggle (Parchment / Midnight Shastra / Rose) -->
-        <button id="themeToggleBtn" class="action-btn" title="पाण्डुलिपि थीम बदलें">
-          <span id="themeIcon" style="display:flex; align-items:center; justify-content:center;">
-            <svg viewBox="0 0 24 24" style="width: 20px; height: 20px; fill: currentColor;">
-              <path d="M12 2c1.1 0 2 .9 2 2 0 1.5-2 4-2 4s-2-2.5-2-4c0-1.1.9-2 2-2zm-8 14c0 3.31 2.69 6 6 6h4c3.31 0 6-2.69 6-6 0-2.21-1.2-4.15-3-5.18V10h-2v1.1c-.63-.07-1.3-.1-2-.1s-1.37.03-2 .1V10H9v.82C7.2 11.85 6 13.79 6 16z"/>
-            </svg>
-          </span>
-        </button>
-
-        <!-- Compose Button -->
-        <button id="composeBtn" class="btn-compose">
-          <svg viewBox="0 0 24 24">
-            <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
-          </svg>
-          <span>रचना लिखें</span>
-        </button>
-
-        <!-- Mobile Menu Toggle Button -->
-        <button id="mobileMenuBtn" class="mobile-menu-btn" title="मेन्यू खोलें" aria-label="मेन्यू खोलें">
-          <span></span>
-          <span></span>
-          <span></span>
-        </button>
-      </div>
-
+  <!-- Sacred Minimal Centerpiece: Only the Word "अशब्द" -->
+  <main class="parchment-container">
+    <div class="word-wrapper">
+      <h1 class="sacred-word" lang="hi">अशब्द</h1>
     </div>
+  </main>
 
-    <!-- Mobile Navigation Drawer -->
-    <div id="mobileNavDrawer" class="mobile-nav-drawer">
-      <a href="#hero" class="nav-link" onclick="toggleMobileMenu()">मुखपृष्ठ</a>
-      <a href="#poems" class="nav-link" onclick="toggleMobileMenu()">काव्य-ग्रंथ</a>
-      <a href="#featured" class="nav-link" onclick="toggleMobileMenu()">आज का कलाम</a>
-      <a href="#about" class="nav-link" onclick="toggleMobileMenu()">ग्रंथकार परिचय</a>
-    </div>
-  </header>
+  <!-- SVG Filter for Antique Ink Bleed on Handmade Fibrous Paper -->
+  <svg class="svg-filters" aria-hidden="true" focusable="false">
+    <defs>
+      <!-- Microscopic Ink Bleed & Fiber Feathering Filter -->
+      <filter id="ink-bleed" x="-10%" y="-10%" width="120%" height="120%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.065" numOctaves="4" result="noise" />
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.2" xChannelSelector="R" yChannelSelector="G" result="displaced" />
+        <feGaussianBlur in="displaced" stdDeviation="0.4" result="blurred" />
+        <feMerge>
+          <feMergeNode in="blurred" />
+          <feMergeNode in="displaced" />
+        </feMerge>
+      </filter>
+    </defs>
+  </svg>
 
-  <!-- ================= HERO SECTION ================= -->
-  <section id="hero" class="hero-section">
-    <div class="container">
-      
-      <div class="hero-badge">
-        <span class="shastra-danda">॥</span>
-        <span>काव्य-साधना एवं पाण्डुलिपि संग्रह</span>
-        <span class="shastra-danda">॥</span>
-      </div>
-
-      <h1 class="hero-title">
-        अल्फ़ाज़ जो रूह को छू लें,<br>
-        <span>जज़्बात जो अमर हो जाएँ।</span>
-      </h1>
-
-      <!-- Featured Couplet Box with Silk Ribbon Marker -->
-      <div class="hero-sher-box">
-        <div class="hero-ribbon-marker"></div>
-        <div class="hero-sher-quote-mark">“</div>
-        <blockquote class="hero-sher-text">
-          कुछ तो बात है ख़ामोशी में तेरी,<br>
-          वरना यूँ ही नहीं कागज़ पे अश्क उतरते...
-        </blockquote>
-        <div class="hero-sher-author">
-          <span class="shastra-danda">॥</span>
-          <span>मेरी क़लम से</span>
-          <span class="shastra-danda">॥</span>
-        </div>
-      </div>
-
-      <!-- Hero Action Buttons -->
-      <div class="hero-actions">
-        <a href="#poems" class="btn-primary">
-          <span>📜</span> <span>काव्य-ग्रंथ पढ़ें</span>
-        </a>
-        <button class="btn-outline" onclick="openComposeModal()">
-          <span>✒️</span> <span>अपनी नज़्म जोड़ें</span>
-        </button>
-      </div>
-
-    </div>
-  </section>
-
-  <!-- ================= DAILY SHER (आज का शेर / दैनिक दोहा) ================= -->
-  <section class="daily-sher-section">
-    <div class="container">
-      <div class="daily-sher-banner">
-        <div class="daily-sher-content">
-          <div id="dailySherTag" class="daily-sher-tag">
-            <span class="shastra-danda">॥</span> आज का शेर • विचार
-          </div>
-          <p id="dailySherVerse" class="daily-sher-verse">
-            कुछ तो बात है ख़ामोशी में तेरी,<br>वरना यूँ ही नहीं कागज़ पे अश्क उतरते।
-          </p>
-          <span id="dailySherAuthor" style="font-size: 0.88rem; color: var(--haldi-gold); font-style: italic; font-family: var(--font-shastra);">
-            — मेरी क़लम से
-          </span>
-        </div>
-        <div class="daily-sher-controls">
-          <button id="copySherBtn" class="btn-icon-subtle" title="शेर कॉपी करें">
-            <span>📋</span> <span>प्रतिलिपि</span>
-          </button>
-          <button id="nextSherBtn" class="btn-icon-subtle" title="दूसरा शेर देखें">
-            <span>अगला दोहा ✦</span>
-          </button>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ================= FEATURED POEM (आज की नज़्म / विशेष कलाम) ================= -->
-  <section id="featured" class="featured-section">
-    <div class="container">
-      <div class="section-header">
-        <span class="section-tag">॥ विशेष प्रस्तुति ॥</span>
-        <h2 class="section-title">आज का मुख्य कलाम</h2>
-        <div class="section-divider"><span class="ornament">॥ 𑁍 ❦ 𑁍 ॥</span></div>
-      </div>
-
-      <div class="featured-poem-card">
-        <div class="featured-corner-ornament">𑁍</div>
-        <div style="text-align: center;">
-          <h3 id="featuredPoemTitle" class="font-heading" style="font-size: 2.4rem; margin-bottom: 0.35rem;">ख़ामोशियों की सदा</h3>
-          <p id="featuredPoemMeta" style="color: var(--haldi-gold); font-size: 0.92rem; font-family: var(--font-shastra); font-style: italic;">नज़्म • रूहानियत • 14 सितंबर 2026</p>
-        </div>
-
-        <div id="featuredPoemStanzas" class="featured-stanzas">
-          कभी जो वक़्त मिले तो ज़रा ठहर जाना,<br>
-          ख़ामोशियाँ भी बहुत कुछ कहा करती हैं।<br>
-          जो अल्फ़ाज़ लबों तक पहुँच नहीं पाते,<br>
-          वो दास्तानें पलकों पे रहा करती हैं।
-        </div>
-
-        <div style="text-align: center; margin-top: 2rem;">
-          <button id="featuredReadBtn" class="btn-primary">
-            <span>सम्पूर्ण रचना पढ़ें</span> <span>&rarr;</span>
-          </button>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ================= FILTER & SEARCH ================= -->
-  <section id="poems" class="filter-section">
-    <div class="container">
-      <div class="section-header" style="margin-bottom: 1.75rem;">
-        <span class="section-tag">॥ रचना संकलन ॥</span>
-        <h2 class="section-title">साहित्यिक पाण्डुलिपि</h2>
-        <div class="section-divider"><span class="ornament">॥ ❦ ॥</span></div>
-      </div>
-
-      <div class="filter-bar">
-        <!-- Category Filter Pills -->
-        <div id="filterPills" class="filter-pills">
-          <!-- Populated dynamically by app.js -->
-        </div>
-
-        <!-- Search Input -->
-        <div class="search-input-wrap">
-          <span class="search-icon">🔍</span>
-          <input type="text" id="poemSearchInput" placeholder="कविता, शीर्षक या शब्द खोजें...">
-        </div>
-      </div>
-      
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; padding: 0 0.5rem;">
-        <span id="poemsCountText" style="font-size: 0.88rem; color: var(--ink-faded); font-family: var(--font-shastra);">रचनाएँ लोड हो रही हैं...</span>
-        <span style="font-size: 0.85rem; color: var(--hasheeya-red); font-family: var(--font-shastra);">🪶 देवनागरी एवं अंग्रेज़ी खोज समर्थित</span>
-      </div>
-    </div>
-  </section>
-
-  <!-- ================= POEMS GRID (FOLIO CARDS) ================= -->
-  <section class="poems-section">
-    <div class="container">
-      <div id="poemsGrid" class="poems-grid">
-        <!-- Rendered dynamically by app.js -->
-      </div>
-    </div>
-  </section>
-
-  <!-- ================= ABOUT THE POET (ग्रंथकार परिचय) ================= -->
-  <section id="about" class="about-section">
-    <div class="container">
-      <div class="about-card">
-        
-        <div class="author-avatar-wrap">
-          <div class="author-avatar">
-            🪶
-          </div>
-          <div class="author-pen-badge">✒️</div>
-        </div>
-
-        <div class="about-content">
-          <span class="section-tag">॥ रचनाकार परिचय ॥</span>
-          <h3>कलम और ख़्वाबों का सफ़र</h3>
-          <p class="author-subtitle">शायर • लेखक • साहित्य अनुरागी</p>
-          <p class="author-bio">
-            "काव्य मेरे लिए सिर्फ़ शब्दों का मेल नहीं, बल्कि ख़ामोशी और एहसासों के बीच का एक नाज़ुक पुल है। जब रोज़मर्रा की दुनिया में जज़्बात लफ़्ज़ों की कमी महसूस करते हैं, तब क़लम प्राचीन भोजपत्र पर अपने निशान छोड़ती है। यहाँ जो कुछ भी है, वो मेरी रूह के अलग-अलग मौसमों का अक्स है।"
-          </p>
-          <div class="author-social-links">
-            <a href="#" class="social-pill" onclick="showToast('Instagram लिंक शीघ्र उपलब्ध होगा'); return false;">
-              <span>📸</span> <span>Instagram</span>
-            </a>
-            <a href="#" class="social-pill" onclick="showToast('X / Twitter लिंक शीघ्र उपलब्ध होगा'); return false;">
-              <span>𝕏</span> <span>Twitter</span>
-            </a>
-            <a href="mailto:contact@my-poetry.com" class="social-pill">
-              <span>✉️</span> <span>ईमेल संपर्क</span>
-            </a>
-          </div>
-        </div>
-
-      </div>
-    </div>
-  </section>
-
-  <!-- ================= FOOTER ================= -->
-  <footer class="site-footer">
-    <div class="container">
-      <div class="footer-grid">
-        
-        <div class="footer-brand">
-          <div class="site-logo" style="margin-bottom: 0.75rem;">
-            <div class="logo-icon-wrap" style="width: 36px; height: 36px;">
-              <svg viewBox="0 0 24 24" style="width: 20px; height: 20px;"><path d="M21 3C21 3 13.5 4.5 10 11C8.2 14.4 8.5 17.5 8.5 17.5L5 21H7.5L10 18.5C10 18.5 13.1 18.8 16.5 17C23 13.5 24.5 6 24.5 6L21 3Z" fill="currentColor"/></svg>
-            </div>
-            <span class="logo-title" style="font-size: 1.3rem;">काव्य-कुंज</span>
-          </div>
-          <p>
-            एक आत्मीय साहित्यिक कोना जहाँ प्राचीन पाण्डुलिपियों की सुगंध में शब्द ज़िंदा होते हैं।
-          </p>
-        </div>
-
-        <div class="footer-col">
-          <h4>साहित्य विधाएँ</h4>
-          <ul class="footer-links">
-            <li><a href="#poems" onclick="state.currentCategory='नज़्म'; renderPoems();">नज़्में (Nazms)</a></li>
-            <li><a href="#poems" onclick="state.currentCategory='ग़ज़ल'; renderPoems();">ग़ज़लें (Ghazals)</a></li>
-            <li><a href="#poems" onclick="state.currentCategory='कविता'; renderPoems();">गीत व कविताएँ (Kavita)</a></li>
-            <li><a href="#poems" onclick="state.currentCategory='मुक्तक'; renderPoems();">मुक्तक व शेर (Shers)</a></li>
-          </ul>
-        </div>
-
-        <div class="footer-col">
-          <h4>विशेष सुविधाएँ</h4>
-          <ul class="footer-links">
-            <li><a href="javascript:void(0)" onclick="toggleTheme()">🎨 पाण्डुलिपि थीम बदलें</a></li>
-            <li><a href="javascript:void(0)" onclick="document.getElementById('ambianceBtn').click()">🎵 बारिश / तानपुरा माहौल</a></li>
-            <li><a href="javascript:void(0)" onclick="openComposeModal()">✍️ नई कविता जोड़ें</a></li>
-            <li><a href="#hero">🔝 शीर्ष पर जाएँ</a></li>
-          </ul>
-        </div>
-
-      </div>
-
-      <div class="footer-bottom">
-        <p>॥ शब्द अमर हैं, अनुभूतियाँ शाश्वत ॥ • © 2026 काव्य-कुंज (Kavya-Kunj) • सर्वाधिकार सुरक्षित</p>
-      </div>
-    </div>
-  </footer>
-
-  <!-- ================= MODAL: ZEN SHASTRA READING VIEW ================= -->
-  <div id="poemModal" class="modal-backdrop">
-    <div class="modal-window">
-      
-      <!-- Modal Header -->
-      <div class="modal-header">
-        <div class="modal-poem-header" style="text-align: left;">
-          <h3 id="modalPoemTitle" class="modal-poem-title font-heading">कविता का शीर्षक</h3>
-          <div id="modalPoemMeta" class="modal-poem-meta">श्रेणी • दिनांक</div>
-        </div>
-        
-        <div class="modal-header-actions">
-          <!-- Recite Voice Button -->
-          <button id="recitePoemBtn" class="btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;" title="कविता का आवाज़ में वाचन सुनें">
-            <span>🎙️</span> <span>वाचन सुनें</span>
-          </button>
-          <!-- Close Button -->
-          <button id="closePoemBtn" class="action-btn" title="बंद करें (ESC)">✕</button>
-        </div>
-      </div>
-
-      <!-- Modal Body (Poem Content) -->
-      <div class="modal-body">
-        
-        <div id="modalStanzasContainer" class="modal-stanzas-container">
-          <!-- Stanzas injected dynamically by app.js -->
-        </div>
-
-        <!-- Word Meanings / Glossary Drawer -->
-        <div id="modalGlossaryBox" class="modal-glossary-box">
-          <div class="glossary-title">
-            <span>📖</span> <span>शब्दार्थ व भावार्थ (Glossary)</span>
-          </div>
-          <div id="modalGlossaryGrid" class="glossary-grid">
-            <!-- Glossary items injected dynamically -->
-          </div>
-        </div>
-
-        <!-- Essence / भावार्थ Box -->
-        <div id="modalEssenceBox" class="modal-essence-box">
-          <strong style="color: var(--hasheeya-red); display: block; margin-bottom: 0.35rem; font-family: var(--font-shastra);">॥ भावार्थ (Poetic Essence) ॥</strong>
-          <span id="modalEssenceText"></span>
-        </div>
-
-      </div>
-
-      <!-- Modal Footer -->
-      <div class="modal-footer">
-        <!-- Font Size Adjuster -->
-        <div class="font-size-controls">
-          <span style="font-size: 0.8rem; color: var(--ink-faded); padding: 0 0.4rem; font-family: var(--font-shastra);">अक्षर आकार:</span>
-          <button id="fontDecBtn" class="btn-font-size" title="छोटा आकार">A-</button>
-          <button id="fontIncBtn" class="btn-font-size" title="बड़ा आकार">A+</button>
-        </div>
-
-        <!-- Share / Card Generator -->
-        <div style="display: flex; gap: 0.6rem;">
-          <button class="btn-primary" style="padding: 0.55rem 1.25rem; font-size: 0.9rem;" onclick="generateAestheticCard(state.activeModalPoem)">
-            <span>📜</span> <span>पाण्डुलिपि कार्ड डाउनलोड करें</span>
-          </button>
-        </div>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- ================= MODAL: COMPOSE NEW POEM ================= -->
-  <div id="composeModal" class="modal-backdrop">
-    <div class="modal-window" style="max-width: 650px;">
-      <div class="modal-header">
-        <h3 class="font-heading" style="font-size: 1.4rem;">✍️ नई रचना पाण्डुलिपि में जोड़ें</h3>
-        <button id="closeComposeBtn" class="action-btn" title="बंद करें">✕</button>
-      </div>
-
-      <div class="modal-body" style="padding: 2rem;">
-        <form id="composeForm" class="compose-form">
-          
-          <div class="form-row">
-            <div class="form-group">
-              <label for="newPoemTitle">कविता का शीर्षक *</label>
-              <input type="text" id="newPoemTitle" class="form-input" placeholder="उदा. ख़ामोशियों की सदा" required>
-            </div>
-            <div class="form-group">
-              <label for="newPoemTranslit">रोमन/अंग्रेज़ी शीर्षक</label>
-              <input type="text" id="newPoemTranslit" class="form-input" placeholder="e.g. Khamoshiyon Ki Sada">
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label for="newPoemCategory">विधा (Category)</label>
-              <select id="newPoemCategory" class="form-select">
-                <option value="नज़्म">नज़्म (Nazm)</option>
-                <option value="ग़ज़ल">ग़ज़ल (Ghazal)</option>
-                <option value="कविता">कविता (Kavita)</option>
-                <option value="मुक्तक">मुक्तक (Muktak)</option>
-                <option value="रुबाई">रुबाई (Rubai)</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="newPoemTag">मुख्य भाव/टैग</label>
-              <input type="text" id="newPoemTag" class="form-input" placeholder="उदा. इश्क़, यादें, ज़िंदगी">
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="newPoemContent">कविता की पंक्तियाँ (Stanzas) *</label>
-            <textarea id="newPoemContent" rows="6" class="form-textarea" placeholder="यहाँ अपनी पंक्तियाँ लिखें...&#10;अलग-अलग बंध (stanzas) के लिए बीच में एक खाली पंक्ति छोड़ें।" required></textarea>
-          </div>
-
-          <div class="form-group">
-            <label for="newPoemEssence">संक्षिप्त भावार्थ / संदेश (वैकल्पिक)</label>
-            <input type="text" id="newPoemEssence" class="form-input" placeholder="इस रचना का मूल सार या प्रेरणा...">
-          </div>
-
-          <div style="display: flex; justify-content: flex-end; gap: 0.8rem; margin-top: 1rem;">
-            <button type="button" class="btn-outline" onclick="closeComposeModal()">रद्द करें</button>
-            <button type="submit" class="btn-primary">प्रकाशित करें 🪶</button>
-          </div>
-
-        </form>
-      </div>
-    </div>
-  </div>
-
-  <!-- Toast Notification Container -->
-  <div id="toastNotification" class="toast-notification"></div>
-
-  <!-- Scripts -->
-  <script src="poems.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

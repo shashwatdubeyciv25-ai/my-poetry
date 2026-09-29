@@ -1,1760 +1,210 @@
 /* ==========================================================================
-   काव्य-कुंज (Kavya-Kunj) - Antique Hindi Shastra & Old Book Aesthetic
-   UI/UX Pro Max: Skeuomorphic Classical Manuscript Design System
+   अशब्द (A-Shabd) — Antique Manuscript Single Page Experience
+   Centuries-Old Weathered Parchment with Organic Stains & Walnut Gall Ink
    ========================================================================== */
 
-/* ---------------- CSS Variables & Themes ---------------- */
-:root {
-  /* Font Families */
-  --font-shastra: 'Rozha One', 'Yatra One', 'Tiro Devanagari Hindi', serif;
-  --font-body: 'Tiro Devanagari Hindi', 'Noto Serif Devanagari', 'Cormorant Garamond', Georgia, serif;
-  --font-classic-latin: 'Cormorant Garamond', 'Cinzel Decorative', 'Cinzel', serif;
-  --font-ui: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-
-  /* Primary Theme: प्राचीन पाण्डुलिपि / भोजपत्र (Ancient Shastra Parchment) */
-  --paper-bg: #f4edd9;
-  --paper-bg-warm: #eee1c3;
-  --paper-card: #fbf5e8;
-  --paper-card-alt: #f3e6cd;
-  --paper-card-highlight: #fffcf4;
-  --paper-edge-stain: #dfcca6;
-  --paper-overlay: rgba(244, 237, 217, 0.94);
-  --paper-glass: rgba(251, 245, 232, 0.88);
-
-  /* Deep Walnut & Gall Inks */
-  --ink-primary: #23150b;       /* Dark Walnut & Iron Gall Ink */
-  --ink-secondary: #533924;     /* Antique Sepia Ink */
-  --ink-faded: #81664d;         /* Faded Historical Manuscript Notes */
-  --ink-poetry: #1c1007;        /* Crisp Literary Lettering */
-
-  /* Sacred Shastra Manuscript Accents */
-  --hasheeya-red: #9e2a2b;      /* Cinnabar / Vermilion Margin Ruling (हाशिया) */
-  --hasheeya-red-light: rgba(158, 42, 43, 0.08);
-  --hasheeya-red-border: rgba(158, 42, 43, 0.28);
-  
-  --haldi-gold: #c98829;        /* Aged Turmeric & Burnished Gold Foil */
-  --haldi-gold-light: rgba(201, 136, 41, 0.12);
-  --saffron-ochre: #d9741e;     /* Kesar / Saffron */
-  --sandalwood: #b87333;        /* Copper / Sandalwood */
-  --leather-brown: #4d2711;     /* Old Book Spine Leather */
-
-  /* Borders & Rules */
-  --border-manuscript: #d8c4a0;
-  --border-inner-rule: #c8b088;
-  --border-focus: #c98829;
-
-  /* Multi-Layered Skeuomorphic Shadows */
-  --shadow-book-sm: 0 2px 6px rgba(45, 24, 11, 0.07), 0 1px 2px rgba(45, 24, 11, 0.05);
-  --shadow-book-md: 0 8px 24px -4px rgba(45, 24, 11, 0.12), 0 3px 8px rgba(45, 24, 11, 0.06), inset 0 0 60px rgba(180, 130, 60, 0.05);
-  --shadow-book-lg: 0 18px 45px -8px rgba(45, 24, 11, 0.18), 0 6px 14px rgba(45, 24, 11, 0.08), inset 0 0 100px rgba(180, 130, 60, 0.08);
-  --shadow-page-curl: 0 14px 28px rgba(35, 18, 8, 0.15), 0 10px 10px rgba(35, 18, 8, 0.1);
-  --shadow-seal: 0 3px 12px rgba(158, 42, 43, 0.25);
-
-  --radius-sm: 6px;
-  --radius-md: 12px;
-  --radius-lg: 18px;
-  --radius-pill: 9999px;
-
-  --transition-fast: 0.2s cubic-bezier(0.25, 1, 0.5, 1);
-  --transition-normal: 0.35s cubic-bezier(0.25, 1, 0.5, 1);
-  --transition-slow: 0.6s cubic-bezier(0.25, 1, 0.5, 1);
-}
-
-/* ---------------- Theme: ताम्रपत्र / कृष्ण-पक्ष पोथी (Midnight Shastra Manuscript) ---------------- */
-[data-theme="mushaira"] {
-  --paper-bg: #140d08;
-  --paper-bg-warm: #1b120c;
-  --paper-card: #201710;
-  --paper-card-alt: #271d15;
-  --paper-card-highlight: #2e231a;
-  --paper-edge-stain: #0c0805;
-  --paper-overlay: rgba(20, 13, 8, 0.95);
-  --paper-glass: rgba(32, 23, 16, 0.88);
-
-  --ink-primary: #eee2cd;       /* Soft Candlelit Gold Leaf Lettering */
-  --ink-secondary: #c2af94;     /* Warm Amber Parchment Ink */
-  --ink-faded: #8f7d66;
-  --ink-poetry: #f8f0de;
-
-  --hasheeya-red: #d64b44;
-  --hasheeya-red-light: rgba(214, 75, 68, 0.18);
-  --hasheeya-red-border: rgba(214, 75, 68, 0.35);
-
-  --haldi-gold: #e2a643;
-  --haldi-gold-light: rgba(226, 166, 67, 0.16);
-  --saffron-ochre: #e88636;
-  --sandalwood: #d99159;
-  --leather-brown: #361b0a;
-
-  --border-manuscript: #3c2a1c;
-  --border-inner-rule: #4a3424;
-  --border-focus: #e2a643;
-
-  --shadow-book-sm: 0 2px 8px rgba(0, 0, 0, 0.45);
-  --shadow-book-md: 0 10px 30px rgba(0, 0, 0, 0.6), inset 0 0 50px rgba(226, 166, 67, 0.05);
-  --shadow-book-lg: 0 20px 60px rgba(0, 0, 0, 0.75), inset 0 0 80px rgba(226, 166, 67, 0.08);
-  --shadow-page-curl: 0 14px 30px rgba(0, 0, 0, 0.7);
-  --shadow-seal: 0 4px 20px rgba(214, 75, 68, 0.35);
-}
-
-/* ---------------- Theme: चन्दन-गुलाब (Sandalwood & Saffron) ---------------- */
-[data-theme="gulab"] {
-  --paper-bg: #f8eee7;
-  --paper-bg-warm: #f2e1d7;
-  --paper-card: #fdf7f3;
-  --paper-card-alt: #f7e8df;
-  --paper-card-highlight: #ffffff;
-  --paper-edge-stain: #e8d0c2;
-  --paper-overlay: rgba(248, 238, 231, 0.94);
-  --paper-glass: rgba(253, 247, 243, 0.88);
-
-  --ink-primary: #2a1619;
-  --ink-secondary: #5e393f;
-  --ink-faded: #8c676d;
-  --ink-poetry: #221013;
-
-  --hasheeya-red: #a82d46;
-  --hasheeya-red-light: rgba(168, 45, 70, 0.1);
-  --hasheeya-red-border: rgba(168, 45, 70, 0.28);
-
-  --haldi-gold: #c7803a;
-  --haldi-gold-light: rgba(199, 128, 58, 0.12);
-  --saffron-ochre: #d46342;
-  --sandalwood: #b86256;
-  --leather-brown: #542226;
-
-  --border-manuscript: #dfc8c0;
-  --border-inner-rule: #d2b5ab;
-  --border-focus: #c7803a;
-
-  --shadow-book-sm: 0 2px 6px rgba(50, 20, 25, 0.08);
-  --shadow-book-md: 0 8px 24px -4px rgba(50, 20, 25, 0.12), inset 0 0 60px rgba(199, 128, 58, 0.05);
-  --shadow-book-lg: 0 18px 45px -8px rgba(50, 20, 25, 0.18), inset 0 0 100px rgba(199, 128, 58, 0.08);
-  --shadow-page-curl: 0 14px 28px rgba(50, 20, 25, 0.16);
-  --shadow-seal: 0 3px 14px rgba(168, 45, 70, 0.25);
-}
-
-/* ---------------- Base & Global Resets ---------------- */
+/* ---------------- Resets & Zero-Scroll Setup ---------------- */
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-}
-
-html {
-  scroll-behavior: smooth;
-  font-size: 16px;
-}
-
-body {
-  font-family: var(--font-body);
-  background-color: var(--paper-bg);
-  color: var(--ink-primary);
-  line-height: 1.7;
-  overflow-x: hidden;
-  position: relative;
-  min-height: 100vh;
-  transition: background-color var(--transition-normal), color var(--transition-normal);
-
-  /* Skeuomorphic Multi-Stop Antique Parchment Vignette */
-  background-image:
-    radial-gradient(ellipse at 50% 0%, var(--paper-card-highlight) 0%, transparent 60%),
-    radial-gradient(circle at 10% 20%, rgba(201, 136, 41, 0.06) 0%, transparent 45%),
-    radial-gradient(circle at 90% 80%, rgba(158, 42, 43, 0.05) 0%, transparent 50%),
-    radial-gradient(ellipse at 50% 100%, var(--paper-edge-stain) 0%, transparent 70%);
-}
-
-/* Procedural SVG Antique Paper Grain & Fiber Overlay */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 999;
-  opacity: 0.045;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'%3E%3Cfilter id='paperNoise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.05' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.2  0 0 0 0 0.12  0 0 0 0 0.05  0 0 0 0.35 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23paperNoise)'/%3E%3C/svg%3E");
-}
-
-/* Ancient Manuscript Marginal Binding Strip along Left Edge of Screen on Large Displays */
-body::after {
-  content: "";
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 5px;
-  height: 100%;
-  background: linear-gradient(to right, var(--hasheeya-red), var(--haldi-gold));
-  opacity: 0.65;
-  pointer-events: none;
-  z-index: 1000;
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
-  transition: color var(--transition-fast);
-}
-
-button {
-  font-family: inherit;
-  cursor: pointer;
-  border: none;
-  background: none;
-  outline: none;
-  transition: all var(--transition-fast);
-}
-
-.container {
-  width: 100%;
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 1.5rem;
-}
-
-/* ---------------- Sacred Shastra Invocations & Flourishes ---------------- */
-.shastra-crest {
-  background: linear-gradient(90deg, var(--paper-card-alt), var(--paper-card), var(--paper-card-alt));
-  border-bottom: 1px solid var(--border-manuscript);
-  text-align: center;
-  padding: 0.35rem 1rem;
-  font-size: 0.78rem;
-  font-family: var(--font-shastra);
-  color: var(--hasheeya-red);
-  letter-spacing: 0.08em;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  border-top: 2px solid var(--hasheeya-red);
-  box-shadow: inset 0 -1px 3px rgba(0, 0, 0, 0.04);
-}
-
-.shastra-crest span.divider-danda {
-  color: var(--haldi-gold);
-  font-weight: bold;
-}
-
-.shastra-danda {
-  display: inline-block;
-  color: var(--hasheeya-red);
-  font-weight: 700;
-  padding: 0 0.35rem;
-  font-family: var(--font-shastra);
-}
-
-.ornament {
-  display: inline-block;
-  color: var(--haldi-gold);
-  font-family: var(--font-classic-latin);
+  -webkit-user-select: none;
   user-select: none;
 }
 
-/* Traditional Red Hasheeya (हाशिया) Double Margin Framing */
-.hasheeya-frame {
-  position: relative;
-  border: 1px solid var(--border-manuscript);
-  padding: 2.2rem;
-  background-color: var(--paper-card);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-book-md);
-}
-
-.hasheeya-frame::before {
-  content: "";
-  position: absolute;
-  inset: 7px;
-  border: 1px solid var(--hasheeya-red-border);
-  pointer-events: none;
-  border-radius: calc(var(--radius-md) - 4px);
-}
-
-.hasheeya-frame::after {
-  content: "";
-  position: absolute;
-  inset: 10px;
-  border: 1px dashed var(--border-inner-rule);
-  pointer-events: none;
-  border-radius: calc(var(--radius-md) - 6px);
-  opacity: 0.6;
-}
-
-/* ---------------- Typography ---------------- */
-h1, h2, h3, h4, .font-heading {
-  font-family: var(--font-shastra);
-  color: var(--ink-primary);
-  font-weight: 500;
-  letter-spacing: 0.01em;
-}
-
-.poem-text {
-  font-family: var(--font-body);
-  font-size: 1.3rem;
-  line-height: 2.25;
-  color: var(--ink-poetry);
-  letter-spacing: 0.015em;
-}
-
-/* ---------------- Header / Navigation ---------------- */
-.site-header {
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  background-color: var(--paper-glass);
-  border-bottom: 1px solid var(--border-manuscript);
-  box-shadow: 0 2px 10px rgba(45, 24, 11, 0.04);
-  transition: background-color var(--transition-normal);
-}
-
-.nav-container {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 72px;
-  gap: 1rem;
-}
-
-/* Brand Logo */
-.site-logo {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  text-decoration: none;
-}
-
-.logo-icon-wrap {
-  width: 44px;
-  height: 44px;
-  border-radius: var(--radius-sm);
-  background: linear-gradient(135deg, var(--hasheeya-red), var(--leather-brown));
-  color: var(--haldi-gold);
-  border: 1px solid var(--haldi-gold);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: var(--shadow-book-sm);
-  transition: transform var(--transition-fast);
-}
-
-.logo-icon-wrap svg {
-  width: 24px;
-  height: 24px;
-  fill: currentColor;
-}
-
-.site-logo:hover .logo-icon-wrap {
-  transform: rotate(-5deg) scale(1.06);
-}
-
-.logo-title {
-  font-family: var(--font-shastra);
-  font-size: 1.45rem;
-  font-weight: 600;
-  line-height: 1.15;
-  color: var(--ink-primary);
-  letter-spacing: 0.02em;
-}
-
-.logo-subtitle {
-  font-size: 0.72rem;
-  color: var(--hasheeya-red);
-  letter-spacing: 0.06em;
-  font-style: italic;
-  font-family: var(--font-body);
-}
-
-/* Navigation Links */
-.nav-links {
-  display: flex;
-  align-items: center;
-  gap: 1.85rem;
-  list-style: none;
-}
-
-.nav-link {
-  font-size: 0.95rem;
-  font-weight: 500;
-  color: var(--ink-secondary);
-  position: relative;
-  padding: 0.35rem 0;
-  font-family: var(--font-body);
-}
-
-.nav-link:hover,
-.nav-link.active {
-  color: var(--hasheeya-red);
-}
-
-.nav-link::after {
-  content: "";
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 0;
-  height: 2px;
-  background-color: var(--hasheeya-red);
-  transition: width var(--transition-fast);
-}
-
-.nav-link:hover::after,
-.nav-link.active::after {
-  width: 100%;
-}
-
-/* Header Controls */
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-}
-
-.action-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-manuscript);
-  background-color: var(--paper-card);
-  color: var(--ink-secondary);
-  transition: all var(--transition-fast);
-  box-shadow: var(--shadow-book-sm);
-}
-
-.action-btn svg {
-  width: 20px;
-  height: 20px;
-  fill: currentColor;
-}
-
-.action-btn:hover {
-  border-color: var(--hasheeya-red);
-  color: var(--hasheeya-red);
-  background-color: var(--paper-card-highlight);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-book-md);
-}
-
-.action-btn.active {
-  background-color: var(--hasheeya-red-light);
-  border-color: var(--hasheeya-red);
-  color: var(--hasheeya-red);
-}
-
-/* Compose CTA */
-.btn-compose {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.55rem 1.15rem;
-  background: linear-gradient(135deg, var(--hasheeya-red), var(--leather-brown));
-  color: #fff8ef;
-  border: 1px solid var(--haldi-gold);
-  border-radius: var(--radius-sm);
-  font-size: 0.9rem;
-  font-weight: 600;
-  box-shadow: var(--shadow-book-sm);
-  font-family: var(--font-shastra);
-  transition: all var(--transition-fast);
-}
-
-.btn-compose svg {
-  width: 16px;
-  height: 16px;
-  fill: currentColor;
-}
-
-.btn-compose:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-book-md);
-  color: #ffffff;
-}
-
-/* Mobile Toggle */
-.mobile-menu-btn {
-  display: none;
-  flex-direction: column;
-  justify-content: space-between;
-  width: 24px;
-  height: 18px;
-  background: transparent;
-  cursor: pointer;
-  padding: 0;
-}
-
-.mobile-menu-btn span {
-  width: 100%;
-  height: 2px;
-  background-color: var(--ink-primary);
-  border-radius: 2px;
-  transition: all var(--transition-fast);
-}
-
-.mobile-nav-drawer {
-  display: none;
+html, body {
+  width: 100vw;
+  height: 100vh;
+  min-height: 100vh;
+  max-width: 100vw;
+  max-height: 100vh;
+  overflow: hidden;
   position: fixed;
-  top: 72px;
+  top: 0;
   left: 0;
-  right: 0;
-  background-color: var(--paper-card);
-  border-bottom: 2px solid var(--hasheeya-red);
-  padding: 1.5rem;
-  box-shadow: var(--shadow-book-lg);
-  z-index: 99;
-  flex-direction: column;
-  gap: 1rem;
+  background-color: #24140a;
+  cursor: default;
 }
 
-.mobile-nav-drawer.active {
-  display: flex;
+/* ---------------- Layer 1: Base Tonal Ground & Stains ---------------- */
+body {
+  /* Warm antique cream/beige base */
+  background: #ecdcb9;
+
+  /* Layered organic stains: rust, burnt umber, tea, and moisture tide-lines */
+  background-image:
+    /* Central sweet-spot: softly luminous antique paper */
+    radial-gradient(ellipse 65% 55% at 50% 50%, #fbf5e8 0%, #f5ebd3 45%, rgba(240, 227, 201, 0.4) 80%, transparent 100%),
+
+    /* Top-left scorched antique corner */
+    radial-gradient(ellipse 45% 40% at 0% 0%, #2f170a 0%, #582b13 22%, #85451e 40%, rgba(133, 69, 30, 0.2) 65%, transparent 100%),
+
+    /* Bottom-right weathered dark corner */
+    radial-gradient(ellipse 50% 45% at 100% 100%, #251207 0%, #4e2510 25%, #7a3d1c 45%, rgba(122, 61, 28, 0.18) 70%, transparent 100%),
+
+    /* Bottom-left moisture & rust stain */
+    radial-gradient(ellipse 40% 35% at 0% 100%, #3a1c0d 0%, #693418 20%, #944b24 38%, rgba(148, 75, 36, 0.15) 60%, transparent 100%),
+
+    /* Top-right dried tea stain */
+    radial-gradient(ellipse 42% 38% at 100% 0%, #33190b 0%, #5e2c13 22%, #8a4520 42%, rgba(138, 69, 32, 0.18) 65%, transparent 100%),
+
+    /* Irregular perimeter edge foxing and oxidation bands */
+    radial-gradient(circle at 18% 45%, rgba(139, 69, 19, 0.14) 0%, transparent 40%),
+    radial-gradient(circle at 82% 52%, rgba(158, 74, 43, 0.12) 0%, transparent 38%),
+    radial-gradient(circle at 48% 92%, rgba(99, 51, 24, 0.18) 0%, transparent 42%),
+    radial-gradient(circle at 52% 8%, rgba(105, 52, 24, 0.15) 0%, transparent 38%);
 }
 
-.mobile-nav-drawer .nav-link {
-  font-size: 1.15rem;
-  padding: 0.4rem 0;
+/* ---------------- Layer 2: Organic Canvas Background ---------------- */
+#parchment-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 1;
+  display: block;
 }
 
-/* ---------------- Hero Section (Pothi Cover Page) ---------------- */
-.hero-section {
+/* ---------------- Layer 3: Procedural SVG Grain & Fiber Overlay ---------------- */
+.paper-grain-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 2;
+  opacity: 0.38;
+  mix-blend-mode: multiply;
+
+  /* High-frequency cellulose micro-noise */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 240 240'%3E%3Cfilter id='agedPaperNoise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.055' numOctaves='5' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.28  0 0 0 0 0.16  0 0 0 0 0.08  0 0 0 0.45 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23agedPaperNoise)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+}
+
+/* ---------------- Layer 4: Deep Antique Vignette & Candlelight Atmosphere ---------------- */
+.vignette-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 3;
+
+  /* Deep burning vignette along outer edges */
+  background: radial-gradient(ellipse 75% 70% at 50% 50%, transparent 45%, rgba(68, 34, 15, 0.28) 75%, rgba(36, 17, 7, 0.65) 92%, rgba(20, 9, 3, 0.88) 100%);
+  mix-blend-mode: multiply;
+
+  /* Extremely slow, barely perceptible breathing ambient light */
+  animation: candle-drift 16s ease-in-out infinite alternate;
+}
+
+/* Very subtle organic illumination modulation (breathing old manuscript room ambiance) */
+@keyframes candle-drift {
+  0% {
+    opacity: 0.94;
+    transform: scale(1.0);
+  }
+  50% {
+    opacity: 1.0;
+    transform: scale(1.008);
+  }
+  100% {
+    opacity: 0.96;
+    transform: scale(1.003);
+  }
+}
+
+/* ---------------- Centerpiece Container ---------------- */
+.parchment-container {
   position: relative;
-  padding: 5rem 0 3.5rem;
-  text-align: center;
+  z-index: 10;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
   overflow: hidden;
 }
 
-.hero-section::before {
-  content: "";
+.word-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  position: relative;
+}
+
+/* ---------------- The Sacred Word: "अशब्द" ---------------- */
+.sacred-word {
+  /* Classical Devanagari Serif Typography */
+  font-family: 'Rozha One', 'Tiro Devanagari Hindi', 'Noto Serif Devanagari', serif;
+  font-weight: 500;
+  
+  /* Large, commanding, yet dignified and proportionate scale */
+  font-size: clamp(3.8rem, 11vw, 8.2rem);
+  line-height: 1.15;
+  letter-spacing: 0.08em;
+
+  /* Ancient Walnut Gall & Iron Ink Tone */
+  color: #24160c;
+
+  /* SVG Ink Bleed & Fiber Feathering */
+  filter: url(#ink-bleed);
+
+  /* Subtle ink soak halo into the fibrous paper */
+  text-shadow:
+    0 0 1px rgba(36, 22, 12, 0.65),
+    0 1px 2px rgba(36, 22, 12, 0.35),
+    0 0 16px rgba(120, 65, 25, 0.08);
+
+  /* Natural antique ink opacity with microscopic texture bleed */
+  opacity: 0.94;
+
+  /* Clean subpixel smoothing */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  position: relative;
+  display: inline-block;
+}
+
+/* Subtle aged ink fading variation across the letterpress contour */
+.sacred-word::before {
+  content: "अशब्द";
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 580px;
-  height: 580px;
-  border-radius: 50%;
-  background: radial-gradient(circle, var(--haldi-gold-light) 0%, transparent 70%);
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  color: #1a0f08;
+  opacity: 0.3;
+  filter: blur(1.5px);
   pointer-events: none;
   z-index: -1;
 }
 
-.hero-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.65rem;
-  padding: 0.4rem 1.25rem;
-  border-radius: var(--radius-sm);
-  background-color: var(--paper-card);
-  border: 1px solid var(--border-manuscript);
-  color: var(--hasheeya-red);
-  font-size: 0.85rem;
-  font-family: var(--font-shastra);
-  font-weight: 600;
-  margin-bottom: 1.5rem;
-  box-shadow: var(--shadow-book-sm);
-}
-
-.hero-title {
-  font-size: 3.4rem;
-  line-height: 1.28;
-  color: var(--ink-primary);
-  margin-bottom: 1.5rem;
-  font-weight: 500;
-}
-
-.hero-title span {
-  color: var(--hasheeya-red);
-  font-style: italic;
-  display: inline-block;
-  border-bottom: 2px solid var(--haldi-gold);
-  padding-bottom: 0.15rem;
-}
-
-/* Antique Manuscript Couplet Scroll */
-.hero-sher-box {
-  max-width: 720px;
-  margin: 0 auto 2.5rem;
-  padding: 2.2rem 2.5rem;
-  background-color: var(--paper-card);
-  border: 1px solid var(--border-manuscript);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-book-md);
-  position: relative;
-  transition: transform var(--transition-normal), box-shadow var(--transition-normal);
-}
-
-.hero-sher-box::before {
-  content: "";
+/* ---------------- Hidden SVG Filters ---------------- */
+.svg-filters {
   position: absolute;
-  inset: 6px;
-  border: 1px solid var(--hasheeya-red-border);
-  border-radius: calc(var(--radius-md) - 3px);
-  pointer-events: none;
-}
-
-.hero-sher-box:hover {
-  transform: translateY(-3px);
-  box-shadow: var(--shadow-book-lg);
-}
-
-/* Visual Silk Ribbon Marker */
-.hero-ribbon-marker {
-  position: absolute;
-  top: -10px;
-  right: 32px;
-  width: 22px;
-  height: 52px;
-  background: var(--hasheeya-red);
-  border-radius: 0 0 4px 4px;
-  box-shadow: 0 4px 8px rgba(158, 42, 43, 0.4);
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%);
-  pointer-events: none;
-}
-
-.hero-sher-quote-mark {
-  position: absolute;
-  top: -18px;
-  left: 36px;
-  font-family: var(--font-classic-latin);
-  font-size: 2.5rem;
-  color: var(--haldi-gold);
-  background: var(--paper-card);
-  padding: 0 8px;
-  line-height: 1;
-}
-
-.hero-sher-text {
-  font-family: var(--font-body);
-  font-size: 1.38rem;
-  line-height: 2.2;
-  color: var(--ink-poetry);
-  margin-bottom: 0.85rem;
-}
-
-.hero-sher-author {
-  font-size: 0.9rem;
-  color: var(--ink-faded);
-  font-family: var(--font-shastra);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-}
-
-.hero-actions {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 1.25rem;
-  flex-wrap: wrap;
-}
-
-/* Primary Parchment Button */
-.btn-primary {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.55rem;
-  background: linear-gradient(135deg, var(--hasheeya-red), var(--leather-brown));
-  color: #fff9f0;
-  padding: 0.85rem 2rem;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--haldi-gold);
-  font-size: 0.98rem;
-  font-weight: 600;
-  font-family: var(--font-shastra);
-  box-shadow: var(--shadow-book-md);
-  transition: all var(--transition-fast);
-}
-
-.btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-book-lg);
-  color: #ffffff;
-}
-
-.btn-primary:active {
-  transform: translateY(1px);
-}
-
-.btn-outline {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.55rem;
-  background-color: var(--paper-card);
-  color: var(--ink-primary);
-  border: 1px solid var(--border-manuscript);
-  padding: 0.85rem 1.85rem;
-  border-radius: var(--radius-sm);
-  font-size: 0.98rem;
-  font-weight: 600;
-  font-family: var(--font-shastra);
-  box-shadow: var(--shadow-book-sm);
-  transition: all var(--transition-fast);
-}
-
-.btn-outline:hover {
-  border-color: var(--hasheeya-red);
-  color: var(--hasheeya-red);
-  background-color: var(--paper-card-highlight);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-book-md);
-}
-
-/* ---------------- Daily Couplet (आज का शेर / दैनिक दोहा) ---------------- */
-.daily-sher-section {
-  padding: 1rem 0 3rem;
-}
-
-.daily-sher-banner {
-  background: var(--paper-card);
-  border: 1px solid var(--border-manuscript);
-  border-left: 5px solid var(--hasheeya-red);
-  border-radius: var(--radius-sm);
-  padding: 1.6rem 2.2rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1.5rem;
-  box-shadow: var(--shadow-book-md);
-  position: relative;
+  width: 0;
+  height: 0;
   overflow: hidden;
-}
-
-.daily-sher-banner::after {
-  content: "॥";
-  position: absolute;
-  right: 1.5rem;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 4.5rem;
-  font-family: var(--font-shastra);
-  color: var(--border-manuscript);
-  opacity: 0.35;
   pointer-events: none;
 }
 
-.daily-sher-content {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  z-index: 1;
-}
-
-.daily-sher-tag {
-  font-size: 0.8rem;
-  font-weight: 700;
-  font-family: var(--font-shastra);
-  color: var(--hasheeya-red);
-  letter-spacing: 0.08em;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.daily-sher-verse {
-  font-family: var(--font-body);
-  font-size: 1.3rem;
-  color: var(--ink-poetry);
-  line-height: 2;
-}
-
-.daily-sher-controls {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  flex-shrink: 0;
-  z-index: 1;
-}
-
-.btn-icon-subtle {
-  padding: 0.6rem 1rem;
-  border-radius: var(--radius-sm);
-  color: var(--ink-secondary);
-  border: 1px solid var(--border-manuscript);
-  background: var(--paper-bg);
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.88rem;
-  font-family: var(--font-shastra);
-}
-
-.btn-icon-subtle:hover {
-  color: var(--hasheeya-red);
-  border-color: var(--hasheeya-red);
-  background: var(--paper-card);
-}
-
-/* ---------------- Section Headers ---------------- */
-.section-header {
-  text-align: center;
-  margin-bottom: 2.75rem;
-  position: relative;
-}
-
-.section-tag {
-  font-size: 0.85rem;
-  font-weight: 600;
-  font-family: var(--font-shastra);
-  color: var(--hasheeya-red);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  margin-bottom: 0.4rem;
-  display: block;
-}
-
-.section-title {
-  font-size: 2.5rem;
-  color: var(--ink-primary);
-  line-height: 1.3;
-}
-
-.section-divider {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  margin: 0.75rem auto 0;
-  max-width: 260px;
-}
-
-.section-divider::before,
-.section-divider::after {
-  content: "";
-  height: 1px;
-  flex: 1;
-  background: linear-gradient(to right, transparent, var(--border-manuscript), transparent);
-}
-
-/* ---------------- Featured Shastra Poem Card ---------------- */
-.featured-section {
-  padding: 3.5rem 0;
-  background-color: var(--paper-bg-warm);
-  border-top: 1px solid var(--border-manuscript);
-  border-bottom: 1px solid var(--border-manuscript);
-  position: relative;
-}
-
-.featured-poem-card {
-  background: var(--paper-card);
-  border: 1px solid var(--border-manuscript);
-  border-radius: var(--radius-md);
-  padding: 3rem 3.5rem;
-  max-width: 900px;
-  margin: 0 auto;
-  box-shadow: var(--shadow-book-lg);
-  position: relative;
-}
-
-/* Red Marginal Line (हाशिया) on sides */
-.featured-poem-card::before {
-  content: "";
-  position: absolute;
-  top: 15px;
-  bottom: 15px;
-  left: 20px;
-  width: 2px;
-  background: var(--hasheeya-red);
-  box-shadow: 2px 0 0 var(--border-manuscript);
-}
-
-.featured-poem-card::after {
-  content: "";
-  position: absolute;
-  top: 15px;
-  bottom: 15px;
-  right: 20px;
-  width: 2px;
-  background: var(--hasheeya-red);
-  box-shadow: -2px 0 0 var(--border-manuscript);
-}
-
-.featured-corner-ornament {
-  position: absolute;
-  top: 1.25rem;
-  right: 2.5rem;
-  font-size: 2.2rem;
-  color: var(--haldi-gold);
-  opacity: 0.6;
-}
-
-.featured-stanzas {
-  font-family: var(--font-body);
-  font-size: 1.38rem;
-  line-height: 2.3;
-  color: var(--ink-poetry);
-  text-align: center;
-  margin: 2.25rem 0;
-  padding: 0 1.5rem;
-}
-
-.stanza-divider {
-  display: block;
-  text-align: center;
-  margin: 1.5rem 0;
-  color: var(--hasheeya-red);
-  font-size: 1.15rem;
-  font-family: var(--font-shastra);
-}
-
-/* ---------------- Filter & Search Section ---------------- */
-.filter-section {
-  padding: 2rem 0 1.5rem;
-}
-
-.filter-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1.25rem;
-  flex-wrap: wrap;
-  background-color: var(--paper-card);
-  padding: 0.85rem 1.35rem;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-manuscript);
-  box-shadow: var(--shadow-book-sm);
-}
-
-.filter-pills {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.filter-pill {
-  padding: 0.45rem 1.15rem;
-  border-radius: var(--radius-sm);
-  font-size: 0.88rem;
-  font-weight: 500;
-  font-family: var(--font-shastra);
-  background-color: var(--paper-bg);
-  color: var(--ink-secondary);
-  border: 1px solid var(--border-manuscript);
-  transition: all var(--transition-fast);
-}
-
-.filter-pill:hover {
-  border-color: var(--hasheeya-red);
-  color: var(--hasheeya-red);
-  background-color: var(--paper-card-highlight);
-}
-
-.filter-pill.active {
-  background: linear-gradient(135deg, var(--hasheeya-red), var(--leather-brown));
-  border-color: var(--hasheeya-red);
-  color: #fff9f0;
-  box-shadow: var(--shadow-book-sm);
-}
-
-.search-input-wrap {
-  position: relative;
-  min-width: 240px;
-  flex: 1;
-  max-width: 340px;
-}
-
-.search-input-wrap input {
-  width: 100%;
-  padding: 0.55rem 1rem 0.55rem 2.4rem;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-manuscript);
-  background-color: var(--paper-bg);
-  color: var(--ink-primary);
-  font-size: 0.92rem;
-  outline: none;
-  font-family: var(--font-body);
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
-}
-
-.search-input-wrap input:focus {
-  border-color: var(--hasheeya-red);
-  box-shadow: 0 0 0 3px var(--hasheeya-red-light);
-  background-color: var(--paper-card);
-}
-
-.search-icon {
-  position: absolute;
-  left: 0.85rem;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--ink-faded);
-  font-size: 0.95rem;
-  pointer-events: none;
-}
-
-/* ---------------- Poems Grid (Antique Folio Cards) ---------------- */
-.poems-section {
-  padding: 2rem 0 5rem;
-}
-
-.poems-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-  gap: 2.25rem;
-}
-
-/* Pothi Manuscript Card Aesthetic */
-.poem-card {
-  background-color: var(--paper-card);
-  border: 1px solid var(--border-manuscript);
-  border-radius: var(--radius-sm);
-  padding: 2.2rem 2rem 1.75rem;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  box-shadow: var(--shadow-book-sm);
-  position: relative;
-  transition: all var(--transition-normal);
-  overflow: hidden;
-}
-
-/* Authentic Red Hasheeya Inner Border */
-.poem-card::before {
-  content: "";
-  position: absolute;
-  inset: 6px;
-  border: 1px solid var(--hasheeya-red-border);
-  border-radius: calc(var(--radius-sm) - 2px);
-  pointer-events: none;
-  transition: border-color var(--transition-fast);
-}
-
-/* Subtle Corner Page Curl & Red Accent Top Border */
-.poem-card::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, var(--hasheeya-red), var(--haldi-gold), var(--leather-brown));
-  opacity: 0.85;
-}
-
-.poem-card:hover {
-  transform: translateY(-6px);
-  box-shadow: var(--shadow-book-lg);
-  border-color: var(--hasheeya-red);
-}
-
-.poem-card:hover::before {
-  border-color: var(--hasheeya-red);
-}
-
-.card-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 1.25rem;
-}
-
-.card-meta-badges {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.badge-category {
-  font-size: 0.75rem;
-  font-family: var(--font-shastra);
-  font-weight: 600;
-  padding: 0.2rem 0.65rem;
-  border-radius: var(--radius-sm);
-  background-color: var(--hasheeya-red-light);
-  color: var(--hasheeya-red);
-  border: 1px solid var(--hasheeya-red-border);
-  letter-spacing: 0.04em;
-}
-
-.badge-tag {
-  font-size: 0.78rem;
-  color: var(--ink-faded);
-  font-style: italic;
-}
-
-.card-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.card-action-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-sm);
-  color: var(--ink-faded);
-  border: 1px solid var(--border-manuscript);
-  background: var(--paper-bg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.9rem;
-  transition: all var(--transition-fast);
-}
-
-.card-action-btn:hover {
-  background-color: var(--paper-card-highlight);
-  color: var(--hasheeya-red);
-  border-color: var(--hasheeya-red);
-}
-
-.card-action-btn.favorited {
-  color: var(--hasheeya-red);
-  background-color: var(--hasheeya-red-light);
-  border-color: var(--hasheeya-red);
-}
-
-.card-action-btn.favorited svg {
-  fill: currentColor;
-}
-
-.poem-card-title {
-  font-size: 1.75rem;
-  line-height: 1.3;
-  color: var(--ink-primary);
-  margin-bottom: 0.25rem;
-}
-
-.poem-card-translit {
-  font-size: 0.85rem;
-  color: var(--haldi-gold);
-  font-family: var(--font-classic-latin);
-  font-style: italic;
-  margin-bottom: 1.25rem;
-}
-
-.poem-card-excerpt {
-  font-family: var(--font-body);
-  font-size: 1.2rem;
-  line-height: 2.1;
-  color: var(--ink-poetry);
-  margin-bottom: 1.5rem;
-  padding-left: 1rem;
-  border-left: 2px solid var(--hasheeya-red);
-  flex-grow: 1;
-}
-
-.card-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-top: 1.25rem;
-  border-top: 1px dashed var(--border-inner-rule);
-  font-size: 0.85rem;
-  color: var(--ink-faded);
-  font-family: var(--font-body);
-}
-
-.btn-read-poem {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  color: var(--hasheeya-red);
-  font-weight: 600;
-  font-family: var(--font-shastra);
-  font-size: 0.92rem;
-  padding: 0.35rem 0.65rem;
-  border-radius: var(--radius-sm);
-  background-color: transparent;
-  transition: all var(--transition-fast);
-}
-
-.btn-read-poem:hover {
-  background-color: var(--hasheeya-red-light);
-  transform: translateX(4px);
-}
-
-/* Empty State */
-.empty-state {
-  grid-column: 1 / -1;
-  text-align: center;
-  padding: 4.5rem 2rem;
-  color: var(--ink-faded);
-  background-color: var(--paper-card);
-  border: 1px dashed var(--border-manuscript);
-  border-radius: var(--radius-md);
-}
-
-.empty-state-icon {
-  font-size: 3.5rem;
-  margin-bottom: 1rem;
-  color: var(--haldi-gold);
-}
-
-/* ---------------- About the Poet (ग्रंथकार परिचय) ---------------- */
-.about-section {
-  padding: 5rem 0;
-}
-
-.about-card {
-  background-color: var(--paper-card);
-  border: 1px solid var(--border-manuscript);
-  border-radius: var(--radius-md);
-  padding: 3.5rem;
-  display: grid;
-  grid-template-columns: 280px 1fr;
-  gap: 3.5rem;
-  align-items: center;
-  box-shadow: var(--shadow-book-md);
-  position: relative;
-}
-
-.about-card::before {
-  content: "";
-  position: absolute;
-  inset: 8px;
-  border: 1px solid var(--hasheeya-red-border);
-  border-radius: calc(var(--radius-md) - 4px);
-  pointer-events: none;
-}
-
-.author-avatar-wrap {
-  text-align: center;
-  position: relative;
-}
-
-.author-avatar {
-  width: 210px;
-  height: 210px;
-  border-radius: 50%;
-  margin: 0 auto;
-  border: 4px solid var(--paper-bg);
-  box-shadow: var(--shadow-book-lg);
-  background: linear-gradient(135deg, var(--hasheeya-red), var(--leather-brown));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff8eb;
-  font-size: 4.5rem;
-}
-
-.author-pen-badge {
-  position: absolute;
-  bottom: 8px;
-  right: 40px;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: var(--paper-card);
-  border: 2px solid var(--haldi-gold);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.25rem;
-  color: var(--hasheeya-red);
-  box-shadow: var(--shadow-book-sm);
-}
-
-.about-content h3 {
-  font-size: 2.2rem;
-  margin-bottom: 0.4rem;
-}
-
-.author-subtitle {
-  color: var(--hasheeya-red);
-  font-size: 1.05rem;
-  font-family: var(--font-shastra);
-  margin-bottom: 1.25rem;
-  font-weight: 500;
-}
-
-.author-bio {
-  color: var(--ink-secondary);
-  font-size: 1.15rem;
-  line-height: 2;
-  margin-bottom: 1.85rem;
-  font-style: italic;
-}
-
-.author-social-links {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-}
-
-.social-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.55rem 1.15rem;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-manuscript);
-  background-color: var(--paper-bg);
-  font-size: 0.88rem;
-  font-weight: 600;
-  font-family: var(--font-shastra);
-  color: var(--ink-secondary);
-  transition: all var(--transition-fast);
-}
-
-.social-pill:hover {
-  background-color: var(--hasheeya-red);
-  border-color: var(--hasheeya-red);
-  color: #ffffff;
-  transform: translateY(-2px);
-}
-
-/* ---------------- Interactive Reading Modal (Zen Shastra Reader) ---------------- */
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background-color: var(--paper-overlay);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1.5rem;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity var(--transition-normal);
-}
-
-.modal-backdrop.active {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.modal-window {
-  background-color: var(--paper-card);
-  border: 1px solid var(--border-manuscript);
-  border-radius: var(--radius-md);
-  width: 100%;
-  max-width: 860px;
-  max-height: 92vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: var(--shadow-book-lg);
-  transform: translateY(20px) scale(0.98);
-  transition: transform var(--transition-normal);
-  overflow: hidden;
-  position: relative;
-}
-
-.modal-window::before {
-  content: "";
-  position: absolute;
-  inset: 6px;
-  border: 1px solid var(--hasheeya-red-border);
-  border-radius: calc(var(--radius-md) - 3px);
-  pointer-events: none;
-}
-
-.modal-backdrop.active .modal-window {
-  transform: translateY(0) scale(1);
-}
-
-.modal-header {
-  padding: 1.35rem 2.2rem;
-  border-bottom: 1px solid var(--border-manuscript);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  background: var(--paper-bg-warm);
-}
-
-.modal-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-}
-
-.modal-body {
-  padding: 2.5rem 3.5rem;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 2.25rem;
-  position: relative;
-}
-
-/* Margin ruling lines inside reading modal */
-.modal-body::before {
-  content: "";
-  position: absolute;
-  top: 15px;
-  bottom: 15px;
-  left: 24px;
-  width: 2px;
-  background: var(--hasheeya-red);
-  box-shadow: 2px 0 0 var(--border-manuscript);
-}
-
-.modal-body::after {
-  content: "";
-  position: absolute;
-  top: 15px;
-  bottom: 15px;
-  right: 24px;
-  width: 2px;
-  background: var(--hasheeya-red);
-  box-shadow: -2px 0 0 var(--border-manuscript);
-}
-
-.modal-poem-header {
-  text-align: center;
-}
-
-.modal-poem-title {
-  font-size: 2.6rem;
-  line-height: 1.3;
-  margin-bottom: 0.4rem;
-}
-
-.modal-poem-meta {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  color: var(--ink-faded);
-  font-size: 0.9rem;
-  font-family: var(--font-shastra);
-}
-
-.modal-stanzas-container {
-  font-family: var(--font-body);
-  font-size: 1.38rem;
-  line-height: 2.35;
-  color: var(--ink-poetry);
-  text-align: center;
-  padding: 0 1rem;
-}
-
-.modal-stanza {
-  margin-bottom: 2rem;
-}
-
-.modal-stanza p {
-  margin-bottom: 0.35rem;
-}
-
-/* Interactive Glossary Tooltip Highlight */
-.glossary-word {
-  position: relative;
-  text-decoration: underline dotted var(--hasheeya-red);
-  text-underline-offset: 5px;
-  cursor: pointer;
-  color: var(--hasheeya-red);
-  font-weight: 500;
-  transition: color var(--transition-fast);
-}
-
-.glossary-word:hover {
-  color: var(--leather-brown);
-  background-color: var(--hasheeya-red-light);
-}
-
-/* Glossary Drawer inside Modal */
-.modal-glossary-box {
-  background-color: var(--paper-bg);
-  border: 1px solid var(--border-manuscript);
-  border-left: 4px solid var(--haldi-gold);
-  border-radius: var(--radius-sm);
-  padding: 1.35rem 1.6rem;
-}
-
-.glossary-title {
-  font-size: 0.95rem;
-  font-weight: 700;
-  font-family: var(--font-shastra);
-  color: var(--hasheeya-red);
-  letter-spacing: 0.06em;
-  margin-bottom: 0.85rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.glossary-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  gap: 0.75rem;
-}
-
-.glossary-item {
-  font-size: 0.9rem;
-  line-height: 1.55;
-  font-family: var(--font-body);
-}
-
-.glossary-item strong {
-  color: var(--hasheeya-red);
-  font-family: var(--font-shastra);
-  font-size: 1rem;
-}
-
-/* Essence / भावार्थ Box */
-.modal-essence-box {
-  background: var(--paper-bg-warm);
-  border-left: 4px solid var(--hasheeya-red);
-  border-radius: var(--radius-sm);
-  padding: 1.35rem 1.6rem;
-  font-size: 1.05rem;
-  color: var(--ink-secondary);
-  line-height: 1.9;
-  font-style: italic;
-}
-
-.modal-footer {
-  padding: 1.25rem 2.2rem;
-  border-top: 1px solid var(--border-manuscript);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 1rem;
-  background-color: var(--paper-bg-warm);
-}
-
-/* Font Size Controls inside Modal */
-.font-size-controls {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  background-color: var(--paper-card);
-  padding: 0.25rem;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-manuscript);
-}
-
-.btn-font-size {
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-sm);
-  font-size: 0.82rem;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--ink-secondary);
-}
-
-.btn-font-size:hover {
-  background-color: var(--hasheeya-red-light);
-  color: var(--hasheeya-red);
-}
-
-/* ---------------- Compose Modal (नई रचना) ---------------- */
-.compose-form {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.form-group label {
-  font-size: 0.88rem;
-  font-weight: 600;
-  font-family: var(--font-shastra);
-  color: var(--ink-secondary);
-}
-
-.form-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-}
-
-.form-input, .form-select, .form-textarea {
-  width: 100%;
-  padding: 0.75rem 1rem;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-manuscript);
-  background-color: var(--paper-bg);
-  color: var(--ink-primary);
-  font-family: var(--font-body);
-  font-size: 1rem;
-  outline: none;
-  transition: border-color var(--transition-fast);
-}
-
-.form-textarea {
-  font-size: 1.15rem;
-  line-height: 2;
-  resize: vertical;
-}
-
-.form-input:focus, .form-select:focus, .form-textarea:focus {
-  border-color: var(--hasheeya-red);
-  box-shadow: 0 0 0 3px var(--hasheeya-red-light);
-  background-color: var(--paper-card);
-}
-
-/* ---------------- Toast Notification ---------------- */
-.toast-notification {
-  position: fixed;
-  bottom: 2rem;
-  right: 2rem;
-  background-color: var(--paper-card);
-  color: var(--ink-primary);
-  border: 1px solid var(--hasheeya-red);
-  border-left: 4px solid var(--hasheeya-red);
-  padding: 0.85rem 1.5rem;
-  border-radius: var(--radius-sm);
-  font-size: 0.95rem;
-  font-family: var(--font-shastra);
-  box-shadow: var(--shadow-book-lg);
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  z-index: 2000;
-  transform: translateY(100px);
-  opacity: 0;
-  transition: all var(--transition-normal);
-  pointer-events: none;
-}
-
-.toast-notification.show {
-  transform: translateY(0);
-  opacity: 1;
-}
-
-/* ---------------- Footer ---------------- */
-.site-footer {
-  background-color: var(--paper-card);
-  border-top: 2px solid var(--border-manuscript);
-  padding: 4.5rem 0 2rem;
-  position: relative;
-}
-
-.site-footer::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, var(--hasheeya-red), var(--haldi-gold), var(--leather-brown));
-}
-
-.footer-grid {
-  display: grid;
-  grid-template-columns: 2fr 1fr 1fr;
-  gap: 3rem;
-  margin-bottom: 3rem;
-}
-
-.footer-brand p {
-  color: var(--ink-secondary);
-  font-size: 1rem;
-  margin-top: 0.75rem;
-  max-width: 320px;
-  line-height: 1.8;
-}
-
-.footer-col h4 {
-  font-size: 1.15rem;
-  margin-bottom: 1.25rem;
-  color: var(--hasheeya-red);
-  font-family: var(--font-shastra);
-}
-
-.footer-links {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 0.65rem;
-}
-
-.footer-links a {
-  color: var(--ink-secondary);
-  font-size: 0.92rem;
-}
-
-.footer-links a:hover {
-  color: var(--hasheeya-red);
-  text-decoration: underline;
-}
-
-.footer-bottom {
-  text-align: center;
-  padding-top: 2rem;
-  border-top: 1px dashed var(--border-inner-rule);
-  color: var(--ink-faded);
-  font-size: 0.88rem;
-  font-family: var(--font-shastra);
-}
-
-/* ---------------- Responsive Media Queries ---------------- */
-@media (max-width: 900px) {
-  .hero-title {
-    font-size: 2.6rem;
-  }
-
-  .about-card {
-    grid-template-columns: 1fr;
-    text-align: center;
-  }
-
-  .author-pen-badge {
-    right: calc(50% - 70px);
-  }
-
-  .author-social-links {
-    justify-content: center;
-  }
-
-  .footer-grid {
-    grid-template-columns: 1fr;
-    gap: 2rem;
+/* ---------------- Responsive Fine-Tuning ---------------- */
+@media (max-width: 600px) {
+  .sacred-word {
+    font-size: clamp(3.2rem, 15vw, 5.2rem);
+    letter-spacing: 0.05em;
   }
 }
 
-@media (max-width: 768px) {
-  .nav-links {
-    display: none;
-  }
-
-  .mobile-menu-btn {
-    display: flex;
-  }
-
-  .hero-section {
-    padding: 3.5rem 0 2rem;
-  }
-
-  .hero-title {
-    font-size: 2.1rem;
-  }
-
-  .hero-sher-text {
-    font-size: 1.2rem;
-  }
-
-  .poems-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .modal-window {
-    max-height: 96vh;
-  }
-
-  .modal-body {
-    padding: 1.8rem;
-  }
-
-  .modal-poem-title {
-    font-size: 1.9rem;
-  }
-
-  .daily-sher-banner {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .daily-sher-controls {
-    align-self: flex-end;
-  }
-
-  .form-row {
-    grid-template-columns: 1fr;
+@media (min-width: 1800px) {
+  .sacred-word {
+    font-size: 8.5rem;
+    letter-spacing: 0.09em;
   }
 }

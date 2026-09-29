@@ -1,113 +1,20 @@
-# 📜 काव्य-कुंज (Kavya-Kunj) — प्राचीन हिंदी पाण्डुलिपि व काव्य-संग्रह
+# अशब्द (ashabd.in)
 
-> **"दिल के अल्फ़ाज़, रूह की ज़ुबाँ"**  
-> प्राचीन हिंदी शास्त्र, भोजपत्र व पुरानी पोथी शैली में रचित एक सुरुचिपूर्ण व कलात्मक व्यक्तिगत काव्य मंच (Antique Shastra & Classical Manuscript Aesthetic)।
+> **अशब्द** — An antique manuscript single-page experience.
 
----
-
-## ✨ मुख्य विशेषताएँ व शास्त्रीय रूप-रंग (Design & Features)
-
-- 📜 **प्राचीन पाण्डुलिपि व पोथी शैली (Antique Hindi Shastra UI/UX)**:
-  - **भोजपत्र व पुराना काग़ज़**: पुरानी किताबों की सौंधी सुगंध का आभास कराने वाले सेपिया और कत्थई (brownish-sepia) टोन, प्राकृतिक काग़ज़ी रेशे (procedural parchment grain) और विंटेज किनारों की छाया।
-  - **रक्त-वर्ण हाशिया (Red Hasheeya Margin Ruling)**: प्राचीन हस्तलिखित पोथियों की तरह दोनों किनारों पर पारंपरिक लाल हाशिया रेखाएँ।
-  - **मंगलाचरण एवं शास्त्र-प्रतीक**: शीर्ष पर पारंपरिक मंगलाचरण (`॥ श्री गणेशाय नमः ॥ ✦ ॥ ॐ वाग्देव्यै नमः ॥`) और पारंपरिक दण्ड `॥` विभाजक।
-  - **लाल रेशमी ग्रंथ-सूत्र (Silk Bookmark Ribbon)**: मुख्य फलक पर प्राचीन ग्रंथों जैसी लटकती रेशमी बुकमार्क रिबन।
-
-- 🎨 **तीन शास्त्रीय पाण्डुलिपि थीम्स**:
-  - **प्राचीन भोजपत्र (Antique Shastra Parchment)**: गर्म काग़ज़ी आधार, अखरोट-लोहे की गहरी कत्थई स्याही और सिंदूरी हाशिया।
-  - **ताम्रपत्र पाण्डुलिपि (Midnight Manuscript / Night)**: प्राचीन काष्ठ-चर्म और ताम्रपत्र शैली, जिसमें सुनहरी मोमबत्ती जैसी स्याही जगमगाती है।
-  - **चन्दन-गुलाब (Sandalwood Rose)**: चन्दन, केसर और गुलाब की पंखुड़ियों के कोमल शास्त्रीय रंग।
-
-- ✒️ **क्लासिकल देवनागरी व लैटिन टाइपोग्राफी**:
-  - `Rozha One`, `Yatra One`, `Tiro Devanagari Hindi`, `Noto Serif Devanagari`, और `Cormorant Garamond` का सुंदर संयोजन।
-  - यूआई/यूएक्स प्रो मैक्स मानकों के अनुरूप **इमोजी की जगह शुद्ध वेक्टर SVG आइकन्स** (मयूर-कलम, दीपशिखा, वीणा, ग्रंथ-मुद्रा)।
-
-- 📜 **समृद्ध हिंदी काव्य संकलन (Curated Demo Poems)**:
-  1. **ख़ामोशियों की सदा** (नज़्म • रूहानियत)
-  2. **चाँद, चाय और वो रात** (ग़ज़ल • प्रेम)
-  3. **कागज़ की कश्ती और बारिश** (कविता • यादें)
-  4. **उम्मीद का चिराग़** (मुक्तक • हौसला)
-
-- 🧘 **मुक्ताकाश पठन (Zen Shastra Reader)**:
-  - पारंपरिक ग्रंथ-पृष्ठ प्रारूप में संपूर्ण कविता का एकाग्र पठन।
-  - **शब्दार्थ (Word Meanings / Glossary)**: कठिन उर्दू/हिंदी शब्दों पर क्लिक करके तुरंत हिंदी व अंग्रेज़ी अर्थ जानें।
-  - **भावार्थ (Poetic Essence)**: रचना के आंतरिक भाव व प्रेरणा का सार।
-  - **अक्षर आकार नियंत्रक (A- / A+)**: सुविधानुसार लिपि का आकार घटाएं/बढ़ाएं।
-
-- 🎙️ **आवाज़ में वाचन (Voice Recitation / Audio Reader)**:
-  - ब्राउज़र की Web Speech API द्वारा हिंदी आवाज़ में भावपूर्ण काव्य-पाठ।
-
-- 📸 **पाण्डुलिपि कार्ड जनरेटर (Antique Manuscript Card Exporter)**:
-  - HTML5 Canvas द्वारा प्राचीन भोजपत्र, लाल हाशिये और प्रामाणिक **"ग्रंथ मुद्रा" (Circular Wax Seal Stamp)** के साथ उच्च-रेज़ोल्यूशन कार्ड (PNG) 1-क्लिक में डाउनलोड करें।
-
-- 🎵 **माहौल संगीत (Generative Ambient Soundscape)**:
-  - शुद्ध Web Audio API द्वारा रचित:
-    - 🌧️ सौंधी वर्षा की फुहारें (Soft Rain)
-    - 🪕 ध्यानमग्न तानपुरा धुन (Meditative Tanpura Drone)
-
-- ✍️ **नई रचना जोड़ें (In-Browser Poem Composer)**:
-  - "रचना लिखें" बटन दबाकर अपनी नई कविताएँ सीधे वेबसाइट पर प्रकाशित करें (ब्राउज़र के `localStorage` में सुरक्षित)।
+A minimalist, atmospheric, centuries-old aged parchment page bearing strictly the word **अशब्द**.
 
 ---
 
-## 🚀 वेबसाइट कैसे चलाएं (How to View & Run)
+## 📜 Aesthetic Highlights
 
-### 1. सीधे ब्राउज़र में खोलें
-[index.html](file:///c:/Users/ACER/Desktop/my-poetry/index.html) फ़ाइल पर डबल-क्लिक करें, यह किसी भी आधुनिक ब्राउज़र (Chrome, Edge, Firefox, Safari) में तुरंत खुल जाएगी।
-
-### 2. लोकल वेब सर्वर (वैकल्पिक)
-PowerShell में यह कमांड चलाएं:
-```bash
-python -m http.server 8000
-```
-फिर ब्राउज़र में `http://localhost:8000` खोलें।
+- **Ancient Weathered Parchment**: Procedurally generated organic paper with water tide-lines, creases, cellulose fibers, foxing oxidation spots, and scorched edge vignettes.
+- **Antique Walnut Gall Ink**: Traditional Devanagari serif typography (`Rozha One`, `Tiro Devanagari Hindi`) with realistic ink absorption bleed and paper feathering.
+- **Pure Minimalism**: Zero buttons, zero navigation, zero scrollbars, zero UI clutter. Centered in silent, meditative stillness.
+- **Zero External Image Dependencies**: Rendered purely through CSS gradients, procedural SVG filters, and HTML5 Canvas.
 
 ---
 
-## 🌐 GitHub Pages पर लाइव कैसे करें (Publish to GitHub Pages)
+## 🌐 Domain
 
-1. अपनी रिपॉजिटरी में बदलाव कमिट और पुश करें:
-   ```bash
-   git add .
-   git commit -m "feat: enhance UI with antique Hindi Shastra manuscript aesthetic"
-   git push origin main
-   ```
-2. GitHub पर अपने Repo की **Settings** &rarr; **Pages** में जाएँ।
-3. **Branch** में `main` और फ़ोल्डर में `/ (root)` चुनकर **Save** करें।
-
----
-
-## 📝 अपनी नई कविताएँ कोड में स्थायी रूप से कैसे जोड़ें
-
-`poems.js` फ़ाइल में `poemsData` ऐरे में अपनी रचना जोड़ें:
-
-```javascript
-{
-  id: "apni-kavita-ka-slug",
-  title: "आपकी कविता का शीर्षक",
-  transliteration: "Title in English",
-  category: "ग़ज़ल", // नज़्म, ग़ज़ल, कविता, या मुक्तक
-  tag: "प्रेम",
-  date: "29 सितंबर 2026",
-  readTime: "2 मिनट",
-  excerpt: "कविता की शुरुआती दो पंक्तियाँ...",
-  stanzas: [
-    [
-      "पहली पंक्ति,",
-      "दूसरी पंक्ति।"
-    ],
-    [
-      "दूसरे बंध की पहली पंक्ति,",
-      "दूसरे बंध की दूसरी पंक्ति।"
-    ]
-  ],
-  glossary: [
-    { word: "कठिन शब्द", meaning: "उसका सरल अर्थ" }
-  ],
-  essence: "कविता का भावार्थ या संदेश।"
-}
-```
-
----
-
-**॥ शब्द अमर हैं, अनुभूतियाँ शाश्वत ॥ • काव्य-कुंज**
+Configured for **ashabd.in** via [CNAME](CNAME) on GitHub Pages.
