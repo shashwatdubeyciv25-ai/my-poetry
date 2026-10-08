@@ -1,6 +1,6 @@
 /* ==========================================================================
    अशब्द (A-Shabd) — Antique Manuscript Single Page Experience
-   Centuries-Old Weathered Parchment with Organic Stains & Walnut Gall Ink
+   Centuries-Old Weathered Parchment with Official Ashabd Brand Mark
    ========================================================================== */
 
 /* ---------------- Resets & Zero-Scroll Setup ---------------- */
@@ -82,31 +82,7 @@ body {
   background-repeat: repeat;
 }
 
-/* ---------------- Layer 3: Faint Embedded Paper Watermark ---------------- */
-.manuscript-watermark {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-  z-index: 2;
-  opacity: 0.048;
-  mix-blend-mode: multiply;
-  filter: sepia(0.7) brightness(0.85) contrast(1.15);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.watermark-img {
-  width: clamp(230px, 34vw, 420px);
-  max-height: 42vh;
-  height: auto;
-  object-fit: contain;
-  display: block;
-}
-
-/* ---------------- Layer 4: Deep Antique Vignette & Candlelight Ambiance ---------------- */
+/* ---------------- Layer 3: Deep Antique Vignette & Candlelight Ambiance ---------------- */
 .vignette-overlay {
   position: fixed;
   inset: 0;
@@ -138,26 +114,7 @@ body {
   }
 }
 
-/* ---------------- Layer 5: Subtle Corner Colophon / Maker's Mark ---------------- */
-.corner-colophon {
-  position: fixed;
-  top: clamp(1.2rem, 3.5vh, 2.5rem);
-  left: clamp(1.2rem, 3.5vw, 2.8rem);
-  z-index: 8;
-  pointer-events: none;
-  opacity: 0.28;
-  mix-blend-mode: multiply;
-  filter: sepia(0.85) hue-rotate(-18deg) contrast(1.25);
-  transition: opacity 0.6s ease;
-}
-
-.colophon-seal {
-  width: clamp(40px, 4.6vw, 62px);
-  height: auto;
-  display: block;
-}
-
-/* ---------------- Layer 6: Centerpiece Viewport ---------------- */
+/* ---------------- Layer 4: Sacred Centerpiece Viewport ---------------- */
 .manuscript-viewport {
   position: relative;
   z-index: 10;
@@ -166,67 +123,74 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 2rem;
+  padding: 2.5rem 1.5rem;
   overflow: hidden;
 }
 
-.centerpiece-word-wrap {
+.centerpiece-logo-wrap {
   display: flex;
   align-items: center;
   justify-content: center;
   text-align: center;
   position: relative;
-}
-
-/* ---------------- The Sacred Word: "अशब्द" ---------------- */
-.sacred-word {
-  /* Classical Devanagari Serif Typography */
-  font-family: 'Rozha One', 'Tiro Devanagari Hindi', 'Noto Serif Devanagari', serif;
-  font-weight: 500;
-  
-  /* Large, commanding, yet dignified scale with ample breathing margin */
-  font-size: clamp(3.8rem, 11vw, 8.2rem);
-  line-height: 1.15;
-  letter-spacing: 0.08em;
-
-  /* Ancient Walnut Gall & Iron Ink Tone */
-  color: #23150c;
-
-  /* SVG Ink Bleed & Fiber Feathering */
-  filter: url(#ink-bleed);
-
-  /* Subtle ink soak halo into the fibrous paper */
-  text-shadow:
-    0 0 1px rgba(35, 21, 12, 0.68),
-    0 1px 2px rgba(35, 21, 12, 0.35),
-    0 0 16px rgba(120, 65, 25, 0.08);
-
-  /* Natural antique ink opacity with microscopic texture bleed */
-  opacity: 0.94;
-
-  /* Clean subpixel smoothing */
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-
-  position: relative;
-  display: inline-block;
-}
-
-/* Subtle aged ink fading variation across the letterpress contour */
-.sacred-word::before {
-  content: "अशब्द";
-  position: absolute;
-  inset: 0;
   width: 100%;
-  height: 100%;
-  color: #1a0f08;
-  opacity: 0.28;
-  filter: blur(1.5px);
-  pointer-events: none;
-  z-index: -1;
+  max-width: min(600px, 86vw);
 }
 
-/* ---------------- Layer 7: Understated Monochromatic Social Footing ---------------- */
+.official-logo-picture {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+/* ---------------- Official Ashabd Logo — Natural Paper Ink Integration ---------------- */
+.official-ashabd-logo {
+  /* Dimensions & Preserved Proportions */
+  width: 100%;
+  max-width: min(580px, 84vw);
+  max-height: 46vh;
+  height: auto;
+  aspect-ratio: 1000 / 586;
+  object-fit: contain;
+  display: block;
+
+  /* Natural Physical Ink Integration into Antique Parchment */
+  /* Multiply blend allows organic parchment fibers and luminous cream tone to show through the strokes */
+  mix-blend-mode: multiply;
+  
+  /* Slight natural aged opacity — avoiding artificial digital PNG cutout feeling */
+  opacity: 0.92;
+
+  /* Aged gall-ink toning: subtly warm walnut tint, rich contrast, and soft ink soak */
+  filter: 
+    contrast(1.06) 
+    brightness(0.93) 
+    sepia(0.22) 
+    drop-shadow(0 1px 1.5px rgba(35, 18, 8, 0.22))
+    drop-shadow(0 0 12px rgba(90, 45, 18, 0.05));
+
+  /* Prevent dragging and selection distortion */
+  -webkit-user-drag: none;
+  user-select: none;
+  pointer-events: none;
+  transition: opacity 0.5s ease;
+}
+
+/* Accessible Screen-Reader Utility for SEO Heading */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------------- Layer 5: Understated Monochromatic Social Footing ---------------- */
 .parchment-footer {
   position: fixed;
   bottom: clamp(1.2rem, 3.2vh, 2.2rem);
@@ -288,33 +252,19 @@ body {
   line-height: 1;
 }
 
-/* ---------------- Hidden SVG Filters ---------------- */
-.svg-filters {
-  position: absolute;
-  width: 0;
-  height: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-
 /* ---------------- Responsive Fine-Tuning ---------------- */
 @media (max-width: 600px) {
-  .corner-colophon {
-    top: 1rem;
-    left: 1rem;
+  .manuscript-viewport {
+    padding: 1.5rem 1rem;
   }
 
-  .colophon-seal {
-    width: 36px;
+  .centerpiece-logo-wrap {
+    max-width: 90vw;
   }
 
-  .watermark-img {
-    width: 72vw;
-  }
-
-  .sacred-word {
-    font-size: clamp(3.2rem, 15vw, 5.2rem);
-    letter-spacing: 0.05em;
+  .official-ashabd-logo {
+    max-width: 86vw;
+    max-height: 38vh;
   }
 
   .subtle-social-links {
@@ -327,9 +277,9 @@ body {
   }
 }
 
-@media (min-width: 1800px) {
-  .sacred-word {
-    font-size: 8.5rem;
-    letter-spacing: 0.09em;
+@media (min-width: 1600px) {
+  .official-ashabd-logo {
+    max-width: 660px;
+    max-height: 50vh;
   }
 }

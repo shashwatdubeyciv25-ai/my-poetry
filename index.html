@@ -28,10 +28,10 @@
   <meta name="twitter:description" content="अशब्द — A forgotten poetry manuscript.">
   <meta name="twitter:image" content="ashabd_website_logo_pack/social_media_and_og/og-banner-1200x630.jpg">
 
-  <!-- Classical Devanagari Literary Typography (Rozha One, Tiro Devanagari, Noto Serif) -->
+  <!-- Classical Devanagari Literary Typography for Handles & Marginalia -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Devanagari:wght@400;500;600;700&family=Rozha+One&family=Tiro+Devanagari+Hindi:ital@0;1&family=Yatra+One&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Devanagari:wght@400;500;600&family=Tiro+Devanagari+Hindi:ital@0;1&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="style.css">
 </head>
@@ -43,27 +43,28 @@
   <!-- Layer 2: High-Frequency Cellulose Paper Grain Overlay -->
   <div class="paper-grain-overlay" aria-hidden="true"></div>
 
-  <!-- Layer 3: Faint Embedded Paper Watermark (Official Logo from Logo Pack) -->
-  <div class="manuscript-watermark" aria-hidden="true">
-    <img src="ashabd_website_logo_pack/website_header_logos/logo_transparent_600w.webp" alt="" class="watermark-img" loading="eager">
-  </div>
-
-  <!-- Layer 4: Antique Edge Vignette & Corner Scorches with Breathing Illumination -->
+  <!-- Layer 3: Antique Edge Vignette & Corner Scorches with Gentle Breathing Ambiance -->
   <div class="vignette-overlay" aria-hidden="true"></div>
 
-  <!-- Extremely Subtle Corner Colophon / Maker's Mark -->
-  <aside class="corner-colophon" aria-label="Brand Mark">
-    <img src="ashabd_website_logo_pack/website_header_logos/logo_transparent_350w.webp" alt="अशब्द" class="colophon-seal" loading="eager">
-  </aside>
-
-  <!-- Sacred Centerpiece: Strictly the Word "अशब्द" -->
+  <!-- Sacred Centerpiece: Official Ashabd Logo Integrated into Antique Parchment -->
   <main class="manuscript-viewport">
-    <div class="centerpiece-word-wrap">
-      <h1 class="sacred-word" lang="hi">अशब्द</h1>
+    <div class="centerpiece-logo-wrap">
+      <h1 class="visually-hidden">अशब्द — ASHABD</h1>
+      <picture class="official-logo-picture">
+        <source srcset="ashabd_website_logo_pack/website_header_logos/logo_transparent_1000w.webp" type="image/webp">
+        <img 
+          src="ashabd_website_logo_pack/website_header_logos/logo_transparent_1000w.png" 
+          alt="अशब्द — ASHABD" 
+          class="official-ashabd-logo" 
+          width="1000" 
+          height="586"
+          loading="eager"
+          decoding="async">
+      </picture>
     </div>
   </main>
 
-  <!-- Extremely Subtle Antique Ink Social Links at the Bottom Foot of the Page -->
+  <!-- Extremely Subtle Antique Ink Social Margins at the Foot of the Page -->
   <footer class="parchment-footer">
     <nav class="subtle-social-links" aria-label="Official Social Channels">
       <a href="https://www.instagram.com/ashabd0/" target="_blank" rel="noopener noreferrer" class="ink-social-link" title="Instagram: @ashabd0" aria-label="Instagram: @ashabd0">
@@ -85,21 +86,6 @@
       </a>
     </nav>
   </footer>
-
-  <!-- SVG Filter for Natural Ink Bleed onto Porous Rag Paper -->
-  <svg class="svg-filters" aria-hidden="true" focusable="false">
-    <defs>
-      <filter id="ink-bleed" x="-10%" y="-10%" width="120%" height="120%">
-        <feTurbulence type="fractalNoise" baseFrequency="0.062" numOctaves="4" result="noise" />
-        <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.3" xChannelSelector="R" yChannelSelector="G" result="displaced" />
-        <feGaussianBlur in="displaced" stdDeviation="0.38" result="blurred" />
-        <feMerge>
-          <feMergeNode in="blurred" />
-          <feMergeNode in="displaced" />
-        </feMerge>
-      </filter>
-    </defs>
-  </svg>
 
   <script src="app.js"></script>
 </body>

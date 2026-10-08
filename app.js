@@ -164,7 +164,7 @@
     const spotCount = 38 + Math.floor(random() * 25);
     const centerX = width / 2;
     const centerY = height / 2;
-    const safeRadius = Math.min(width, height) * 0.28; // Avoid direct text center
+    const safeRadius = Math.min(width, height) * 0.32; // Avoid direct logo center
 
     for (let i = 0; i < spotCount; i++) {
       let x = random() * width;
