@@ -6,9 +6,29 @@
   <title>अशब्द</title>
   
   <meta name="description" content="अशब्द — An antique manuscript experience.">
-  <meta name="theme-color" content="#2b180d">
+  <meta name="theme-color" content="#26140a">
 
-  <!-- Traditional Classical Devanagari Web Fonts -->
+  <!-- Official Ashabd Favicons & App Icons from Logo Pack -->
+  <link rel="icon" type="image/x-icon" href="ashabd_website_logo_pack/favicons_and_icons/favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="ashabd_website_logo_pack/favicons_and_icons/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="ashabd_website_logo_pack/favicons_and_icons/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="ashabd_website_logo_pack/favicons_and_icons/apple-touch-icon-180x180.png">
+
+  <!-- Open Graph & Social SEO using Official OG Banner -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="अशब्द">
+  <meta property="og:description" content="अशब्द — A forgotten poetry manuscript.">
+  <meta property="og:url" content="https://ashabd.in">
+  <meta property="og:image" content="ashabd_website_logo_pack/social_media_and_og/og-banner-1200x630.jpg">
+  
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:site" content="@ashabd0">
+  <meta name="twitter:title" content="अशब्द">
+  <meta name="twitter:description" content="अशब्द — A forgotten poetry manuscript.">
+  <meta name="twitter:image" content="ashabd_website_logo_pack/social_media_and_og/og-banner-1200x630.jpg">
+
+  <!-- Classical Devanagari Literary Typography (Rozha One, Tiro Devanagari, Noto Serif) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Devanagari:wght@400;500;600;700&family=Rozha+One&family=Tiro+Devanagari+Hindi:ital@0;1&family=Yatra+One&display=swap" rel="stylesheet">
@@ -17,30 +37,62 @@
 </head>
 <body>
 
-  <!-- Background Canvas for Organic Antique Staining, Creases, Tide Marks & Fibers -->
-  <canvas id="parchment-canvas"></canvas>
+  <!-- Layer 1: Procedural Canvas for Organic Water Stains, Creases, Tide Lines & Fibers -->
+  <canvas id="parchment-canvas" aria-hidden="true"></canvas>
 
-  <!-- Procedural Antique Paper Grain Overlay -->
-  <div class="paper-grain-overlay"></div>
+  <!-- Layer 2: High-Frequency Cellulose Paper Grain Overlay -->
+  <div class="paper-grain-overlay" aria-hidden="true"></div>
 
-  <!-- Deep Antique Edge Vignette & Corner Scorches -->
-  <div class="vignette-overlay"></div>
+  <!-- Layer 3: Faint Embedded Paper Watermark (Official Logo from Logo Pack) -->
+  <div class="manuscript-watermark" aria-hidden="true">
+    <img src="ashabd_website_logo_pack/website_header_logos/logo_transparent_600w.webp" alt="" class="watermark-img" loading="eager">
+  </div>
 
-  <!-- Sacred Minimal Centerpiece: Only the Word "अशब्द" -->
-  <main class="parchment-container">
-    <div class="word-wrapper">
+  <!-- Layer 4: Antique Edge Vignette & Corner Scorches with Breathing Illumination -->
+  <div class="vignette-overlay" aria-hidden="true"></div>
+
+  <!-- Extremely Subtle Corner Colophon / Maker's Mark -->
+  <aside class="corner-colophon" aria-label="Brand Mark">
+    <img src="ashabd_website_logo_pack/website_header_logos/logo_transparent_350w.webp" alt="अशब्द" class="colophon-seal" loading="eager">
+  </aside>
+
+  <!-- Sacred Centerpiece: Strictly the Word "अशब्द" -->
+  <main class="manuscript-viewport">
+    <div class="centerpiece-word-wrap">
       <h1 class="sacred-word" lang="hi">अशब्द</h1>
     </div>
   </main>
 
-  <!-- SVG Filter for Antique Ink Bleed on Handmade Fibrous Paper -->
+  <!-- Extremely Subtle Antique Ink Social Links at the Bottom Foot of the Page -->
+  <footer class="parchment-footer">
+    <nav class="subtle-social-links" aria-label="Official Social Channels">
+      <a href="https://www.instagram.com/ashabd0/" target="_blank" rel="noopener noreferrer" class="ink-social-link" title="Instagram: @ashabd0" aria-label="Instagram: @ashabd0">
+        <svg class="ink-icon" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+          <rect x="2" y="2" width="20" height="20" rx="5.5" ry="5.5" fill="none" stroke="currentColor" stroke-width="1.6"/>
+          <circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
+          <circle cx="17.4" cy="6.6" r="1.1" fill="currentColor"/>
+        </svg>
+        <span class="ink-handle">ashabd0</span>
+      </a>
+
+      <span class="ink-separator" aria-hidden="true">·</span>
+
+      <a href="https://x.com/ashabd0/" target="_blank" rel="noopener noreferrer" class="ink-social-link" title="X: @ashabd0" aria-label="X / Twitter: @ashabd0">
+        <svg class="ink-icon" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" fill="currentColor"/>
+        </svg>
+        <span class="ink-handle">ashabd0</span>
+      </a>
+    </nav>
+  </footer>
+
+  <!-- SVG Filter for Natural Ink Bleed onto Porous Rag Paper -->
   <svg class="svg-filters" aria-hidden="true" focusable="false">
     <defs>
-      <!-- Microscopic Ink Bleed & Fiber Feathering Filter -->
       <filter id="ink-bleed" x="-10%" y="-10%" width="120%" height="120%">
-        <feTurbulence type="fractalNoise" baseFrequency="0.065" numOctaves="4" result="noise" />
-        <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.2" xChannelSelector="R" yChannelSelector="G" result="displaced" />
-        <feGaussianBlur in="displaced" stdDeviation="0.4" result="blurred" />
+        <feTurbulence type="fractalNoise" baseFrequency="0.062" numOctaves="4" result="noise" />
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.3" xChannelSelector="R" yChannelSelector="G" result="displaced" />
+        <feGaussianBlur in="displaced" stdDeviation="0.38" result="blurred" />
         <feMerge>
           <feMergeNode in="blurred" />
           <feMergeNode in="displaced" />
