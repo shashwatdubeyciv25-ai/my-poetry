@@ -954,22 +954,57 @@ function renderPoemHtml(poem) {
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Devanagari:wght@400;500;600;700&family=Rozha+One&family=Tiro+Devanagari+Hindi:ital@0;1&family=Yatra+One&display=swap" rel="stylesheet">
 
   <style>
+    :root {
+      /* Background Parchment Palette */
+      --bg-parchment: #ebdcb7;
+      --bg-parchment-light: #fbf5e8;
+      --bg-parchment-warm: #f5ebd3;
+      --bg-parchment-deep: #1c0e07;
+
+      /* Antique Ink Typography & Accents */
+      --ink-primary: #221309;
+      --ink-secondary: #562e17;
+      --ink-muted: #743e1e;
+      --ink-faint: rgba(78, 42, 20, 0.22);
+      --ink-subtle: rgba(78, 42, 20, 0.12);
+      --ink-hover: #120601;
+      --ink-tag-bg: rgba(92, 53, 28, 0.08);
+
+      /* Overlays & Atmosphere */
+      --grain-opacity: 0.26;
+      --vignette-inner: rgba(68, 34, 15, 0.22);
+      --vignette-mid: rgba(36, 17, 7, 0.55);
+      --vignette-edge: rgba(20, 9, 3, 0.82);
+    }
+
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     
     body {
       min-height: 100vh;
-      background: #ebdcb7;
-      background-image:
-        radial-gradient(ellipse 70% 60% at 50% 30%, #fbf5e8 0%, #f5ebd3 45%, rgba(240, 227, 201, 0.4) 80%, transparent 100%),
-        radial-gradient(ellipse 48% 42% at 0% 0%, #2e1609 0%, #582b13 22%, #85451e 40%, rgba(133, 69, 30, 0.2) 65%, transparent 100%),
-        radial-gradient(ellipse 52% 48% at 100% 100%, #241206 0%, #4e2510 25%, #7a3d1c 45%, rgba(122, 61, 28, 0.18) 70%, transparent 100%),
-        radial-gradient(ellipse 42% 38% at 0% 100%, #391b0d 0%, #693418 20%, #944b24 38%, rgba(148, 75, 36, 0.15) 60%, transparent 100%),
-        radial-gradient(ellipse 44% 40% at 100% 0%, #32180a 0%, #5e2c13 22%, #8a4520 42%, rgba(138, 69, 32, 0.18) 65%, transparent 100%);
-      color: #24160c;
+      background-color: var(--bg-parchment);
+      color: var(--ink-primary);
       font-family: 'Tiro Devanagari Hindi', 'Noto Serif Devanagari', Georgia, serif;
       position: relative;
       overflow-x: hidden;
       padding: 2.5rem 1.25rem 4rem;
+    }
+
+    /* Photographic Parchment Ground */
+    .parchment-background {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      background-color: var(--bg-parchment);
+      background-image:
+        url('/parchment_background.webp'),
+        url('/parchment_background.jpg'),
+        radial-gradient(ellipse 70% 60% at 50% 30%, var(--bg-parchment-light) 0%, var(--bg-parchment-warm) 45%, rgba(240, 227, 201, 0.4) 80%, transparent 100%);
+      background-position: center center;
+      background-size: cover;
+      background-repeat: no-repeat;
+      z-index: 0;
+      pointer-events: none;
     }
 
     /* Paper Grain Texture */
@@ -978,7 +1013,7 @@ function renderPoemHtml(poem) {
       inset: 0;
       pointer-events: none;
       z-index: 1;
-      opacity: 0.35;
+      opacity: var(--grain-opacity);
       mix-blend-mode: multiply;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 240 240'%3E%3Cfilter id='agedPaperNoise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.055' numOctaves='5' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.28  0 0 0 0 0.16  0 0 0 0 0.08  0 0 0 0.45 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23agedPaperNoise)'/%3E%3C/svg%3E");
     }
@@ -989,7 +1024,7 @@ function renderPoemHtml(poem) {
       inset: 0;
       pointer-events: none;
       z-index: 2;
-      background: radial-gradient(ellipse 75% 70% at 50% 50%, transparent 45%, rgba(68, 34, 15, 0.24) 75%, rgba(36, 17, 7, 0.6) 94%, rgba(20, 9, 3, 0.85) 100%);
+      background: radial-gradient(ellipse 75% 70% at 50% 50%, transparent 48%, var(--vignette-inner) 74%, var(--vignette-mid) 92%, var(--vignette-edge) 100%);
       mix-blend-mode: multiply;
     }
 
@@ -1009,29 +1044,29 @@ function renderPoemHtml(poem) {
       justify-content: space-between;
       margin-bottom: 3.5rem;
       padding-bottom: 0.8rem;
-      border-bottom: 1px dashed rgba(78, 42, 20, 0.25);
+      border-bottom: 1px dashed var(--ink-faint);
     }
 
     .brand-back-link {
       font-family: 'Rozha One', 'Tiro Devanagari Hindi', serif;
       font-size: 1.35rem;
-      color: #3b2010;
+      color: var(--ink-primary);
       text-decoration: none;
       letter-spacing: 0.05em;
-      opacity: 0.78;
-      transition: opacity 0.3s ease;
+      opacity: 0.82;
+      transition: opacity 0.3s ease, color 0.3s ease;
     }
-    .brand-back-link:hover { opacity: 1; }
+    .brand-back-link:hover { opacity: 1; color: var(--ink-hover); }
 
     .collection-link {
       font-size: 0.85rem;
-      color: #5c351c;
+      color: var(--ink-secondary);
       text-decoration: none;
       letter-spacing: 0.06em;
-      opacity: 0.7;
-      transition: opacity 0.3s ease;
+      opacity: 0.75;
+      transition: opacity 0.3s ease, color 0.3s ease;
     }
-    .collection-link:hover { opacity: 1; color: #24160c; }
+    .collection-link:hover { opacity: 1; color: var(--ink-hover); }
 
     /* Poem Header */
     .poem-header {
@@ -1045,8 +1080,8 @@ function renderPoemHtml(poem) {
       font-size: 0.75rem;
       letter-spacing: 0.12em;
       text-transform: uppercase;
-      color: #743f20;
-      opacity: 0.75;
+      color: var(--ink-muted);
+      opacity: 0.85;
       margin-bottom: 0.8rem;
     }
 
@@ -1055,24 +1090,24 @@ function renderPoemHtml(poem) {
       font-size: clamp(2.2rem, 6vw, 3.4rem);
       line-height: 1.25;
       font-weight: 500;
-      color: #24160c;
+      color: var(--ink-primary);
       margin-bottom: 0.8rem;
       letter-spacing: 0.04em;
-      text-shadow: 0 1px 2px rgba(36, 22, 12, 0.25);
+      text-shadow: 0 1px 2px rgba(34, 19, 9, 0.22);
     }
 
     .poem-subtitle {
       font-size: 1.1rem;
       font-style: italic;
-      color: #5a3219;
-      opacity: 0.82;
+      color: var(--ink-secondary);
+      opacity: 0.85;
       margin-bottom: 1rem;
     }
 
     .poem-meta {
       font-size: 0.82rem;
-      color: #704022;
-      opacity: 0.7;
+      color: var(--ink-muted);
+      opacity: 0.75;
       letter-spacing: 0.04em;
     }
 
@@ -1082,7 +1117,7 @@ function renderPoemHtml(poem) {
       line-height: 2.05;
       white-space: pre-wrap;
       word-wrap: break-word;
-      color: #20130a;
+      color: var(--ink-primary);
       letter-spacing: 0.02em;
       margin: 2.5rem 0 4rem;
       padding: 0 0.5rem;
@@ -1099,12 +1134,12 @@ function renderPoemHtml(poem) {
 
     .ink-tag {
       font-size: 0.75rem;
-      color: #5c351c;
-      background: rgba(92, 53, 28, 0.07);
+      color: var(--ink-secondary);
+      background: var(--ink-tag-bg);
       padding: 0.2rem 0.6rem;
       border-radius: 2px;
       letter-spacing: 0.04em;
-      opacity: 0.8;
+      opacity: 0.85;
     }
 
     /* Manuscript End Mark */
@@ -1112,13 +1147,13 @@ function renderPoemHtml(poem) {
       text-align: center;
       margin-top: 3.5rem;
       padding-top: 2rem;
-      border-top: 1px dashed rgba(78, 42, 20, 0.22);
+      border-top: 1px dashed var(--ink-faint);
     }
 
     .colophon-symbol {
       font-size: 1.2rem;
-      color: #743f20;
-      opacity: 0.5;
+      color: var(--ink-muted);
+      opacity: 0.6;
       margin-bottom: 1rem;
       display: block;
     }
@@ -1132,15 +1167,15 @@ function renderPoemHtml(poem) {
 
     .ink-link {
       font-size: 0.82rem;
-      color: #442a1a;
+      color: var(--ink-secondary);
       text-decoration: none;
-      opacity: 0.45;
-      transition: opacity 0.3s ease;
+      opacity: 0.65;
+      transition: opacity 0.3s ease, color 0.3s ease;
       display: inline-flex;
       align-items: center;
       gap: 0.35rem;
     }
-    .ink-link:hover { opacity: 0.88; }
+    .ink-link:hover { opacity: 1; color: var(--ink-primary); }
 
     @media (max-width: 600px) {
       body { padding: 1.5rem 1rem 3rem; }
@@ -1150,6 +1185,7 @@ function renderPoemHtml(poem) {
   </style>
 </head>
 <body>
+  <div class="parchment-background" aria-hidden="true"></div>
   <div class="paper-grain" aria-hidden="true"></div>
   <div class="vignette" aria-hidden="true"></div>
 
@@ -1214,21 +1250,82 @@ function renderArchiveHtml(writings) {
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Devanagari:wght@400;500;600&family=Rozha+One&family=Tiro+Devanagari+Hindi:ital@0;1&display=swap" rel="stylesheet">
 
   <style>
+    :root {
+      /* Background Parchment Palette */
+      --bg-parchment: #ebdcb7;
+      --bg-parchment-light: #fbf5e8;
+      --bg-parchment-warm: #f5ebd3;
+      --bg-parchment-deep: #1c0e07;
+
+      /* Antique Ink Typography & Accents */
+      --ink-primary: #221309;
+      --ink-secondary: #562e17;
+      --ink-muted: #743e1e;
+      --ink-faint: rgba(78, 42, 20, 0.22);
+      --ink-subtle: rgba(78, 42, 20, 0.12);
+      --ink-hover: #120601;
+
+      /* Overlays & Atmosphere */
+      --grain-opacity: 0.26;
+      --vignette-inner: rgba(68, 34, 15, 0.22);
+      --vignette-mid: rgba(36, 17, 7, 0.55);
+      --vignette-edge: rgba(20, 9, 3, 0.82);
+    }
+
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     
     body {
       min-height: 100vh;
-      background: #ebdcb7;
-      background-image:
-        radial-gradient(ellipse 70% 60% at 50% 30%, #fbf5e8 0%, #f5ebd3 45%, rgba(240, 227, 201, 0.4) 80%, transparent 100%),
-        radial-gradient(ellipse 48% 42% at 0% 0%, #2e1609 0%, #582b13 22%, #85451e 40%, rgba(133, 69, 30, 0.2) 65%, transparent 100%),
-        radial-gradient(ellipse 52% 48% at 100% 100%, #241206 0%, #4e2510 25%, #7a3d1c 45%, rgba(122, 61, 28, 0.18) 70%, transparent 100%);
-      color: #24160c;
+      background-color: var(--bg-parchment);
+      color: var(--ink-primary);
       font-family: 'Tiro Devanagari Hindi', 'Noto Serif Devanagari', Georgia, serif;
+      position: relative;
+      overflow-x: hidden;
       padding: 3rem 1.5rem 5rem;
     }
 
+    /* Photographic Parchment Ground */
+    .parchment-background {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      background-color: var(--bg-parchment);
+      background-image:
+        url('/parchment_background.webp'),
+        url('/parchment_background.jpg'),
+        radial-gradient(ellipse 70% 60% at 50% 30%, var(--bg-parchment-light) 0%, var(--bg-parchment-warm) 45%, rgba(240, 227, 201, 0.4) 80%, transparent 100%);
+      background-position: center center;
+      background-size: cover;
+      background-repeat: no-repeat;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* Paper Grain Texture */
+    .paper-grain {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 1;
+      opacity: var(--grain-opacity);
+      mix-blend-mode: multiply;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 240 240'%3E%3Cfilter id='agedPaperNoise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.055' numOctaves='5' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.28  0 0 0 0 0.16  0 0 0 0 0.08  0 0 0 0.45 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23agedPaperNoise)'/%3E%3C/svg%3E");
+    }
+
+    /* Outer Vignette */
+    .vignette {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 2;
+      background: radial-gradient(ellipse 75% 70% at 50% 50%, transparent 48%, var(--vignette-inner) 74%, var(--vignette-mid) 92%, var(--vignette-edge) 100%);
+      mix-blend-mode: multiply;
+    }
+
     .page-container {
+      position: relative;
+      z-index: 10;
       max-width: 680px;
       margin: 0 auto;
     }
@@ -1237,22 +1334,26 @@ function renderArchiveHtml(writings) {
       text-align: center;
       margin-bottom: 3.5rem;
       padding-bottom: 1.5rem;
-      border-bottom: 1px dashed rgba(78, 42, 20, 0.25);
+      border-bottom: 1px dashed var(--ink-faint);
     }
 
     .brand-title {
       font-family: 'Rozha One', 'Tiro Devanagari Hindi', serif;
       font-size: 2.8rem;
-      color: #24160c;
+      color: var(--ink-primary);
       text-decoration: none;
       display: inline-block;
       margin-bottom: 0.5rem;
+      transition: color 0.3s ease;
+    }
+    .brand-title:hover {
+      color: var(--ink-hover);
     }
 
     .archive-subtitle {
       font-size: 0.95rem;
-      color: #5c351c;
-      opacity: 0.75;
+      color: var(--ink-secondary);
+      opacity: 0.82;
       letter-spacing: 0.08em;
     }
 
@@ -1265,7 +1366,7 @@ function renderArchiveHtml(writings) {
 
     .writing-item {
       padding-bottom: 1.8rem;
-      border-bottom: 1px dotted rgba(78, 42, 20, 0.18);
+      border-bottom: 1px dotted var(--ink-subtle);
       transition: transform 0.2s ease;
     }
 
@@ -1278,23 +1379,23 @@ function renderArchiveHtml(writings) {
     .writing-item-title {
       font-family: 'Rozha One', 'Tiro Devanagari Hindi', serif;
       font-size: 1.6rem;
-      color: #22140a;
+      color: var(--ink-primary);
       margin-bottom: 0.35rem;
       transition: color 0.2s ease;
     }
-    .writing-link:hover .writing-item-title { color: #5c2c12; }
+    .writing-link:hover .writing-item-title { color: var(--ink-secondary); }
 
     .writing-item-subtitle {
       font-size: 0.95rem;
-      color: #58331d;
-      opacity: 0.8;
+      color: var(--ink-secondary);
+      opacity: 0.85;
       margin-bottom: 0.5rem;
     }
 
     .writing-item-meta {
       font-size: 0.78rem;
-      color: #744222;
-      opacity: 0.65;
+      color: var(--ink-muted);
+      opacity: 0.75;
       display: flex;
       gap: 0.8rem;
     }
@@ -1302,8 +1403,8 @@ function renderArchiveHtml(writings) {
     .empty-state {
       text-align: center;
       padding: 4rem 1rem;
-      color: #633b20;
-      opacity: 0.75;
+      color: var(--ink-secondary);
+      opacity: 0.85;
       font-size: 1.1rem;
       font-style: italic;
     }
@@ -1313,14 +1414,19 @@ function renderArchiveHtml(writings) {
       text-align: center;
       margin-top: 4rem;
       font-size: 0.9rem;
-      color: #5c351c;
+      color: var(--ink-secondary);
       text-decoration: none;
-      opacity: 0.7;
+      opacity: 0.75;
+      transition: opacity 0.3s ease, color 0.3s ease;
     }
-    .back-home:hover { opacity: 1; }
+    .back-home:hover { opacity: 1; color: var(--ink-primary); }
   </style>
 </head>
 <body>
+  <div class="parchment-background" aria-hidden="true"></div>
+  <div class="paper-grain" aria-hidden="true"></div>
+  <div class="vignette" aria-hidden="true"></div>
+
   <div class="page-container">
     <header class="archive-header">
       <a href="/" class="brand-title">अशब्द</a>
@@ -1366,25 +1472,113 @@ function renderNotFoundHtml(customMessage = null) {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>अशब्द — मौन</title>
+  <link rel="icon" type="image/x-icon" href="/ashabd_website_logo_pack/favicons_and_icons/favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Rozha+One&family=Tiro+Devanagari+Hindi:ital@0;1&display=swap" rel="stylesheet">
   <style>
+    :root {
+      /* Background Parchment Palette */
+      --bg-parchment: #ebdcb7;
+      --bg-parchment-light: #fbf5e8;
+      --bg-parchment-warm: #f5ebd3;
+      --bg-parchment-deep: #1c0e07;
+
+      /* Antique Ink Typography & Accents */
+      --ink-primary: #221309;
+      --ink-secondary: #562e17;
+      --ink-muted: #743e1e;
+
+      /* Overlays & Atmosphere */
+      --grain-opacity: 0.26;
+      --vignette-inner: rgba(68, 34, 15, 0.22);
+      --vignette-mid: rgba(36, 17, 7, 0.55);
+      --vignette-edge: rgba(20, 9, 3, 0.82);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
-      background: #ebdcb7;
-      color: #24160c;
+      background-color: var(--bg-parchment);
+      color: var(--ink-primary);
       font-family: 'Tiro Devanagari Hindi', Georgia, serif;
       text-align: center;
       padding: 2rem;
+      position: relative;
+      overflow-x: hidden;
     }
-    h1 { font-size: 2.8rem; margin-bottom: 0.8rem; font-weight: normal; }
-    p { font-size: 1.15rem; color: #5c351c; margin-bottom: 2rem; opacity: 0.85; }
-    a { color: #3b2010; text-decoration: underline; }
+    /* Photographic Parchment Ground */
+    .parchment-background {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      background-color: var(--bg-parchment);
+      background-image:
+        url('/parchment_background.webp'),
+        url('/parchment_background.jpg'),
+        radial-gradient(ellipse 70% 60% at 50% 30%, var(--bg-parchment-light) 0%, var(--bg-parchment-warm) 45%, rgba(240, 227, 201, 0.4) 80%, transparent 100%);
+      background-position: center center;
+      background-size: cover;
+      background-repeat: no-repeat;
+      z-index: 0;
+      pointer-events: none;
+    }
+    /* Paper Grain Texture */
+    .paper-grain {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 1;
+      opacity: var(--grain-opacity);
+      mix-blend-mode: multiply;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 240 240'%3E%3Cfilter id='agedPaperNoise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.055' numOctaves='5' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.28  0 0 0 0 0.16  0 0 0 0 0.08  0 0 0 0.45 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23agedPaperNoise)'/%3E%3C/svg%3E");
+    }
+    /* Outer Vignette */
+    .vignette {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 2;
+      background: radial-gradient(ellipse 75% 70% at 50% 50%, transparent 48%, var(--vignette-inner) 74%, var(--vignette-mid) 92%, var(--vignette-edge) 100%);
+      mix-blend-mode: multiply;
+    }
+    .not-found-content {
+      position: relative;
+      z-index: 10;
+      max-width: 540px;
+    }
+    h1 {
+      font-family: 'Rozha One', 'Tiro Devanagari Hindi', serif;
+      font-size: 2.8rem;
+      margin-bottom: 0.8rem;
+      font-weight: normal;
+      color: var(--ink-primary);
+    }
+    p {
+      font-size: 1.15rem;
+      color: var(--ink-secondary);
+      margin-bottom: 2rem;
+      opacity: 0.85;
+      line-height: 1.6;
+    }
+    a {
+      color: var(--ink-secondary);
+      text-decoration: underline;
+      transition: color 0.2s ease;
+    }
+    a:hover {
+      color: var(--ink-primary);
+    }
   </style>
 </head>
 <body>
-  <div>
+  <div class="parchment-background" aria-hidden="true"></div>
+  <div class="paper-grain" aria-hidden="true"></div>
+  <div class="vignette" aria-hidden="true"></div>
+  <div class="not-found-content">
     <h1>४०४ — यह शब्द अभी मौन है</h1>
     <p>${customMessage || 'यह रचना उपलब्ध नहीं है या अभी एक अप्रकाशित विचार है।'}</p>
     <a href="/">← मुख्य पृष्ठ पर वापस लौटें</a>

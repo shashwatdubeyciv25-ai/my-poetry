@@ -1,7 +1,36 @@
 /* ==========================================================================
-   अशब्द (Ashabd.in) — Antique Manuscript Single-Page Experience
-   Centuries-Old Weathered Parchment with Sacred Word & Interactive Arrow
+   अशब्द (Ashabd.in) — Antique Manuscript Unified Design System
+   Consistent Parchment Palette, Atmosphere & Typography Across All Pages
    ========================================================================== */
+
+:root {
+  /* Background Parchment Palette */
+  --bg-parchment: #ebdcb7;
+  --bg-parchment-light: #fbf5e8;
+  --bg-parchment-warm: #f5ebd3;
+  --bg-parchment-deep: #1c0e07;
+
+  /* Antique Ink Typography & Accents */
+  --ink-primary: #221309;           /* Main Devanagari titles, poem stanzas, archive titles */
+  --ink-secondary: #562e17;         /* Subtitles, author notes, secondary text */
+  --ink-muted: #743e1e;             /* Badge (कविता), dates, reading meta, tags */
+  --ink-faint: rgba(78, 42, 20, 0.22);  /* Dashed dividers, top marginalia rules */
+  --ink-subtle: rgba(78, 42, 20, 0.12); /* Dotted archive item dividers */
+  --ink-hover: #120601;             /* Deep darkened ink on hover/focus */
+  --ink-tag-bg: rgba(92, 53, 28, 0.08); /* Tag backgrounds */
+
+  /* Candlelight Golden Glow */
+  --gold-light: #fffdf2;
+  --gold-mid: #fde08b;
+  --gold-amber: #ffd56b;
+  --gold-glow: rgba(255, 235, 165, 0.75);
+
+  /* Overlays & Atmosphere */
+  --grain-opacity: 0.26;
+  --vignette-inner: rgba(68, 34, 15, 0.22);
+  --vignette-mid: rgba(36, 17, 7, 0.55);
+  --vignette-edge: rgba(20, 9, 3, 0.82);
+}
 
 /* ---------------- Resets & Zero-Scroll Setup ---------------- */
 *, *::before, *::after {
@@ -22,7 +51,8 @@ html, body {
   position: fixed;
   top: 0;
   left: 0;
-  background-color: #1c0e07;
+  background-color: var(--bg-parchment-deep);
+  color: var(--ink-primary);
   cursor: default;
 }
 
@@ -32,8 +62,11 @@ html, body {
   inset: 0;
   width: 100vw;
   height: 100vh;
-  background-color: #ebdcb7;
-  background-image: url('parchment_background.webp'), url('parchment_background.jpg');
+  background-color: var(--bg-parchment);
+  background-image:
+    url('/parchment_background.webp'),
+    url('/parchment_background.jpg'),
+    radial-gradient(ellipse 70% 60% at 50% 30%, var(--bg-parchment-light) 0%, var(--bg-parchment-warm) 45%, rgba(240, 227, 201, 0.4) 80%, transparent 100%);
   background-position: center center;
   background-size: cover;
   background-repeat: no-repeat;
@@ -53,28 +86,30 @@ html, body {
 }
 
 /* ---------------- Layer 3: Micro Paper Grain Texture ---------------- */
-.paper-grain-overlay {
+.paper-grain-overlay,
+.paper-grain {
   position: fixed;
   inset: 0;
   width: 100vw;
   height: 100vh;
   pointer-events: none;
   z-index: 2;
-  opacity: 0.28;
+  opacity: var(--grain-opacity);
   mix-blend-mode: multiply;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 240 240'%3E%3Cfilter id='agedPaperNoise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.055' numOctaves='5' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.28  0 0 0 0 0.16  0 0 0 0 0.08  0 0 0 0.45 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23agedPaperNoise)'/%3E%3C/svg%3E");
   background-repeat: repeat;
 }
 
 /* ---------------- Layer 4: Deep Weathered Vignette & Candlelight Atmosphere ---------------- */
-.vignette-overlay {
+.vignette-overlay,
+.vignette {
   position: fixed;
   inset: 0;
   width: 100vw;
   height: 100vh;
   pointer-events: none;
   z-index: 3;
-  background: radial-gradient(ellipse 75% 70% at 50% 50%, transparent 48%, rgba(68, 34, 15, 0.22) 74%, rgba(36, 17, 7, 0.58) 92%, rgba(20, 9, 3, 0.85) 100%);
+  background: radial-gradient(ellipse 75% 70% at 50% 50%, transparent 48%, var(--vignette-inner) 74%, var(--vignette-mid) 92%, var(--vignette-edge) 100%);
   mix-blend-mode: multiply;
   animation: candle-drift 18s ease-in-out infinite alternate;
 }

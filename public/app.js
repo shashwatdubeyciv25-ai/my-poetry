@@ -55,16 +55,16 @@
     ctx.save();
     ctx.globalCompositeOperation = 'multiply';
 
-    // Stains concentrated around edges and corners
+    // Stains concentrated around edges and corners - harmonized for uniform page brightness
     const stainZones = [
-      { x: 0, y: 0, r: Math.max(width, height) * 0.42, c1: 'rgba(92, 45, 18, 0.18)', c2: 'rgba(92, 45, 18, 0.04)' },
-      { x: width, y: height, r: Math.max(width, height) * 0.48, c1: 'rgba(78, 36, 15, 0.2)', c2: 'rgba(78, 36, 15, 0.04)' },
-      { x: 0, y: height, r: Math.max(width, height) * 0.38, c1: 'rgba(105, 52, 24, 0.16)', c2: 'rgba(105, 52, 24, 0.03)' },
-      { x: width, y: 0, r: Math.max(width, height) * 0.4, c1: 'rgba(85, 42, 17, 0.17)', c2: 'rgba(85, 42, 17, 0.03)' },
-      { x: width * 0.1, y: height * 0.5, r: width * 0.25, c1: 'rgba(120, 60, 25, 0.08)', c2: 'rgba(120, 60, 25, 0.02)' },
-      { x: width * 0.9, y: height * 0.45, r: width * 0.28, c1: 'rgba(110, 55, 22, 0.09)', c2: 'rgba(110, 55, 22, 0.02)' },
-      { x: width * 0.5, y: height * 0.05, r: width * 0.3, c1: 'rgba(130, 65, 28, 0.07)', c2: 'rgba(130, 65, 28, 0.02)' },
-      { x: width * 0.52, y: height * 0.95, r: width * 0.32, c1: 'rgba(100, 48, 20, 0.1)', c2: 'rgba(100, 48, 20, 0.02)' }
+      { x: 0, y: 0, r: Math.max(width, height) * 0.42, c1: 'rgba(92, 45, 18, 0.08)', c2: 'rgba(92, 45, 18, 0.02)' },
+      { x: width, y: height, r: Math.max(width, height) * 0.48, c1: 'rgba(78, 36, 15, 0.09)', c2: 'rgba(78, 36, 15, 0.02)' },
+      { x: 0, y: height, r: Math.max(width, height) * 0.38, c1: 'rgba(105, 52, 24, 0.07)', c2: 'rgba(105, 52, 24, 0.015)' },
+      { x: width, y: 0, r: Math.max(width, height) * 0.4, c1: 'rgba(85, 42, 17, 0.08)', c2: 'rgba(85, 42, 17, 0.015)' },
+      { x: width * 0.1, y: height * 0.5, r: width * 0.25, c1: 'rgba(120, 60, 25, 0.04)', c2: 'rgba(120, 60, 25, 0.01)' },
+      { x: width * 0.9, y: height * 0.45, r: width * 0.28, c1: 'rgba(110, 55, 22, 0.04)', c2: 'rgba(110, 55, 22, 0.01)' },
+      { x: width * 0.5, y: height * 0.05, r: width * 0.3, c1: 'rgba(130, 65, 28, 0.03)', c2: 'rgba(130, 65, 28, 0.01)' },
+      { x: width * 0.52, y: height * 0.95, r: width * 0.32, c1: 'rgba(100, 48, 20, 0.04)', c2: 'rgba(100, 48, 20, 0.01)' }
     ];
 
     stainZones.forEach(zone => {
