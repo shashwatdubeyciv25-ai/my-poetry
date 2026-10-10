@@ -29,7 +29,7 @@ export default {
       if (pathname === '/admin.html') {
         return Response.redirect(new URL('/admin', request.url), 302);
       }
-      if (pathname === '/admin' || pathname === '/admin/') {
+      if (pathname === '/admin' || pathname === '/admin/' || pathname === '/admin/analytics' || pathname === '/admin/analytics/') {
         return handleAdminPage(request, env);
       }
 
@@ -97,6 +97,19 @@ export default {
       }
 
       // ------------------------------------------------------------------------
+      // 3b. ROUTE GROUP: Website Analytics APIs (/api/analytics/*)
+      // ------------------------------------------------------------------------
+      if (pathname === '/api/analytics/collect' && request.method === 'POST') {
+        return handleAnalyticsCollect(request, env, ctx);
+      }
+      if (pathname === '/api/analytics/data' && request.method === 'GET') {
+        return handleGetAnalyticsData(request, env);
+      }
+      if (pathname === '/api/analytics/test-ping' && request.method === 'POST') {
+        return handleAnalyticsTestPing(request, env);
+      }
+
+      // ------------------------------------------------------------------------
       // 4. ROUTE: Public API for Published Writings (/api/public/writings)
       // ------------------------------------------------------------------------
       if (pathname === '/api/public/writings' && request.method === 'GET') {
@@ -124,7 +137,25 @@ export default {
       // 7. ROUTE: Static Assets (/, /style.css, /app.js, /ashabd_website_logo_pack/*)
       // ------------------------------------------------------------------------
       if (env.ASSETS) {
-        return await env.ASSETS.fetch(request);
+        const assetRes = await env.ASSETS.fetch(request);
+        if (assetRes.status === 404 && request.method === 'GET' && request.headers.get('accept')?.includes('text/html')) {
+          if (ctx && ctx.waitUntil) {
+            ctx.waitUntil(recordAnalyticsEvent(env.DB, {
+              path: pathname,
+              event_type: 'error_404',
+              status_code: 404,
+              referrer_source: getReferrerDetails(request.headers.get('referer')).source,
+              referrer_host: getReferrerDetails(request.headers.get('referer')).host,
+              is_bot: isBotRequest(request),
+              visitor_id: await getAnonymousVisitorId(request, env)
+            }));
+          }
+          return new Response(renderNotFoundHtml(), {
+            status: 404,
+            headers: { 'Content-Type': 'text/html; charset=utf-8' }
+          });
+        }
+        return assetRes;
       }
 
       // Fallback if env.ASSETS is not configured
@@ -312,6 +343,732 @@ async function ensureWritingsTable(db) {
   } catch (e) {
     console.warn('ensureWritingsTable notice:', e?.message || e);
   }
+}
+
+/* ==========================================================================
+   WEBSITE ANALYTICS BACKEND (CLOUDFLARE EDGE & D1 ANALYTICS)
+   ========================================================================== */
+
+let analyticsTablesEnsured = false;
+async function ensureAnalyticsTables(db) {
+  if (!db || analyticsTablesEnsured) return;
+  try {
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS analytics_events (
+        id TEXT PRIMARY KEY,
+        timestamp INTEGER NOT NULL,
+        date TEXT NOT NULL,
+        path TEXT NOT NULL,
+        content_slug TEXT,
+        content_type TEXT DEFAULT 'Page',
+        event_type TEXT NOT NULL DEFAULT 'pageview',
+        visitor_id TEXT NOT NULL,
+        is_returning INTEGER NOT NULL DEFAULT 0,
+        country TEXT DEFAULT 'XX',
+        referrer_source TEXT DEFAULT 'direct',
+        referrer_host TEXT DEFAULT 'direct',
+        device_type TEXT DEFAULT 'desktop',
+        browser TEXT DEFAULT 'Other',
+        os TEXT DEFAULT 'Other',
+        duration_seconds INTEGER DEFAULT 0,
+        is_bot INTEGER DEFAULT 0,
+        status_code INTEGER DEFAULT 200
+      )
+    `).run();
+
+    try {
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_analytics_timestamp ON analytics_events(timestamp DESC)`).run();
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_analytics_date ON analytics_events(date)`).run();
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_analytics_path ON analytics_events(path)`).run();
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_analytics_event_type ON analytics_events(event_type)`).run();
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_analytics_visitor ON analytics_events(visitor_id, date)`).run();
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_analytics_bot ON analytics_events(is_bot)`).run();
+    } catch (_) {}
+    analyticsTablesEnsured = true;
+  } catch (e) {
+    console.warn('ensureAnalyticsTables notice:', e?.message || e);
+  }
+}
+
+async function getAnonymousVisitorId(request, env) {
+  const ip = request.headers.get('cf-connecting-ip') || '127.0.0.1';
+  const ua = request.headers.get('user-agent') || '';
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const salt = env.ANALYTICS_SALT || 'ashabd-salt-2026-edge';
+  const data = new TextEncoder().encode(`${ip}|${ua}|${salt}|${dateStr}`);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.slice(0, 8).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function isBotRequest(request) {
+  const ua = request.headers.get('user-agent') || '';
+  if (!ua) return 0;
+  const botPattern = /bot|spider|crawler|crawling|slurp|bingbot|googlebot|yandex|duckduckbot|baiduspider|facebookexternalhit|twitterbot|rogerbot|linkedinbot|embedly|quora link preview|showyoubot|outbrain|pinterest|slackbot|vkShare|W3C_Validator|whatsapp|telegrambot|applebot|petalbot|semrush|ahrefs/i;
+  return botPattern.test(ua) ? 1 : 0;
+}
+
+function getClientDetails(request) {
+  const ua = request.headers.get('user-agent') || '';
+  let device_type = 'desktop';
+  if (/tablet|ipad|playbook|silk/i.test(ua)) {
+    device_type = 'tablet';
+  } else if (/mobile|iphone|ipod|android|blackberry|iemobile|kindle/i.test(ua)) {
+    device_type = 'mobile';
+  }
+
+  let browser = 'Other';
+  if (/edg/i.test(ua)) browser = 'Edge';
+  else if (/samsungbrowser/i.test(ua)) browser = 'Samsung Internet';
+  else if (/chrome|crios/i.test(ua)) browser = 'Chrome';
+  else if (/firefox|fxios/i.test(ua)) browser = 'Firefox';
+  else if (/safari/i.test(ua)) browser = 'Safari';
+  else if (/opera|opr/i.test(ua)) browser = 'Opera';
+
+  let os = 'Other';
+  if (/android/i.test(ua)) os = 'Android';
+  else if (/iphone|ipad|ipod/i.test(ua)) os = 'iOS';
+  else if (/windows/i.test(ua)) os = 'Windows';
+  else if (/macintosh|mac os x/i.test(ua)) os = 'macOS';
+  else if (/linux/i.test(ua)) os = 'Linux';
+
+  return { device_type, browser, os };
+}
+
+function getReferrerDetails(referrer) {
+  if (!referrer) return { source: 'direct', host: 'direct' };
+  try {
+    const url = new URL(referrer);
+    const host = url.hostname.toLowerCase();
+    if (host.includes('ashabd.in')) return { source: 'internal', host: 'ashabd.in' };
+    if (host.includes('instagram.com') || host.includes('l.instagram.com')) return { source: 'instagram', host: 'Instagram' };
+    if (host.includes('t.co') || host.includes('twitter.com') || host.includes('x.com')) return { source: 'twitter', host: 'X (Twitter)' };
+    if (host.includes('google.')) return { source: 'google', host: 'Google' };
+    if (host.includes('bing.')) return { source: 'bing', host: 'Bing' };
+    if (host.includes('duckduckgo.')) return { source: 'duckduckgo', host: 'DuckDuckGo' };
+    if (host.includes('yahoo.')) return { source: 'yahoo', host: 'Yahoo' };
+    if (host.includes('facebook.') || host.includes('fb.me') || host.includes('l.facebook.com')) return { source: 'facebook', host: 'Facebook' };
+    if (host.includes('linkedin.')) return { source: 'linkedin', host: 'LinkedIn' };
+    if (host.includes('reddit.')) return { source: 'reddit', host: 'Reddit' };
+    if (host.includes('youtube.')) return { source: 'youtube', host: 'YouTube' };
+    if (host.includes('pinterest.')) return { source: 'pinterest', host: 'Pinterest' };
+    return { source: 'other', host };
+  } catch {
+    return { source: 'other', host: 'external' };
+  }
+}
+
+async function recordAnalyticsEvent(db, event) {
+  if (!db) return;
+  try {
+    await ensureAnalyticsTables(db);
+    const id = (crypto.randomUUID ? crypto.randomUUID() : (Math.random().toString(36).slice(2) + Date.now().toString(36)));
+    await db.prepare(`
+      INSERT INTO analytics_events (
+        id, timestamp, date, path, content_slug, content_type, event_type,
+        visitor_id, is_returning, country, referrer_source, referrer_host,
+        device_type, browser, os, duration_seconds, is_bot, status_code
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      id,
+      event.timestamp || Date.now(),
+      event.date || new Date().toISOString().slice(0, 10),
+      event.path || '/',
+      event.content_slug || null,
+      event.content_type || 'Page',
+      event.event_type || 'pageview',
+      event.visitor_id || 'anon',
+      event.is_returning ? 1 : 0,
+      event.country || 'XX',
+      event.referrer_source || 'direct',
+      event.referrer_host || 'direct',
+      event.device_type || 'desktop',
+      event.browser || 'Other',
+      event.os || 'Other',
+      event.duration_seconds || 0,
+      event.is_bot ? 1 : 0,
+      event.status_code || 200
+    ).run();
+  } catch (err) {
+    console.warn('recordAnalyticsEvent error:', err?.message || err);
+  }
+}
+
+async function handleAnalyticsCollect(request, env, ctx) {
+  if (request.method !== 'POST') {
+    return new Response(null, { status: 405 });
+  }
+
+  let body = {};
+  try {
+    body = await request.json();
+  } catch {
+    try {
+      const text = await request.text();
+      body = JSON.parse(text);
+    } catch {}
+  }
+
+  const rawPath = body.path || '/';
+  const path = rawPath.split('?')[0];
+  if (path.startsWith('/admin') || path.startsWith('/api')) {
+    return new Response(null, { status: 204 });
+  }
+
+  const timestamp = Date.now();
+  const date = new Date().toISOString().slice(0, 10);
+  const visitor_id = await getAnonymousVisitorId(request, env);
+  const is_bot = isBotRequest(request);
+  const client = getClientDetails(request);
+  const country = request.headers.get('cf-ipcountry') || request.cf?.country || 'XX';
+  const refDetails = getReferrerDetails(body.ref || request.headers.get('referer'));
+
+  const slugMatch = path.match(/^\/(?:poems|poetry|writing|writings)\/([^\/]+)$/);
+  const content_slug = slugMatch ? decodeURIComponent(slugMatch[1]) : null;
+
+  const eventData = {
+    timestamp,
+    date,
+    path,
+    content_slug,
+    content_type: content_slug ? 'Poetry' : 'Page',
+    event_type: body.type || 'pageview',
+    visitor_id,
+    is_returning: !!body.is_returning,
+    country,
+    referrer_source: refDetails.source,
+    referrer_host: refDetails.host,
+    device_type: client.device_type,
+    browser: client.browser,
+    os: client.os,
+    duration_seconds: parseInt(body.duration, 10) || 0,
+    is_bot,
+    status_code: 200
+  };
+
+  if (ctx && ctx.waitUntil) {
+    ctx.waitUntil(recordAnalyticsEvent(env.DB, eventData));
+  } else {
+    await recordAnalyticsEvent(env.DB, eventData);
+  }
+
+  return new Response(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Cache-Control': 'no-store, no-cache, must-revalidate'
+    }
+  });
+}
+
+const COUNTRY_MAP = {
+  IN: { name: 'भारत (India)', flag: '🇮🇳' },
+  US: { name: 'United States', flag: '🇺🇸' },
+  GB: { name: 'United Kingdom', flag: '🇬🇧' },
+  CA: { name: 'Canada', flag: '🇨🇦' },
+  AU: { name: 'Australia', flag: '🇦🇺' },
+  DE: { name: 'Germany', flag: '🇩🇪' },
+  FR: { name: 'France', flag: '🇫🇷' },
+  AE: { name: 'United Arab Emirates', flag: '🇦🇪' },
+  SG: { name: 'Singapore', flag: '🇸🇬' },
+  NP: { name: 'नेपाल (Nepal)', flag: '🇳🇵' },
+  PK: { name: 'Pakistan', flag: '🇵🇰' },
+  BD: { name: 'Bangladesh', flag: '🇧🇩' },
+  NL: { name: 'Netherlands', flag: '🇳🇱' },
+  RU: { name: 'Russia', flag: '🇷🇺' },
+  JP: { name: 'Japan', flag: '🇯🇵' },
+  XX: { name: 'स्थानीय / अज्ञात (Local / Unknown)', flag: '🌐' }
+};
+
+async function handleGetAnalyticsData(request, env) {
+  const user = await getAuthenticatedUser(request, env);
+  if (!user) {
+    return jsonResponse({ error: 'Unauthorized: Administrator session required.' }, 401);
+  }
+
+  const db = env.DB || env['ashabd-db'];
+  if (!db) {
+    return jsonResponse({ error: 'Database not available' }, 500);
+  }
+
+  await ensureAnalyticsTables(db);
+  await ensureWritingsTable(db);
+
+  const url = new URL(request.url);
+  const period = url.searchParams.get('period') || '7d';
+  const customStart = url.searchParams.get('startDate');
+  const customEnd = url.searchParams.get('endDate');
+
+  const now = Date.now();
+  const oneDayMs = 24 * 60 * 60 * 1000;
+
+  const todayStart = new Date();
+  todayStart.setUTCHours(0, 0, 0, 0);
+  const todayStartMs = todayStart.getTime();
+
+  let startMs = now - 7 * oneDayMs;
+  let endMs = now;
+  let prevStartMs = now - 14 * oneDayMs;
+  let prevEndMs = startMs;
+  let isHourly = false;
+
+  if (period === 'today') {
+    startMs = todayStartMs;
+    endMs = now;
+    prevStartMs = todayStartMs - oneDayMs;
+    prevEndMs = todayStartMs;
+    isHourly = true;
+  } else if (period === 'yesterday') {
+    startMs = todayStartMs - oneDayMs;
+    endMs = todayStartMs;
+    prevStartMs = todayStartMs - 2 * oneDayMs;
+    prevEndMs = startMs;
+    isHourly = true;
+  } else if (period === '7d') {
+    startMs = now - 7 * oneDayMs;
+    endMs = now;
+    prevStartMs = now - 14 * oneDayMs;
+    prevEndMs = startMs;
+  } else if (period === '30d') {
+    startMs = now - 30 * oneDayMs;
+    endMs = now;
+    prevStartMs = now - 60 * oneDayMs;
+    prevEndMs = startMs;
+  } else if (period === '90d') {
+    startMs = now - 90 * oneDayMs;
+    endMs = now;
+    prevStartMs = now - 180 * oneDayMs;
+    prevEndMs = startMs;
+  } else if (period === 'custom' && customStart && customEnd) {
+    startMs = new Date(customStart + 'T00:00:00Z').getTime() || (now - 7 * oneDayMs);
+    endMs = new Date(customEnd + 'T23:59:59Z').getTime() || now;
+    const diff = endMs - startMs;
+    prevStartMs = startMs - diff;
+    prevEndMs = startMs;
+  }
+
+  // 1. Summary Counts for Current Period
+  const currStats = await db.prepare(`
+    SELECT
+      COUNT(CASE WHEN event_type = 'pageview' THEN 1 END) as page_views,
+      COUNT(DISTINCT visitor_id) as total_visitors,
+      COUNT(DISTINCT visitor_id) as unique_visitors,
+      COUNT(CASE WHEN event_type = 'read' THEN 1 END) as total_reads
+    FROM analytics_events
+    WHERE is_bot = 0 AND timestamp >= ? AND timestamp <= ?
+  `).bind(startMs, endMs).first() || {};
+
+  // Previous Period for Comparison
+  const prevStats = await db.prepare(`
+    SELECT
+      COUNT(CASE WHEN event_type = 'pageview' THEN 1 END) as page_views,
+      COUNT(DISTINCT visitor_id) as unique_visitors
+    FROM analytics_events
+    WHERE is_bot = 0 AND timestamp >= ? AND timestamp <= ?
+  `).bind(prevStartMs, prevEndMs).first() || {};
+
+  // Active Online Visitors (last 5 minutes = 300,000 ms)
+  const activeOnline = await db.prepare(`
+    SELECT COUNT(DISTINCT visitor_id) as online
+    FROM analytics_events
+    WHERE timestamp >= ? AND is_bot = 0
+  `).bind(now - 300000).first('online') || 0;
+
+  // Multi-interval visitor breakdown
+  const todayVisitors = await db.prepare(`
+    SELECT COUNT(DISTINCT visitor_id) as v, COUNT(CASE WHEN event_type = 'pageview' THEN 1 END) as p
+    FROM analytics_events WHERE timestamp >= ? AND is_bot = 0
+  `).bind(todayStartMs).first() || { v: 0, p: 0 };
+
+  const last7dVisitors = await db.prepare(`
+    SELECT COUNT(DISTINCT visitor_id) as v, COUNT(CASE WHEN event_type = 'pageview' THEN 1 END) as p
+    FROM analytics_events WHERE timestamp >= ? AND is_bot = 0
+  `).bind(now - 7 * oneDayMs).first() || { v: 0, p: 0 };
+
+  const last30dVisitors = await db.prepare(`
+    SELECT COUNT(DISTINCT visitor_id) as v, COUNT(CASE WHEN event_type = 'pageview' THEN 1 END) as p
+    FROM analytics_events WHERE timestamp >= ? AND is_bot = 0
+  `).bind(now - 30 * oneDayMs).first() || { v: 0, p: 0 };
+
+  const allTimeStats = await db.prepare(`
+    SELECT COUNT(DISTINCT visitor_id) as v, COUNT(CASE WHEN event_type = 'pageview' THEN 1 END) as p
+    FROM analytics_events WHERE is_bot = 0
+  `).first() || { v: 0, p: 0 };
+
+  // Content Counts from Writings Table
+  const totalPoems = await db.prepare(`
+    SELECT COUNT(*) as c FROM writings WHERE status = 'Published' AND (content_type = 'Poetry' OR content_type = 'कविता')
+  `).first('c') || 0;
+
+  const totalArticles = await db.prepare(`
+    SELECT COUNT(*) as c FROM writings WHERE status = 'Published' AND content_type != 'Poetry' AND content_type != 'कविता'
+  `).first('c') || 0;
+
+  // 2. Traffic Trends Chart Data
+  let chartPoints = [];
+  if (isHourly) {
+    const { results: hourlyRows } = await db.prepare(`
+      SELECT CAST(strftime('%H', datetime(timestamp/1000, 'unixepoch')) AS INTEGER) as hour,
+             COUNT(CASE WHEN event_type = 'pageview' THEN 1 END) as pageviews,
+             COUNT(DISTINCT visitor_id) as visitors,
+             COUNT(CASE WHEN event_type = 'read' THEN 1 END) as reads,
+             COUNT(DISTINCT CASE WHEN is_returning = 1 THEN visitor_id END) as returning_visitors,
+             COUNT(DISTINCT CASE WHEN is_returning = 0 THEN visitor_id END) as new_visitors
+      FROM analytics_events
+      WHERE is_bot = 0 AND timestamp >= ? AND timestamp <= ?
+      GROUP BY hour
+      ORDER BY hour ASC
+    `).bind(startMs, endMs).all();
+
+    const hourMap = {};
+    for (const r of (hourlyRows || [])) hourMap[r.hour] = r;
+
+    for (let h = 0; h < 24; h++) {
+      const row = hourMap[h] || { pageviews: 0, visitors: 0, reads: 0, returning_visitors: 0, new_visitors: 0 };
+      const label = `${h.toString().padStart(2, '0')}:00`;
+      chartPoints.push({
+        label,
+        pageviews: row.pageviews || 0,
+        visitors: row.visitors || 0,
+        reads: row.reads || 0,
+        returning_visitors: row.returning_visitors || 0,
+        new_visitors: row.new_visitors || 0
+      });
+    }
+  } else {
+    const { results: dailyRows } = await db.prepare(`
+      SELECT date,
+             COUNT(CASE WHEN event_type = 'pageview' THEN 1 END) as pageviews,
+             COUNT(DISTINCT visitor_id) as visitors,
+             COUNT(CASE WHEN event_type = 'read' THEN 1 END) as reads,
+             COUNT(DISTINCT CASE WHEN is_returning = 1 THEN visitor_id END) as returning_visitors,
+             COUNT(DISTINCT CASE WHEN is_returning = 0 THEN visitor_id END) as new_visitors
+      FROM analytics_events
+      WHERE is_bot = 0 AND timestamp >= ? AND timestamp <= ?
+      GROUP BY date
+      ORDER BY date ASC
+    `).bind(startMs, endMs).all();
+
+    const dateMap = {};
+    for (const r of (dailyRows || [])) dateMap[r.date] = r;
+
+    const curDate = new Date(startMs);
+    const stopDate = new Date(endMs);
+    while (curDate <= stopDate) {
+      const dStr = curDate.toISOString().slice(0, 10);
+      const row = dateMap[dStr] || { pageviews: 0, visitors: 0, reads: 0, returning_visitors: 0, new_visitors: 0 };
+      const dObj = new Date(dStr);
+      const formattedLabel = dObj.toLocaleDateString('hi-IN', { day: 'numeric', month: 'short' });
+      chartPoints.push({
+        label: formattedLabel,
+        date: dStr,
+        pageviews: row.pageviews || 0,
+        visitors: row.visitors || 0,
+        reads: row.reads || 0,
+        returning_visitors: row.returning_visitors || 0,
+        new_visitors: row.new_visitors || 0
+      });
+      curDate.setDate(curDate.getDate() + 1);
+    }
+  }
+
+  // 3. Resolve Content Titles from Writings Table
+  const { results: allWritings } = await db.prepare(`
+    SELECT title, slug, content_type, published_at FROM writings
+  `).all();
+  const writingMap = {};
+  for (const w of (allWritings || [])) {
+    writingMap[w.slug] = w;
+  }
+
+  // 4. Most Popular Pages / Content
+  const { results: pageRows } = await db.prepare(`
+    SELECT path, content_slug,
+           COUNT(CASE WHEN event_type = 'pageview' THEN 1 END) as views,
+           COUNT(DISTINCT visitor_id) as visitors,
+           COUNT(CASE WHEN event_type = 'read' THEN 1 END) as reads,
+           ROUND(AVG(CASE WHEN duration_seconds > 0 THEN duration_seconds END)) as avg_duration
+    FROM analytics_events
+    WHERE is_bot = 0 AND timestamp >= ? AND timestamp <= ?
+    GROUP BY path
+    ORDER BY views DESC
+    LIMIT 50
+  `).bind(startMs, endMs).all();
+
+  const totalPageViews = currStats.page_views || 1;
+  const popularContent = (pageRows || []).map((row, idx) => {
+    let title = row.path;
+    let type = 'Page';
+    let is_poem = false;
+
+    if (row.content_slug && writingMap[row.content_slug]) {
+      const wr = writingMap[row.content_slug];
+      title = wr.title;
+      type = wr.content_type || 'Poetry';
+      is_poem = (type === 'Poetry' || type === 'कविता');
+    } else if (row.path === '/') {
+      title = 'अशब्द — मुख्य पृष्ठ (Landing Page)';
+      type = 'Landing Page';
+    } else if (row.path === '/poems' || row.path === '/poetry' || row.path === '/writings') {
+      title = 'प्रकाशित रचना संग्रह (Poetry Collection Archive)';
+      type = 'Collection';
+    } else {
+      const m = row.path.match(/^\/(?:poems|poetry|writing|writings)\/([^\/]+)$/);
+      if (m && writingMap[decodeURIComponent(m[1])]) {
+        const wr = writingMap[decodeURIComponent(m[1])];
+        title = wr.title;
+        type = wr.content_type || 'Poetry';
+        is_poem = (type === 'Poetry' || type === 'कविता');
+      }
+    }
+
+    const views = row.views || 0;
+    const reads = row.reads || 0;
+    const readRate = views > 0 ? Math.min(100, Math.round((reads / views) * 100)) : 0;
+    const sharePct = totalPageViews > 0 ? Math.round((views / totalPageViews) * 1000) / 10 : 0;
+
+    return {
+      rank: idx + 1,
+      path: row.path,
+      title,
+      content_type: type,
+      is_poem,
+      views,
+      visitors: row.visitors || 0,
+      reads,
+      read_rate: readRate,
+      avg_duration: row.avg_duration || 0,
+      share_pct: sharePct
+    };
+  });
+
+  // 5. Traffic Sources Breakdown
+  const { results: sourceRows } = await db.prepare(`
+    SELECT referrer_source, referrer_host, COUNT(*) as count
+    FROM analytics_events
+    WHERE is_bot = 0 AND event_type = 'pageview' AND timestamp >= ? AND timestamp <= ?
+    GROUP BY referrer_source, referrer_host
+    ORDER BY count DESC
+  `).bind(startMs, endMs).all();
+
+  const sourceCounts = {
+    direct: 0,
+    google: 0,
+    instagram: 0,
+    twitter: 0,
+    search: 0,
+    social: 0,
+    other: 0
+  };
+  let totalSources = 0;
+
+  for (const s of (sourceRows || [])) {
+    const c = s.count || 0;
+    totalSources += c;
+    if (s.referrer_source === 'direct') sourceCounts.direct += c;
+    else if (s.referrer_source === 'google') sourceCounts.google += c;
+    else if (s.referrer_source === 'instagram') sourceCounts.instagram += c;
+    else if (s.referrer_source === 'twitter') sourceCounts.twitter += c;
+    else if (s.referrer_source === 'bing' || s.referrer_source === 'duckduckgo' || s.referrer_source === 'yahoo') sourceCounts.search += c;
+    else if (s.referrer_source === 'facebook' || s.referrer_source === 'linkedin' || s.referrer_source === 'reddit' || s.referrer_source === 'youtube') sourceCounts.social += c;
+    else sourceCounts.other += c;
+  }
+
+  // 6. Demographics
+  const { results: countryRows } = await db.prepare(`
+    SELECT country, COUNT(DISTINCT visitor_id) as visitors, COUNT(*) as views
+    FROM analytics_events
+    WHERE is_bot = 0 AND timestamp >= ? AND timestamp <= ?
+    GROUP BY country
+    ORDER BY visitors DESC
+    LIMIT 12
+  `).bind(startMs, endMs).all();
+
+  const countries = (countryRows || []).map(r => {
+    const meta = COUNTRY_MAP[r.country] || { name: r.country, flag: '🌐' };
+    return {
+      code: r.country,
+      name: meta.name,
+      flag: meta.flag,
+      visitors: r.visitors,
+      views: r.views,
+      pct: currStats.unique_visitors > 0 ? Math.round((r.visitors / currStats.unique_visitors) * 100) : 0
+    };
+  });
+
+  const { results: deviceRows } = await db.prepare(`
+    SELECT device_type, COUNT(DISTINCT visitor_id) as visitors
+    FROM analytics_events
+    WHERE is_bot = 0 AND timestamp >= ? AND timestamp <= ?
+    GROUP BY device_type
+    ORDER BY visitors DESC
+  `).bind(startMs, endMs).all();
+
+  const { results: browserRows } = await db.prepare(`
+    SELECT browser, COUNT(DISTINCT visitor_id) as visitors
+    FROM analytics_events
+    WHERE is_bot = 0 AND timestamp >= ? AND timestamp <= ?
+    GROUP BY browser
+    ORDER BY visitors DESC
+    LIMIT 6
+  `).bind(startMs, endMs).all();
+
+  const { results: osRows } = await db.prepare(`
+    SELECT os, COUNT(DISTINCT visitor_id) as visitors
+    FROM analytics_events
+    WHERE is_bot = 0 AND timestamp >= ? AND timestamp <= ?
+    GROUP BY os
+    ORDER BY visitors DESC
+    LIMIT 6
+  `).bind(startMs, endMs).all();
+
+  const { results: returningRows } = await db.prepare(`
+    SELECT is_returning, COUNT(DISTINCT visitor_id) as visitors
+    FROM analytics_events
+    WHERE is_bot = 0 AND timestamp >= ? AND timestamp <= ?
+    GROUP BY is_returning
+  `).bind(startMs, endMs).all();
+
+  let newVisitors = 0, returningVisitors = 0;
+  for (const r of (returningRows || [])) {
+    if (r.is_returning === 1) returningVisitors += r.visitors;
+    else newVisitors += r.visitors;
+  }
+
+  // 7. Poetry Engagement Stats
+  const poemList = popularContent.filter(p => p.is_poem);
+  const totalPoemViews = poemList.reduce((acc, p) => acc + p.views, 0);
+  const totalPoemReads = poemList.reduce((acc, p) => acc + p.reads, 0);
+  const avgPoemDuration = poemList.length > 0 ? Math.round(poemList.reduce((acc, p) => acc + (p.avg_duration || 0), 0) / poemList.length) : 0;
+
+  // 8. Performance & Infrastructure Metrics
+  const totalWorkerReqs = await db.prepare(`
+    SELECT COUNT(*) as c FROM analytics_events WHERE timestamp >= ? AND timestamp <= ?
+  `).bind(startMs, endMs).first('c') || 0;
+
+  const botReqs = await db.prepare(`
+    SELECT COUNT(*) as c FROM analytics_events WHERE is_bot = 1 AND timestamp >= ? AND timestamp <= ?
+  `).bind(startMs, endMs).first('c') || 0;
+
+  const { results: statusRows } = await db.prepare(`
+    SELECT status_code, COUNT(*) as count
+    FROM analytics_events
+    WHERE timestamp >= ? AND timestamp <= ?
+    GROUP BY status_code
+    ORDER BY count DESC
+  `).bind(startMs, endMs).all();
+
+  const { results: error404Rows } = await db.prepare(`
+    SELECT path, COUNT(*) as count
+    FROM analytics_events
+    WHERE status_code = 404 AND timestamp >= ? AND timestamp <= ?
+    GROUP BY path
+    ORDER BY count DESC
+    LIMIT 10
+  `).bind(startMs, endMs).all();
+
+  return jsonResponse({
+    period,
+    start_date: new Date(startMs).toISOString().slice(0, 10),
+    end_date: new Date(endMs).toISOString().slice(0, 10),
+    summary: {
+      total_visitors: currStats.total_visitors || 0,
+      unique_visitors: currStats.unique_visitors || 0,
+      page_views: currStats.page_views || 0,
+      active_online: activeOnline,
+      total_published_poems: totalPoems,
+      total_published_articles: totalArticles,
+      growth: {
+        visitors_pct: prevStats.unique_visitors ? Math.round(((currStats.unique_visitors - prevStats.unique_visitors) / prevStats.unique_visitors) * 100) : 0,
+        pageviews_pct: prevStats.page_views ? Math.round(((currStats.page_views - prevStats.page_views) / prevStats.page_views) * 100) : 0
+      },
+      intervals: {
+        today: { visitors: todayVisitors.v, views: todayVisitors.p },
+        last_7d: { visitors: last7dVisitors.v, views: last7dVisitors.p },
+        last_30d: { visitors: last30dVisitors.v, views: last30dVisitors.p },
+        all_time: { visitors: allTimeStats.v, views: allTimeStats.p }
+      }
+    },
+    chart_points: chartPoints,
+    popular_content: popularContent,
+    traffic_sources: {
+      total: totalSources,
+      counts: sourceCounts,
+      top_hosts: sourceRows || []
+    },
+    demographics: {
+      countries,
+      devices: deviceRows || [],
+      browsers: browserRows || [],
+      os: osRows || [],
+      visitors_ratio: {
+        new_visitors: newVisitors,
+        returning_visitors: returningVisitors
+      }
+    },
+    poetry_engagement: {
+      total_poem_views: totalPoemViews,
+      total_poem_reads: totalPoemReads,
+      read_conversion_rate: totalPoemViews > 0 ? Math.round((totalPoemReads / totalPoemViews) * 100) : 0,
+      avg_duration_seconds: avgPoemDuration,
+      top_read_poems: poemList.slice(0, 10)
+    },
+    performance: {
+      total_worker_requests: totalWorkerReqs,
+      human_requests: totalWorkerReqs - botReqs,
+      bot_requests: botReqs,
+      status_codes: statusRows || [],
+      top_404_urls: error404Rows || []
+    }
+  });
+}
+
+async function handleAnalyticsTestPing(request, env) {
+  const user = await getAuthenticatedUser(request, env);
+  if (!user) {
+    return jsonResponse({ error: 'Unauthorized: Administrator session required.' }, 401);
+  }
+  const db = env.DB || env['ashabd-db'];
+  if (!db) {
+    return jsonResponse({ error: 'Database not available' }, 500);
+  }
+
+  await ensureAnalyticsTables(db);
+  const now = Date.now();
+  const visitor_id = await getAnonymousVisitorId(request, env);
+  const client = getClientDetails(request);
+  const country = request.headers.get('cf-ipcountry') || request.cf?.country || 'IN';
+
+  // Seed sample test visits
+  await recordAnalyticsEvent(db, {
+    timestamp: now,
+    path: '/',
+    event_type: 'pageview',
+    visitor_id,
+    country,
+    referrer_source: 'direct',
+    referrer_host: 'direct',
+    device_type: client.device_type,
+    browser: client.browser,
+    os: client.os,
+    duration_seconds: 40
+  });
+
+  await recordAnalyticsEvent(db, {
+    timestamp: now + 500,
+    path: '/poems',
+    event_type: 'pageview',
+    visitor_id,
+    country,
+    referrer_source: 'direct',
+    referrer_host: 'direct',
+    device_type: client.device_type,
+    browser: client.browser,
+    os: client.os,
+    duration_seconds: 60
+  });
+
+  return jsonResponse({ success: true, message: 'Test visits recorded successfully' });
 }
 
 async function handleLogin(request, env) {
@@ -1227,6 +1984,7 @@ function renderPoemHtml(poem) {
       </footer>
     </article>
   </main>
+  <script src="/analytics.js" defer></script>
 </body>
 </html>`;
 }
@@ -1462,6 +2220,7 @@ function renderArchiveHtml(writings) {
 
     <a href="/" class="back-home">← मुख्य पृष्ठ पर वापस जाएं</a>
   </div>
+  <script src="/analytics.js" defer></script>
 </body>
 </html>`;
 }
@@ -1584,6 +2343,7 @@ function renderNotFoundHtml(customMessage = null) {
     <p>${customMessage || 'यह रचना उपलब्ध नहीं है या अभी एक अप्रकाशित विचार है।'}</p>
     <a href="/">← मुख्य पृष्ठ पर वापस लौटें</a>
   </div>
+  <script src="/analytics.js" defer></script>
 </body>
 </html>`;
 }
@@ -1640,10 +2400,14 @@ function getAdminDashboardHtml() {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Ashabd Admin — प्रबंधन कक्ष</title>
+  
+  <meta name="robots" content="noindex, nofollow">
   <link rel="icon" type="image/x-icon" href="/ashabd_website_logo_pack/favicons_and_icons/favicon.ico">
+  
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Serif+Devanagari:wght@400;500;600&family=Rozha+One&family=Tiro+Devanagari+Hindi&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Serif+Devanagari:wght@400;500;600&family=Rozha+One&family=Tiro+Devanagari+Hindi:ital@0;1&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   
   <style>
     :root {
@@ -1715,7 +2479,7 @@ function getAdminDashboardHtml() {
     .header-actions {
       display: flex;
       align-items: center;
-      gap: 1rem;
+      gap: 0.85rem;
     }
 
     .btn {
@@ -2160,19 +2924,325 @@ function getAdminDashboardHtml() {
       main.workspace { padding: 1.25rem; }
       .nav-count { display: none; }
     }
+
+    /* ==================== ANALYTICS DASHBOARD STYLING ==================== */
+    .analytics-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+      margin-bottom: 1.5rem;
+    }
+    .live-pill {
+      display: inline-flex;
+      align-items: center;
+      background: rgba(63, 185, 80, 0.12);
+      border: 1px solid rgba(63, 185, 80, 0.3);
+      color: #3fb950;
+      font-size: 0.76rem;
+      font-weight: 600;
+      padding: 0.2rem 0.65rem;
+      border-radius: 999px;
+      letter-spacing: 0.02em;
+    }
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #3fb950;
+      display: inline-block;
+      margin-right: 6px;
+      box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.7);
+      animation: pulse-ring 2s infinite;
+    }
+    @keyframes pulse-ring {
+      0% { box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.7); }
+      70% { box-shadow: 0 0 0 8px rgba(63, 185, 80, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(63, 185, 80, 0); }
+    }
+    .analytics-actions {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+    .period-selector {
+      display: inline-flex;
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--radius);
+      padding: 3px;
+      gap: 2px;
+    }
+    .period-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      padding: 0.4rem 0.75rem;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .period-btn:hover {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.04);
+    }
+    .period-btn.active {
+      background: var(--accent);
+      color: #140b04;
+      font-weight: 600;
+    }
+    .custom-date-box {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--radius);
+      padding: 0.75rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.25rem;
+      font-size: 0.85rem;
+    }
+    .custom-date-box label {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      color: var(--text-muted);
+    }
+    .date-input {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--surface-border);
+      color: var(--text-main);
+      padding: 0.35rem 0.6rem;
+      border-radius: 4px;
+      font-size: 0.82rem;
+    }
+    .dropdown-wrap {
+      position: relative;
+      display: inline-block;
+    }
+    .dropdown-menu {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      margin-top: 4px;
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--radius);
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      z-index: 50;
+      min-width: 170px;
+      overflow: hidden;
+    }
+    .dropdown-menu button {
+      display: block;
+      width: 100%;
+      text-align: left;
+      padding: 0.6rem 0.95rem;
+      background: none;
+      border: none;
+      color: var(--text-main);
+      font-size: 0.82rem;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .dropdown-menu button:hover {
+      background: var(--surface-hover);
+      color: var(--accent);
+    }
+    .analytics-info-banner {
+      background: rgba(212, 163, 115, 0.07);
+      border: 1px solid rgba(212, 163, 115, 0.22);
+      border-radius: var(--radius);
+      padding: 0.85rem 1.15rem;
+      margin-bottom: 1.5rem;
+      display: flex;
+      gap: 0.85rem;
+      font-size: 0.82rem;
+      line-height: 1.6;
+      color: var(--text-muted);
+    }
+    .analytics-info-banner strong {
+      color: var(--text-main);
+    }
+    .stat-card-badge {
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      margin-left: 0.4rem;
+    }
+    .badge-up { background: rgba(63, 185, 80, 0.15); color: #3fb950; }
+    .badge-down { background: rgba(248, 81, 73, 0.15); color: #f85149; }
+    .stat-subtext {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.35rem;
+    }
+    .interval-strip {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 0.85rem;
+      margin-bottom: 2rem;
+    }
+    .interval-box {
+      background: rgba(0, 0, 0, 0.22);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--radius);
+      padding: 0.85rem 1rem;
+    }
+    .interval-box-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.25rem;
+    }
+    .interval-box-val {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+    .interval-box-sub {
+      font-size: 0.74rem;
+      color: var(--text-muted);
+      margin-top: 0.2rem;
+    }
+    .chart-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 1.25rem;
+      margin-bottom: 2rem;
+    }
+    @media (max-width: 980px) {
+      .chart-grid { grid-template-columns: 1fr; }
+    }
+    .chart-card {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+    }
+    .chart-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+    .chart-canvas-wrap {
+      position: relative;
+      height: 290px;
+      width: 100%;
+    }
+    .analytics-two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.25rem;
+      margin-bottom: 2rem;
+    }
+    @media (max-width: 980px) {
+      .analytics-two-col { grid-template-columns: 1fr; }
+    }
+    .progress-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.85rem;
+      margin-bottom: 0.85rem;
+      font-size: 0.85rem;
+    }
+    .progress-bar-wrap {
+      flex: 1;
+      height: 7px;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 999px;
+      overflow: hidden;
+      margin: 0 0.5rem;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 999px;
+      transition: width 0.4s ease;
+    }
+    .rank-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.08);
+      font-size: 0.74rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+    .rank-badge.top-1 { background: rgba(212, 163, 115, 0.25); color: var(--accent); }
+    .rank-badge.top-2 { background: rgba(192, 192, 192, 0.2); color: #d0d7de; }
+    .rank-badge.top-3 { background: rgba(205, 127, 50, 0.2); color: #e09f67; }
+    .filter-tab-bar {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+    .filter-tab-btn {
+      background: none;
+      border: 1px solid var(--surface-border);
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      padding: 0.35rem 0.8rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .filter-tab-btn.active {
+      background: rgba(212, 163, 115, 0.14);
+      border-color: var(--accent);
+      color: var(--accent);
+      font-weight: 600;
+    }
+    .status-pill-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 0.85rem;
+      margin-bottom: 1.25rem;
+    }
+    .status-pill-box {
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--radius);
+      padding: 0.75rem 1rem;
+      text-align: center;
+    }
+    .status-pill-code { font-size: 0.78rem; font-weight: 600; margin-bottom: 0.2rem; }
+    .status-pill-val { font-size: 1.35rem; font-weight: 700; color: var(--text-main); }
+    .device-bar-wrap {
+      display: flex;
+      height: 10px;
+      border-radius: 999px;
+      overflow: hidden;
+      margin: 1rem 0;
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .device-bar-segment {
+      height: 100%;
+      transition: width 0.3s ease;
+    }
   </style>
 </head>
 <body>
 
   <!-- ==================== AUTHENTICATION SCREEN ==================== -->
   <div id="authOverlay" class="auth-overlay">
-    <div class="login-box">
+    <!-- 1. Regular Login Box -->
+    <div class="login-box" id="loginBox">
       <h1 class="login-brand">अशब्द</h1>
       <p class="login-sub">प्रबंधन कक्ष — Administrator Login</p>
-
-      <div id="setupNotice" class="notice-box" style="text-align: left;">
-        <strong>⚙️ Setup Notice:</strong> Cloudflare secret <code>ADMIN_PASSWORD</code> is not yet configured. Please set it in Cloudflare Dashboard &gt; Worker &gt; Settings &gt; Variables and Secrets.
-      </div>
 
       <form id="loginForm" onsubmit="handleLogin(event)">
         <div class="form-group" style="text-align: left;">
@@ -2184,6 +3254,37 @@ function getAdminDashboardHtml() {
         </button>
       </form>
       <div id="loginError" style="color: var(--danger); font-size: 0.82rem; margin-top: 1rem; display: none;"></div>
+      <div style="margin-top: 1.25rem; font-size: 0.82rem; color: var(--text-muted); text-align: center;">
+        प्रथम बार सेटअप? <a href="javascript:void(0)" onclick="showSetup()" style="color: var(--accent); text-decoration: underline;">पासवर्ड सेटअप करें (First-time setup)</a>
+      </div>
+    </div>
+
+    <!-- 2. First-Time Setup Box (Self-initializing via D1) -->
+    <div class="login-box" id="setupBox" style="display: none; max-width: 440px;">
+      <h1 class="login-brand">अशब्द</h1>
+      <p class="login-sub">व्यवस्थापक पासवर्ड सेटअप (Initial Setup)</p>
+
+      <div class="notice-box" style="display: block; text-align: left; margin-bottom: 1.25rem;">
+        <strong>🌱 स्वागतम् (Welcome):</strong> Your dashboard is ready! Set your private administrator password below. It will be salted and saved securely in your D1 database.
+      </div>
+
+      <form id="setupForm" onsubmit="handleInitialSetup(event)">
+        <div class="form-group" style="text-align: left;">
+          <label class="form-label" for="newAdminPassword">Choose Password (नया पासवर्ड)</label>
+          <input type="password" id="newAdminPassword" class="text-input" placeholder="न्यूनतम 6 अक्षर (Min 6 chars)" minlength="6" required autocomplete="new-password">
+        </div>
+        <div class="form-group" style="text-align: left;">
+          <label class="form-label" for="confirmAdminPassword">Confirm Password (पुष्टि करें)</label>
+          <input type="password" id="confirmAdminPassword" class="text-input" placeholder="पासवर्ड दोबारा दर्ज करें" minlength="6" required autocomplete="new-password">
+        </div>
+        <button type="submit" id="setupBtn" class="btn btn-accent" style="width: 100%; justify-content: center; padding: 0.75rem;">
+          पासवर्ड सेट करें और शुरू करें (Initialize &amp; Log In)
+        </button>
+      </form>
+      <div id="setupError" style="color: var(--danger); font-size: 0.82rem; margin-top: 1rem; display: none;"></div>
+      <div style="margin-top: 1.25rem; font-size: 0.82rem; color: var(--text-muted); text-align: center;">
+        पहले से पासवर्ड है? <a href="javascript:void(0)" onclick="showLogin()" style="color: var(--accent); text-decoration: underline;">साइन इन करें (Already set up? Sign in)</a>
+      </div>
     </div>
   </div>
 
@@ -2205,26 +3306,29 @@ function getAdminDashboardHtml() {
 
   <div class="admin-container">
     <aside class="sidebar">
-      <button class="nav-btn active" onclick="switchTab('overview')">
+      <button class="nav-btn active" id="btn-overview" onclick="switchTab('overview')">
         <span>📊 Overview</span>
       </button>
-      <button class="nav-btn" onclick="switchTab('all-writings')">
+      <button class="nav-btn" id="btn-analytics" onclick="switchTab('analytics')">
+        <span>📈 Website Analytics / वेबसाइट आँकड़े</span>
+      </button>
+      <button class="nav-btn" id="btn-all-writings" onclick="switchTab('all-writings')">
         <span>📜 All Writings</span>
         <span class="nav-count" id="countAll">0</span>
       </button>
-      <button class="nav-btn" onclick="openNewWriting()">
+      <button class="nav-btn" id="btn-new" onclick="openNewWriting()">
         <span>✍️ Add New Writing</span>
       </button>
-      <button class="nav-btn" onclick="switchTab('published')">
+      <button class="nav-btn" id="btn-published" onclick="switchTab('published')">
         <span>🌐 Published</span>
         <span class="nav-count" id="countPub">0</span>
       </button>
-      <button class="nav-btn" onclick="switchTab('drafts')">
+      <button class="nav-btn" id="btn-drafts" onclick="switchTab('drafts')">
         <span>📁 Drafts</span>
         <span class="nav-count" id="countDraft">0</span>
       </button>
-      <button class="nav-btn" onclick="switchTab('settings')">
-        <span>⚙️ Settings & D1</span>
+      <button class="nav-btn" id="btn-settings" onclick="switchTab('settings')">
+        <span>⚙️ Settings &amp; D1</span>
       </button>
     </aside>
 
@@ -2412,22 +3516,342 @@ function getAdminDashboardHtml() {
         </form>
       </section>
 
+      <!-- ==================== VIEW: WEBSITE ANALYTICS ==================== -->
+      <section id="view-analytics" class="view-section">
+        <!-- Top Analytics Header with Period & Actions -->
+        <div class="analytics-header">
+          <div class="analytics-title-wrap">
+            <h2 class="section-title" style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+              <span>📈 Website Analytics (वेबसाइट आँकड़े)</span>
+              <span class="live-pill"><span class="pulse-dot"></span><span id="statActiveOnline">1</span> पाठक ऑनलाइन</span>
+            </h2>
+            <p style="font-size: 0.85rem; color: var(--text-muted);">
+              वास्तविक काव्य रुचि, पाठक उपस्थिति एवं ट्रैफ़िक विश्लेषण (Cloudflare Edge &amp; D1 Database)
+            </p>
+          </div>
+
+          <div class="analytics-actions">
+            <div class="period-selector" role="group" aria-label="Date Filter">
+              <button class="period-btn" data-period="today" onclick="setAnalyticsPeriod('today')">आज (Today)</button>
+              <button class="period-btn" data-period="yesterday" onclick="setAnalyticsPeriod('yesterday')">कल (Yesterday)</button>
+              <button class="period-btn active" data-period="7d" onclick="setAnalyticsPeriod('7d')">7 दिन (7 Days)</button>
+              <button class="period-btn" data-period="30d" onclick="setAnalyticsPeriod('30d')">30 दिन (30 Days)</button>
+              <button class="period-btn" data-period="90d" onclick="setAnalyticsPeriod('90d')">90 दिन (90 Days)</button>
+              <button class="period-btn" data-period="custom" onclick="toggleCustomDateInputs()">कस्टम (Custom)</button>
+            </div>
+
+            <button class="btn btn-outline btn-sm" id="btnRefreshAnalytics" onclick="refreshAnalytics()" title="ताज़ा करें">
+              <span id="refreshIcon">🔄</span> ताज़ा करें
+            </button>
+
+            <div class="dropdown-wrap">
+              <button class="btn btn-outline btn-sm" onclick="toggleExportMenu()" title="रिपोर्ट डाउनलोड करें">
+                <span>📥 रिपोर्ट (Export) ▾</span>
+              </button>
+              <div id="exportMenu" class="dropdown-menu" style="display: none;">
+                <button onclick="exportAnalyticsReport('csv')">📄 CSV फ़ाइल (.csv)</button>
+                <button onclick="exportAnalyticsReport('json')">📦 JSON फ़ाइल (.json)</button>
+              </div>
+            </div>
+
+            <button class="btn btn-outline btn-sm" onclick="triggerTestPing()" title="टेस्ट विज़िट भेजें">
+              <span>🧪 टेस्ट पिंग (Test Ping)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Custom Date Range Picker (Conditional) -->
+        <div id="customDateRangeBox" class="custom-date-box" style="display: none;">
+          <label>प्रारंभ (From): <input type="date" id="customStartDate" class="date-input"></label>
+          <label>समाप्ति (To): <input type="date" id="customEndDate" class="date-input"></label>
+          <button class="btn btn-accent btn-sm" onclick="applyCustomDateRange()">लागू करें (Apply)</button>
+        </div>
+
+        <!-- Privacy & Estimation Methodology Banner -->
+        <div class="analytics-info-banner">
+          <div style="font-size: 1.2rem;">🔒</div>
+          <div>
+            <strong>गोपनीयता-युक्त एवं प्रामाणिक मापन (Privacy-Preserving &amp; Verified Tracking):</strong>
+            यहाँ <strong>अद्वितीय आगंतुक (Unique Visitors)</strong> की गणना दैनिक क्रिप्टोग्राफ़िक हैश (Salted Daily SHA-256) के माध्यम से की जाती है। किसी भी पाठक का व्यक्तिगत आईपी पता या संवेदनशील डेटा सुरक्षित नहीं किया जाता।
+            <strong>पेज व्यूज़ (Page Views)</strong> कुल पन्नों के खुलने की संख्या है, जबकि <strong>सत्यापित काव्य पाठ (Verified Reads)</strong> उन पाठकों को दर्शाता है जिन्होंने रचना पर कम से कम 15–20 सेकंड व्यतीत किए या स्क्रॉल किया। स्वचालित बॉट्स को मानवीय आँकड़ों से अलग रखा गया है।
+          </div>
+        </div>
+
+        <!-- Section 2: Top Overview Summary Cards (6 Cards) -->
+        <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 1.5rem;">
+          <div class="stat-card">
+            <div class="stat-label">कुल आगंतुक सत्र (Total Visitors)</div>
+            <div class="stat-value" id="statTotalVisitors">0</div>
+            <div class="stat-subtext" id="statVisitorsGrowth">पिछले समय की तुलना में --</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">
+              अद्वितीय आगंतुक (Unique Visitors)
+              <span title="दैनिक साल्टेड हैश द्वारा संगणित (Daily Salted SHA-256)" style="cursor: help; opacity: 0.7;">ℹ️</span>
+            </div>
+            <div class="stat-value" id="statUniqueVisitors" style="color: var(--accent);">0</div>
+            <div class="stat-subtext">विशिष्ट पाठक (Distinct Individuals)</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">कुल पेज व्यूज़ (Total Page Views)</div>
+            <div class="stat-value" id="statTotalPageViews">0</div>
+            <div class="stat-subtext" id="statPageviewsGrowth">पन्नों का कुल पठन --</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">अभी सक्रिय (Currently Online)</div>
+            <div class="stat-value" style="color: #3fb950;">
+              <span class="pulse-dot"></span><span id="statActiveOnlineCard">0</span>
+            </div>
+            <div class="stat-subtext">गत 5 मिनट में सक्रिय पाठक</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">प्रकाशित कविताएं (Poems)</div>
+            <div class="stat-value" id="statTotalPoems" style="color: #388bfd;">0</div>
+            <div class="stat-subtext">वेबसाइट पर लाइव कविता संग्रह</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">प्रकाशित लेख व अन्य (Writings)</div>
+            <div class="stat-value" id="statTotalArticles" style="color: #a371f7;">0</div>
+            <div class="stat-subtext">लेख, निबंध, कहानियां व डायरी</div>
+          </div>
+        </div>
+
+        <!-- Section 2b: Multi-Period Quick Strip (Today, 7d, 30d, All-Time) -->
+        <div class="interval-strip">
+          <div class="interval-box">
+            <div class="interval-box-label">आज का ट्रैफ़िक (Today)</div>
+            <div class="interval-box-val" id="stripTodayViews">0 Views</div>
+            <div class="interval-box-sub" id="stripTodayVisitors">0 Visitors</div>
+          </div>
+          <div class="interval-box">
+            <div class="interval-box-label">गत 7 दिन (Last 7 Days)</div>
+            <div class="interval-box-val" id="strip7dViews">0 Views</div>
+            <div class="interval-box-sub" id="strip7dVisitors">0 Visitors</div>
+          </div>
+          <div class="interval-box">
+            <div class="interval-box-label">गत 30 दिन (Last 30 Days)</div>
+            <div class="interval-box-val" id="strip30dViews">0 Views</div>
+            <div class="interval-box-sub" id="strip30dVisitors">0 Visitors</div>
+          </div>
+          <div class="interval-box">
+            <div class="interval-box-label">सर्वकालिक कुल (All-Time)</div>
+            <div class="interval-box-val" id="stripAllViews">0 Views</div>
+            <div class="interval-box-sub" id="stripAllVisitors">0 Visitors</div>
+          </div>
+        </div>
+
+        <!-- Section 3: Interactive Traffic Charts (Over Time + Visitor Ratio) -->
+        <div class="chart-grid">
+          <div class="chart-card">
+            <div class="chart-card-header">
+              <div>
+                <h3 style="font-size: 1.05rem; font-weight: 600;">📊 ट्रैफ़िक रुझान (Traffic Over Time)</h3>
+                <p style="font-size: 0.78rem; color: var(--text-muted);">पेज व्यूज़ एवं अद्वितीय आगंतुक का दैनिक/घंटेवार विश्लेषण</p>
+              </div>
+            </div>
+            <div class="chart-canvas-wrap">
+              <canvas id="trafficTrendChart"></canvas>
+            </div>
+          </div>
+
+          <div class="chart-card">
+            <div class="chart-card-header">
+              <div>
+                <h3 style="font-size: 1.05rem; font-weight: 600;">👥 पाठक प्रकार (Visitor Ratio)</h3>
+                <p style="font-size: 0.78rem; color: var(--text-muted);">नए बनाम पुनः आने वाले पाठक</p>
+              </div>
+            </div>
+            <div class="chart-canvas-wrap" style="height: 230px;">
+              <canvas id="visitorRatioChart"></canvas>
+            </div>
+            <div id="visitorRatioLegend" style="display: flex; justify-content: center; gap: 1.5rem; margin-top: 0.8rem; font-size: 0.82rem;">
+              <span><span style="color: #d4a373;">●</span> नए पाठक: <strong id="lblNewVisitors">0</strong></span>
+              <span><span style="color: #3fb950;">●</span> पुनः पाठक: <strong id="lblReturningVisitors">0</strong></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 4: Most Popular Poems & Pages -->
+        <div class="editor-card" style="margin-bottom: 2rem;">
+          <div class="chart-card-header" style="flex-wrap: wrap; gap: 1rem;">
+            <div>
+              <h3 style="font-size: 1.1rem; font-weight: 600;">📖 सर्वाधिक पढ़ी गई रचनाएं एवं पृष्ठ (Most Popular Content)</h3>
+              <p style="font-size: 0.8rem; color: var(--text-muted);">चुनी गई समयावधि में पाठकों द्वारा सर्वाधिक पसंद किए गए पृष्ठ</p>
+            </div>
+            <div class="filter-tab-bar" style="margin-bottom: 0;">
+              <button class="filter-tab-btn active" data-filter="all" onclick="filterContentTable('all')">सभी (All)</button>
+              <button class="filter-tab-btn" data-filter="poems" onclick="filterContentTable('poems')">केवल कविताएं (Poems)</button>
+              <button class="filter-tab-btn" data-filter="articles" onclick="filterContentTable('articles')">लेख व अन्य (Articles)</button>
+              <button class="filter-tab-btn" data-filter="pages" onclick="filterContentTable('pages')">मुख्य पृष्ठ (Pages)</button>
+            </div>
+          </div>
+
+          <div class="table-card" style="border: none;">
+            <table class="writings-table">
+              <thead>
+                <tr>
+                  <th style="width: 48px;">#</th>
+                  <th>रचना / पृष्ठ शीर्षक (Title &amp; URL)</th>
+                  <th>प्रकार (Type)</th>
+                  <th style="text-align: right; cursor: pointer;" onclick="sortPopularContent('views')">व्यूज़ (Views) ↕</th>
+                  <th style="text-align: right; cursor: pointer;" onclick="sortPopularContent('reads')">काव्य पाठ (Reads) ↕</th>
+                  <th style="text-align: right;">पाठ दर (Read Rate)</th>
+                  <th style="width: 140px;">ट्रैफ़िक हिस्सा (Share)</th>
+                  <th style="text-align: center; width: 80px;">कार्रवाई</th>
+                </tr>
+              </thead>
+              <tbody id="popularContentTableBody">
+                <tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">आँकड़े लोड हो रहे हैं...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Section 5 & 6: Traffic Sources & Visitor Demographics (Two Column Layout) -->
+        <div class="analytics-two-col">
+          <!-- Column 1: Traffic Sources -->
+          <div class="editor-card">
+            <h3 style="font-size: 1.05rem; font-weight: 600; margin-bottom: 0.35rem;">🌐 आगंतुक स्रोत (Traffic Sources &amp; Referrers)</h3>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.25rem;">पाठक वेबसाइट तक कहाँ से पहुंचे</p>
+
+            <div id="sourcesContainer">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+
+          <!-- Column 2: Visitor Demographics -->
+          <div class="editor-card">
+            <h3 style="font-size: 1.05rem; font-weight: 600; margin-bottom: 0.35rem;">🌍 भौगोलिक उपस्थिति एवं उपकरण (Demographics)</h3>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.25rem;">पाठकों के देश, डिवाइस एवं ब्राउज़र का समग्र विवरण</p>
+
+            <h4 style="font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.6rem;">शीर्ष देश (Top Countries)</h4>
+            <div id="countriesContainer" style="margin-bottom: 1.4rem;">
+              <!-- Rendered dynamically -->
+            </div>
+
+            <h4 style="font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.3rem;">उपकरण श्रेणी (Device Categories)</h4>
+            <div id="devicesContainer">
+              <!-- Segmented bar -->
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1.2rem;">
+              <div>
+                <h4 style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.5rem;">शीर्ष ब्राउज़र (Browsers)</h4>
+                <div id="browsersContainer" style="font-size: 0.82rem;"></div>
+              </div>
+              <div>
+                <h4 style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.5rem;">ऑपरेटिंग सिस्टम (OS)</h4>
+                <div id="osContainer" style="font-size: 0.82rem;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 7 & 8: Poetry Engagement & Technical Performance -->
+        <div class="analytics-two-col">
+          <!-- Column 1: Poetry Engagement -->
+          <div class="editor-card">
+            <h3 style="font-size: 1.05rem; font-weight: 600; margin-bottom: 0.35rem;">✒️ काव्य सहभागिता (Poetry Engagement)</h3>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.25rem;">काव्य पाठकों का वास्तविक जुड़ाव और पठन समय</p>
+
+            <div class="stats-grid" style="grid-template-columns: 1fr 1fr; gap: 0.85rem; margin-bottom: 1.25rem;">
+              <div class="interval-box">
+                <div class="interval-box-label">सत्यापित काव्य पाठ (Reads)</div>
+                <div class="interval-box-val" id="statPoemReads" style="color: var(--accent);">0</div>
+                <div class="interval-box-sub">कम से कम 15s पठन</div>
+              </div>
+              <div class="interval-box">
+                <div class="interval-box-label">काव्य पठन दर (Read Rate)</div>
+                <div class="interval-box-val" id="statPoemReadRate">0%</div>
+                <div class="interval-box-sub">व्यूज़ से पठन रूपांतरण</div>
+              </div>
+            </div>
+
+            <h4 style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.6rem;">शीर्ष पठित कविताएं (Top Read Poems)</h4>
+            <div id="topReadPoemsList">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+
+          <!-- Column 2: Technical Performance & Broken Pages -->
+          <div class="editor-card">
+            <h3 style="font-size: 1.05rem; font-weight: 600; margin-bottom: 0.35rem;">⚡ प्रदर्शन एवं त्रुटि विश्लेषण (Operational Performance)</h3>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.25rem;">Cloudflare Worker संचालन, स्थिति कोड एवं अनुपलब्ध पन्ने</p>
+
+            <div class="status-pill-grid">
+              <div class="status-pill-box">
+                <div class="status-pill-code" style="color: var(--success);">2xx सफ़ल (Success)</div>
+                <div class="status-pill-val" id="statStatus2xx">0</div>
+              </div>
+              <div class="status-pill-box">
+                <div class="status-pill-code" style="color: #388bfd;">3xx पुनर्निर्देशन (Redirect)</div>
+                <div class="status-pill-val" id="statStatus3xx">0</div>
+              </div>
+              <div class="status-pill-box">
+                <div class="status-pill-code" style="color: var(--warning);">4xx त्रुटि (Client Err)</div>
+                <div class="status-pill-val" id="statStatus4xx">0</div>
+              </div>
+              <div class="status-pill-box">
+                <div class="status-pill-code" style="color: var(--danger);">5xx सर्वर (Server Err)</div>
+                <div class="status-pill-val" id="statStatus5xx">0</div>
+              </div>
+            </div>
+
+            <div style="margin-bottom: 1.25rem; font-size: 0.83rem; color: var(--text-muted); background: rgba(0,0,0,0.2); padding: 0.75rem 1rem; border-radius: var(--radius); line-height: 1.6;">
+              <div>🔹 कुल Worker अनुरोध (Requests): <strong id="statTotalRequests" style="color: var(--text-main);">0</strong></div>
+              <div>🔹 मानवीय विज़िट (Human): <strong id="statHumanRequests" style="color: var(--text-main);">0</strong> · बॉट फ़िल्टर (Bots): <strong id="statBotRequests" style="color: var(--text-main);">0</strong></div>
+            </div>
+
+            <h4 style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.6rem;">अनुपलब्ध या टूटे लिंक (404 Not Found URLs)</h4>
+            <div id="missingUrlsList" style="font-size: 0.82rem;">
+              <!-- 404 URLs table -->
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- VIEW 4: SETTINGS & D1 STATUS -->
       <section id="view-settings" class="view-section">
         <div class="section-header">
           <h2 class="section-title">Settings &amp; Database Status</h2>
         </div>
 
+        <!-- Change Password Card -->
         <div class="editor-card" style="margin-bottom: 1.5rem;">
-          <h3 style="margin-bottom: 0.8rem; font-size: 1.1rem;">Cloudflare D1 &amp; Secrets Checklist</h3>
+          <h3 style="margin-bottom: 0.8rem; font-size: 1.1rem;">🔐 Change Administrator Password (पासवर्ड बदलें)</h3>
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.2rem;">
+            Update your administrator password securely in your Cloudflare D1 database.
+          </p>
+          <form id="changePasswordForm" onsubmit="handleChangePassword(event)" style="max-width: 440px;">
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <label class="form-label" for="currentPass">Current Password (वर्तमान पासवर्ड)</label>
+              <input type="password" id="currentPass" class="text-input" placeholder="वर्तमान पासवर्ड दर्ज करें" required autocomplete="current-password">
+            </div>
+            <div class="form-row" style="margin-bottom: 1.2rem;">
+              <div class="form-group">
+                <label class="form-label" for="newPass">New Password (नया पासवर्ड)</label>
+                <input type="password" id="newPass" class="text-input" placeholder="न्यूनतम 6 अक्षर" minlength="6" required autocomplete="new-password">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="confirmPass">Confirm (पुष्टि करें)</label>
+                <input type="password" id="confirmPass" class="text-input" placeholder="दोबारा दर्ज करें" minlength="6" required autocomplete="new-password">
+              </div>
+            </div>
+            <button type="submit" id="changePassBtn" class="btn btn-accent">पासवर्ड अपडेट करें (Update Password)</button>
+            <div id="changePassMsg" style="margin-top: 0.8rem; font-size: 0.85rem; display: none;"></div>
+          </form>
+        </div>
+
+        <div class="editor-card" style="margin-bottom: 1.5rem;">
+          <h3 style="margin-bottom: 0.8rem; font-size: 1.1rem;">Cloudflare D1 &amp; Architecture Checklist</h3>
           <p style="font-size: 0.88rem; color: var(--text-muted); line-height: 1.7; margin-bottom: 1.25rem;">
-            This admin dashboard connects directly to Cloudflare D1 for persistent storage and uses Cloudflare Secrets for administrator authentication.
+            This admin dashboard connects directly to Cloudflare D1 for persistent storage and uses salted SHA-256 password hashing stored in D1 (or optionally <code>ADMIN_PASSWORD</code> secret).
           </p>
 
           <div style="background: rgba(0,0,0,0.25); padding: 1.2rem; border-radius: var(--radius); font-size: 0.85rem; line-height: 1.8;">
-            <p>1. <strong>ADMIN_PASSWORD</strong>: Set your secret in Cloudflare Dashboard &gt; Workers &gt; Settings &gt; Variables and Secrets.</p>
-            <p>2. <strong>D1 Database Binding</strong>: Ensure D1 database binding variable is named <code>DB</code>.</p>
-            <p>3. <strong>Database Migration</strong>: Apply <code>migrations/0001_initial_schema.sql</code> via Cloudflare D1 console.</p>
+            <p>1. <strong>D1 Database Binding</strong>: Ensure D1 database binding variable is named <code>DB</code> in <code>wrangler.jsonc</code>.</p>
+            <p>2. <strong>Database Migration</strong>: Apply <code>migrations/0001_initial_schema.sql</code> via Cloudflare D1 console.</p>
+            <p>3. <strong>Admin Setup</strong>: Once deployed, initialize your password directly at <code>ashabd.in/admin</code>.</p>
           </div>
         </div>
 
@@ -2458,10 +3882,50 @@ function getAdminDashboardHtml() {
     </div>
   </div>
 
+  <!-- ==================== POEM DETAIL INSPECTION MODAL ==================== -->
+  <div id="poemDetailModal" class="modal-overlay">
+    <div class="preview-modal-content" style="background: var(--surface); color: var(--text-main); border: 1px solid var(--surface-border); max-width: 680px; padding: 2.2rem;">
+      <button class="preview-close-btn" style="color: var(--text-main); background: rgba(255,255,255,0.08);" onclick="closePoemDetailModal()">&times;</button>
+      <div style="margin-bottom: 1.5rem;">
+        <span id="pdmType" class="type-tag" style="margin-bottom: 0.5rem; display: inline-block;">कविता</span>
+        <h2 id="pdmTitle" style="font-family: 'Rozha One', 'Tiro Devanagari Hindi', serif; font-size: 1.8rem; margin: 0.25rem 0 0.5rem; color: var(--accent);"></h2>
+        <a id="pdmUrl" href="#" target="_blank" style="font-size: 0.82rem; color: #58a6ff; text-decoration: none;">/poems/... ↗</a>
+      </div>
+
+      <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 1.5rem;">
+        <div class="interval-box">
+          <div class="interval-box-label">कुल व्यूज़ (Views)</div>
+          <div class="interval-box-val" id="pdmViews">0</div>
+        </div>
+        <div class="interval-box">
+          <div class="interval-box-label">काव्य पाठ (Reads)</div>
+          <div class="interval-box-val" id="pdmReads" style="color: var(--accent);">0</div>
+        </div>
+        <div class="interval-box">
+          <div class="interval-box-label">पाठ दर (Read Rate)</div>
+          <div class="interval-box-val" id="pdmRate" style="color: #3fb950;">0%</div>
+        </div>
+      </div>
+
+      <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--surface-border); border-radius: var(--radius); padding: 1.2rem; margin-bottom: 1.5rem;">
+        <h4 style="font-size: 0.88rem; margin-bottom: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">सत्यापन एवं जुड़ाव विवरण (Reading Verification)</h4>
+        <div style="font-size: 0.84rem; line-height: 1.8; color: var(--text-main);">
+          <div>⏱️ <strong>औसत पठन समय:</strong> <span id="pdmAvgDuration">--</span></div>
+          <div>📜 <strong>स्क्रॉल पूर्णता (Scroll Depth):</strong> पाठकों द्वारा 50% से अधिक स्क्रॉल</div>
+          <div>📊 <strong>ट्रैफ़िक हिस्सा:</strong> कुल काव्य ट्रैफ़िक का <span id="pdmShare">--%</span></div>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+        <button class="btn btn-outline btn-sm" onclick="closePoemDetailModal()">बंद करें (Close)</button>
+        <a id="pdmLiveBtn" href="#" target="_blank" class="btn btn-accent btn-sm" style="text-decoration: none;">वेबसाइट पर देखें ↗</a>
+      </div>
+    </div>
+  </div>
+
   <!-- Client-side Logic -->
   <script>
     let currentWritings = [];
-    let currentFilterStatus = 'all';
 
     // Check Auth on Page Load
     async function checkAuth() {
@@ -2471,7 +3935,13 @@ function getAdminDashboardHtml() {
           const data = await res.json();
           if (data.authenticated) {
             document.getElementById('authOverlay').style.display = 'none';
-            loadWritings();
+            if (window.location.pathname === '/admin/analytics') {
+              switchTab('analytics');
+            } else {
+              loadWritings();
+            }
+          } else if (data.needs_setup) {
+            showSetup();
           } else {
             showLogin();
           }
@@ -2485,6 +3955,18 @@ function getAdminDashboardHtml() {
 
     function showLogin() {
       document.getElementById('authOverlay').style.display = 'flex';
+      document.getElementById('loginBox').style.display = 'block';
+      document.getElementById('setupBox').style.display = 'none';
+      const errBox = document.getElementById('loginError');
+      if (errBox) errBox.style.display = 'none';
+    }
+
+    function showSetup() {
+      document.getElementById('authOverlay').style.display = 'flex';
+      document.getElementById('loginBox').style.display = 'none';
+      document.getElementById('setupBox').style.display = 'block';
+      const errBox = document.getElementById('setupError');
+      if (errBox) errBox.style.display = 'none';
     }
 
     async function handleLogin(e) {
@@ -2505,12 +3987,16 @@ function getAdminDashboardHtml() {
         const data = await res.json();
         if (res.ok && data.success) {
           document.getElementById('authOverlay').style.display = 'none';
-          loadWritings();
+          if (window.location.pathname === '/admin/analytics') {
+            switchTab('analytics');
+          } else {
+            loadWritings();
+          }
         } else {
           errBox.innerText = data.error || 'अमान्य पासवर्ड (Invalid password)';
           errBox.style.display = 'block';
-          if (data.setup_needed) {
-            document.getElementById('setupNotice').style.display = 'block';
+          if (data.needs_setup) {
+            setTimeout(showSetup, 1200);
           }
         }
       } catch (err) {
@@ -2519,6 +4005,99 @@ function getAdminDashboardHtml() {
       } finally {
         btn.disabled = false;
         btn.innerText = 'प्रवेश करें (Sign In)';
+      }
+    }
+
+    async function handleInitialSetup(e) {
+      e.preventDefault();
+      const p1 = document.getElementById('newAdminPassword').value;
+      const p2 = document.getElementById('confirmAdminPassword').value;
+      const errBox = document.getElementById('setupError');
+      const btn = document.getElementById('setupBtn');
+
+      errBox.style.display = 'none';
+      if (p1 !== p2) {
+        errBox.innerText = 'पासवर्ड मेल नहीं खाते (Passwords do not match). Please try again.';
+        errBox.style.display = 'block';
+        return;
+      }
+      if (p1.length < 6) {
+        errBox.innerText = 'पासवर्ड कम से कम 6 अक्षरों का होना चाहिए (Password must be at least 6 characters).';
+        errBox.style.display = 'block';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerText = 'सेट हो रहा है... (Initializing...)';
+
+      try {
+        const res = await fetch('/api/auth/setup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: p1 })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          alert('🎉 व्यवस्थापक पासवर्ड सफलतापूर्वक सेट हो गया!\\n(Admin password initialized successfully!)');
+          document.getElementById('authOverlay').style.display = 'none';
+          loadWritings();
+        } else {
+          errBox.innerText = data.error || 'Setup failed';
+          errBox.style.display = 'block';
+        }
+      } catch (err) {
+        errBox.innerText = 'Network error: ' + err.message;
+        errBox.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        btn.innerText = 'पासवर्ड सेट करें और शुरू करें (Initialize & Log In)';
+      }
+    }
+
+    async function handleChangePassword(e) {
+      e.preventDefault();
+      const currentPassword = document.getElementById('currentPass').value;
+      const newPassword = document.getElementById('newPass').value;
+      const confirmPassword = document.getElementById('confirmPass').value;
+      const msgBox = document.getElementById('changePassMsg');
+      const btn = document.getElementById('changePassBtn');
+
+      msgBox.style.display = 'none';
+
+      if (newPassword !== confirmPassword) {
+        msgBox.innerText = 'नया पासवर्ड मेल नहीं खाता (New passwords do not match).';
+        msgBox.style.color = 'var(--danger)';
+        msgBox.style.display = 'block';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerText = 'अपडेट हो रहा है...';
+
+      try {
+        const res = await fetch('/api/auth/change-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ currentPassword, newPassword })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          msgBox.innerText = '✅ ' + (data.message || 'Password updated successfully!');
+          msgBox.style.color = 'var(--success)';
+          msgBox.style.display = 'block';
+          document.getElementById('changePasswordForm').reset();
+        } else {
+          msgBox.innerText = '❌ ' + (data.error || 'Failed to update password');
+          msgBox.style.color = 'var(--danger)';
+          msgBox.style.display = 'block';
+        }
+      } catch (err) {
+        msgBox.innerText = 'Network error: ' + err.message;
+        msgBox.style.color = 'var(--danger)';
+        msgBox.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        btn.innerText = 'पासवर्ड अपडेट करें (Update Password)';
       }
     }
 
@@ -2533,34 +4112,59 @@ function getAdminDashboardHtml() {
       document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
 
       if (tab === 'overview') {
-        document.getElementById('view-overview').classList.add('active');
-        document.querySelector('.nav-btn:nth-child(1)').classList.add('active');
+        document.getElementById('view-overview')?.classList.add('active');
+        document.getElementById('btn-overview')?.classList.add('active');
+      } else if (tab === 'analytics') {
+        document.getElementById('view-analytics')?.classList.add('active');
+        document.getElementById('btn-analytics')?.classList.add('active');
+        loadAnalyticsData();
       } else if (tab === 'all-writings') {
-        document.getElementById('view-list').classList.add('active');
+        document.getElementById('view-list')?.classList.add('active');
         document.getElementById('listSectionTitle').innerText = 'All Writings';
         document.getElementById('statusFilter').value = 'all';
-        document.querySelector('.nav-btn:nth-child(2)').classList.add('active');
+        document.getElementById('btn-all-writings')?.classList.add('active');
         loadWritings();
       } else if (tab === 'published') {
-        document.getElementById('view-list').classList.add('active');
+        document.getElementById('view-list')?.classList.add('active');
         document.getElementById('listSectionTitle').innerText = 'Published Writings';
         document.getElementById('statusFilter').value = 'Published';
-        document.querySelector('.nav-btn:nth-child(4)').classList.add('active');
+        document.getElementById('btn-published')?.classList.add('active');
         loadWritings();
       } else if (tab === 'drafts') {
-        document.getElementById('view-list').classList.add('active');
+        document.getElementById('view-list')?.classList.add('active');
         document.getElementById('listSectionTitle').innerText = 'Drafts';
         document.getElementById('statusFilter').value = 'Draft';
-        document.querySelector('.nav-btn:nth-child(5)').classList.add('active');
+        document.getElementById('btn-drafts')?.classList.add('active');
         loadWritings();
       } else if (tab === 'editor') {
-        document.getElementById('view-editor').classList.add('active');
-        document.querySelector('.nav-btn:nth-child(3)').classList.add('active');
+        document.getElementById('view-editor')?.classList.add('active');
+        document.getElementById('btn-new')?.classList.add('active');
       } else if (tab === 'settings') {
-        document.getElementById('view-settings').classList.add('active');
-        document.querySelector('.nav-btn:nth-child(6)').classList.add('active');
+        document.getElementById('view-settings')?.classList.add('active');
+        document.getElementById('btn-settings')?.classList.add('active');
       }
+
+      // History navigation synchronization
+      try {
+        if (tab === 'analytics') {
+          if (window.location.pathname !== '/admin/analytics') {
+            history.pushState({ tab: 'analytics' }, '', '/admin/analytics');
+          }
+        } else {
+          if (window.location.pathname === '/admin/analytics') {
+            history.pushState({ tab }, '', '/admin');
+          }
+        }
+      } catch (_) {}
     }
+
+    window.addEventListener('popstate', (e) => {
+      if (window.location.pathname === '/admin/analytics' || (e.state && e.state.tab === 'analytics')) {
+        switchTab('analytics');
+      } else {
+        switchTab('overview');
+      }
+    });
 
     function openNewWriting() {
       document.getElementById('editWritingId').value = '';
@@ -2831,8 +4435,8 @@ function getAdminDashboardHtml() {
       if (editId) return; // Do not overwrite existing slug when editing
       const title = document.getElementById('writingTitle').value;
       let slug = title.toLowerCase().trim()
-        .replace(/[\s\t\n]+/g, '-')
-        .replace(/[^\p{L}\p{N}\-_]/gu, '')
+        .replace(/[\\s\\t\\n]+/g, '-')
+        .replace(/[^\\p{L}\\p{N}\\-_]/gu, '')
         .replace(/-+/g, '-')
         .replace(/^-|-$/g, '');
       document.getElementById('writingSlug').value = slug;
@@ -2883,7 +4487,6 @@ function getAdminDashboardHtml() {
     }
 
     function populateImportedContent(fileName, text) {
-      // Auto-set title from filename if title field is empty
       if (!document.getElementById('writingTitle').value) {
         const cleanName = fileName.replace(/\\.[^/.]+$/, '').replace(/[-_]/g, ' ');
         document.getElementById('writingTitle').value = cleanName;
@@ -2895,13 +4498,12 @@ function getAdminDashboardHtml() {
     }
 
     /**
-     * Pure browser client-side docx XML text extraction
+     * Browser-based docx XML text extraction using DecompressionStream
      */
     async function extractDocxText(file) {
       const buffer = await file.arrayBuffer();
       const zip = new Uint8Array(buffer);
 
-      // Search for word/document.xml in ZIP
       const xmlData = await findAndDecompressZipEntry(zip, 'word/document.xml');
       if (!xmlData) {
         throw new Error('word/document.xml not found inside .docx archive.');
@@ -2926,10 +4528,7 @@ function getAdminDashboardHtml() {
 
     async function findAndDecompressZipEntry(bytes, targetFilename) {
       let offset = 0;
-      const targetBytes = new TextEncoder().encode(targetFilename);
-
       while (offset < bytes.length - 30) {
-        // Local file header signature: 0x04034b50 ("PK\\x03\\x04")
         if (bytes[offset] === 0x50 && bytes[offset+1] === 0x4b && bytes[offset+2] === 0x03 && bytes[offset+3] === 0x04) {
           const compression = bytes[offset + 8] | (bytes[offset + 9] << 8);
           const compressedSize = (bytes[offset + 18]) | (bytes[offset + 19] << 8) | (bytes[offset + 20] << 16) | (bytes[offset + 21] << 24);
@@ -2945,9 +4544,8 @@ function getAdminDashboardHtml() {
           if (fn === targetFilename) {
             const raw = bytes.slice(dataStart, dataEnd);
             if (compression === 0) {
-              return raw; // Stored (no compression)
+              return raw;
             } else if (compression === 8) {
-              // Deflate compression - use Web Streams DecompressionStream
               const ds = new DecompressionStream('deflate-raw');
               const res = await new Response(raw).body.pipeThrough(ds);
               return new Uint8Array(await new Response(res).arrayBuffer());
@@ -3022,9 +4620,782 @@ function getAdminDashboardHtml() {
       return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
+    // ==================== WEBSITE ANALYTICS ENGINE ====================
+    let currentAnalyticsData = null;
+    let currentPeriod = '7d';
+    let popularFilter = 'all';
+    let sortField = 'views';
+    let sortDesc = true;
+    let trafficTrendChartInstance = null;
+    let visitorRatioChartInstance = null;
+
+    function setAnalyticsPeriod(period) {
+      currentPeriod = period;
+      document.querySelectorAll('.period-btn').forEach(btn => {
+        if (btn.dataset.period === period) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      });
+      const customBox = document.getElementById('customDateRangeBox');
+      if (period === 'custom') {
+        if (customBox) customBox.style.display = 'flex';
+      } else {
+        if (customBox) customBox.style.display = 'none';
+        loadAnalyticsData();
+      }
+    }
+
+    function toggleCustomDateInputs() {
+      const customBox = document.getElementById('customDateRangeBox');
+      if (!customBox) return;
+      if (customBox.style.display === 'flex') {
+        customBox.style.display = 'none';
+      } else {
+        customBox.style.display = 'flex';
+        setAnalyticsPeriod('custom');
+      }
+    }
+
+    function applyCustomDateRange() {
+      const s = document.getElementById('customStartDate')?.value;
+      const e = document.getElementById('customEndDate')?.value;
+      if (!s || !e) {
+        alert('कृपया प्रारंभ और समाप्ति दोनों तिथियां चुनें (Please select both start and end dates).');
+        return;
+      }
+      if (s > e) {
+        alert('प्रारंभ तिथि समाप्ति तिथि से पूर्व होनी चाहिए (Start date cannot be after end date).');
+        return;
+      }
+      loadAnalyticsData();
+    }
+
+    function toggleExportMenu() {
+      const menu = document.getElementById('exportMenu');
+      if (menu) {
+        menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+      }
+    }
+
+    document.addEventListener('click', (e) => {
+      const menu = document.getElementById('exportMenu');
+      if (menu && menu.style.display === 'block') {
+        if (!e.target.closest('.dropdown-wrap')) {
+          menu.style.display = 'none';
+        }
+      }
+    });
+
+    async function triggerTestPing() {
+      try {
+        const res = await fetch('/api/analytics/test-ping', { method: 'POST' });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          alert('🧪 टेस्ट पिंग सफलतापूर्वक दर्ज किया गया!\\n(Verified test ping recorded successfully!)\\n\\nआँकड़े ताज़ा किए जा रहे हैं...');
+          await loadAnalyticsData();
+        } else {
+          alert('टेस्ट पिंग असफल: ' + (data.error || 'Unknown error'));
+        }
+      } catch (err) {
+        alert('टेस्ट पिंग त्रुटि: ' + err.message);
+      }
+    }
+
+    async function refreshAnalytics() {
+      const icon = document.getElementById('refreshIcon');
+      if (icon) icon.style.display = 'inline-block';
+      await loadAnalyticsData();
+    }
+
+    async function loadAnalyticsData() {
+      const refreshBtn = document.getElementById('btnRefreshAnalytics');
+      if (refreshBtn) refreshBtn.disabled = true;
+
+      try {
+        let url = \`/api/analytics/data?period=\${encodeURIComponent(currentPeriod)}\`;
+        if (currentPeriod === 'custom') {
+          const s = document.getElementById('customStartDate')?.value;
+          const e = document.getElementById('customEndDate')?.value;
+          if (s && e) {
+            url += \`&startDate=\${encodeURIComponent(s)}&endDate=\${encodeURIComponent(e)}\`;
+          }
+        }
+
+        const res = await fetch(url);
+        if (res.status === 401) {
+          showLogin();
+          return;
+        }
+
+        const data = await res.json();
+        if (data.error) {
+          console.error('Analytics load error:', data.error);
+          return;
+        }
+
+        currentAnalyticsData = data;
+        renderAnalyticsUI(data);
+      } catch (err) {
+        console.error('Failed to load analytics:', err);
+      } finally {
+        if (refreshBtn) refreshBtn.disabled = false;
+      }
+    }
+
+    function renderAnalyticsUI(data) {
+      if (!data) return;
+
+      const sum = data.summary || {};
+
+      // 1. Overview Summary Cards
+      const elTot = document.getElementById('statTotalVisitors');
+      if (elTot) elTot.innerText = (sum.total_visitors || 0).toLocaleString();
+
+      const elUniq = document.getElementById('statUniqueVisitors');
+      if (elUniq) elUniq.innerText = (sum.unique_visitors || 0).toLocaleString();
+
+      const elPv = document.getElementById('statTotalPageViews');
+      if (elPv) elPv.innerText = (sum.page_views || 0).toLocaleString();
+      
+      const activeOnline = sum.active_online || 0;
+      const elActive1 = document.getElementById('statActiveOnline');
+      const elActive2 = document.getElementById('statActiveOnlineCard');
+      if (elActive1) elActive1.innerText = activeOnline;
+      if (elActive2) elActive2.innerText = activeOnline;
+
+      const elPoems = document.getElementById('statTotalPoems');
+      if (elPoems) elPoems.innerText = (sum.total_published_poems || 0).toLocaleString();
+
+      const elArts = document.getElementById('statTotalArticles');
+      if (elArts) elArts.innerText = (sum.total_published_articles || 0).toLocaleString();
+
+      // Growth tags
+      const vGrowth = sum.growth?.visitors_pct || 0;
+      const pGrowth = sum.growth?.pageviews_pct || 0;
+      const elVGrowth = document.getElementById('statVisitorsGrowth');
+      const elPGrowth = document.getElementById('statPageviewsGrowth');
+
+      if (elVGrowth) {
+        elVGrowth.innerHTML = vGrowth !== 0
+          ? \`<span class="stat-card-badge \${vGrowth > 0 ? 'badge-up' : 'badge-down'}">\${vGrowth > 0 ? '▲ +' : '▼ '}\${vGrowth}%</span> पिछले समय की तुलना में\`
+          : \`स्थिर / नया विश्लेषण\`;
+      }
+      if (elPGrowth) {
+        elPGrowth.innerHTML = pGrowth !== 0
+          ? \`<span class="stat-card-badge \${pGrowth > 0 ? 'badge-up' : 'badge-down'}">\${pGrowth > 0 ? '▲ +' : '▼ '}\${pGrowth}%</span> पिछले समय की तुलना में\`
+          : \`कुल पन्नों का समग्र पठन\`;
+      }
+
+      // 2. Multi-Period Interval Strip
+      const intervals = sum.intervals || {};
+      const formatInterval = (obj) => {
+        const views = (obj?.views || 0).toLocaleString();
+        const visitors = (obj?.visitors || 0).toLocaleString();
+        return { views: \`\${views} Views\`, visitors: \`\${visitors} Visitors\` };
+      };
+
+      const tI = formatInterval(intervals.today);
+      const elTv = document.getElementById('stripTodayViews');
+      const elTu = document.getElementById('stripTodayVisitors');
+      if (elTv) elTv.innerText = tI.views;
+      if (elTu) elTu.innerText = tI.visitors;
+
+      const sI = formatInterval(intervals.last_7d);
+      const elSv = document.getElementById('strip7dViews');
+      const elSu = document.getElementById('strip7dVisitors');
+      if (elSv) elSv.innerText = sI.views;
+      if (elSu) elSu.innerText = sI.visitors;
+
+      const mI = formatInterval(intervals.last_30d);
+      const elMv = document.getElementById('strip30dViews');
+      const elMu = document.getElementById('strip30dVisitors');
+      if (elMv) elMv.innerText = mI.views;
+      if (elMu) elMu.innerText = mI.visitors;
+
+      const aI = formatInterval(intervals.all_time);
+      const elAv = document.getElementById('stripAllViews');
+      const elAu = document.getElementById('stripAllVisitors');
+      if (elAv) elAv.innerText = aI.views;
+      if (elAu) elAu.innerText = aI.visitors;
+
+      // 3. Render Charts
+      renderTrafficChart(data.chart_points || []);
+      renderRatioChart(data.demographics?.visitors_ratio || {});
+
+      // 4. Popular Content Table
+      renderPopularContentTable();
+
+      // 5. Traffic Sources Breakdown
+      renderTrafficSources(data.traffic_sources || {});
+
+      // 6. Demographics
+      renderDemographics(data.demographics || {});
+
+      // 7. Poetry Engagement
+      renderPoetryEngagement(data.poetry_engagement || {});
+
+      // 8. Performance & Errors
+      renderPerformanceMetrics(data.performance || {});
+    }
+
+    // ==================== TRAFFIC CHARTS ====================
+    function renderTrafficChart(points) {
+      const ctx = document.getElementById('trafficTrendChart');
+      if (!ctx || typeof Chart === 'undefined') return;
+
+      if (trafficTrendChartInstance) {
+        trafficTrendChartInstance.destroy();
+      }
+
+      const labels = points.map(p => p.label);
+      const pageviews = points.map(p => p.pageviews);
+      const visitors = points.map(p => p.visitors);
+      const reads = points.map(p => p.reads);
+
+      trafficTrendChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'पेज व्यूज़ (Page Views)',
+              data: pageviews,
+              borderColor: '#d4a373',
+              backgroundColor: 'rgba(212, 163, 115, 0.14)',
+              fill: true,
+              tension: 0.35,
+              borderWidth: 2,
+              pointBackgroundColor: '#d4a373',
+              pointRadius: points.length > 30 ? 0 : 3,
+              pointHoverRadius: 5
+            },
+            {
+              label: 'अद्वितीय आगंतुक (Unique Visitors)',
+              data: visitors,
+              borderColor: '#3fb950',
+              backgroundColor: 'rgba(63, 185, 80, 0.08)',
+              fill: true,
+              tension: 0.35,
+              borderWidth: 2,
+              pointBackgroundColor: '#3fb950',
+              pointRadius: points.length > 30 ? 0 : 3,
+              pointHoverRadius: 5
+            },
+            {
+              label: 'सत्यापित काव्य पाठ (Verified Reads)',
+              data: reads,
+              borderColor: '#58a6ff',
+              borderDash: [5, 5],
+              fill: false,
+              tension: 0.35,
+              borderWidth: 2,
+              pointBackgroundColor: '#58a6ff',
+              pointRadius: points.length > 30 ? 0 : 3,
+              pointHoverRadius: 5
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: {
+            mode: 'index',
+            intersect: false
+          },
+          plugins: {
+            legend: {
+              position: 'top',
+              labels: {
+                color: '#c9d1d9',
+                boxWidth: 12,
+                font: { size: 12 }
+              }
+            },
+            tooltip: {
+              backgroundColor: '#161b22',
+              titleColor: '#f0f6fc',
+              bodyColor: '#c9d1d9',
+              borderColor: '#30363d',
+              borderWidth: 1,
+              padding: 10
+            }
+          },
+          scales: {
+            x: {
+              grid: { color: 'rgba(255, 255, 255, 0.05)' },
+              ticks: { color: '#8b949e', maxRotation: 45, font: { size: 11 } }
+            },
+            y: {
+              beginAtZero: true,
+              grid: { color: 'rgba(255, 255, 255, 0.05)' },
+              ticks: { color: '#8b949e', precision: 0, font: { size: 11 } }
+            }
+          }
+        }
+      });
+    }
+
+    function renderRatioChart(ratio) {
+      const ctx = document.getElementById('visitorRatioChart');
+      if (!ctx || typeof Chart === 'undefined') return;
+
+      if (visitorRatioChartInstance) {
+        visitorRatioChartInstance.destroy();
+      }
+
+      const newV = ratio.new_visitors || 0;
+      const retV = ratio.returning_visitors || 0;
+
+      const lblNew = document.getElementById('lblNewVisitors');
+      const lblRet = document.getElementById('lblReturningVisitors');
+      if (lblNew) lblNew.innerText = newV.toLocaleString();
+      if (lblRet) lblRet.innerText = retV.toLocaleString();
+
+      const total = newV + retV;
+      const dataValues = total > 0 ? [newV, retV] : [1, 0];
+      const backgroundColors = total > 0 ? ['#d4a373', '#3fb950'] : ['rgba(255,255,255,0.1)', 'transparent'];
+
+      visitorRatioChartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['नए पाठक (New)', 'पुनः आने वाले पाठक (Returning)'],
+          datasets: [{
+            data: dataValues,
+            backgroundColor: backgroundColors,
+            borderColor: '#181b21',
+            borderWidth: 3,
+            hoverOffset: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '72%',
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: '#161b22',
+              titleColor: '#f0f6fc',
+              bodyColor: '#c9d1d9',
+              borderColor: '#30363d',
+              borderWidth: 1,
+              callbacks: {
+                label: function(item) {
+                  if (total === 0) return ' अभी कोई डेटा नहीं';
+                  const val = item.raw || 0;
+                  const pct = Math.round((val / total) * 100);
+                  return \` \${item.label}: \${val} (\${pct}%)\`;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // ==================== POPULAR CONTENT TABLE ====================
+    function filterContentTable(filter) {
+      popularFilter = filter;
+      document.querySelectorAll('.filter-tab-btn').forEach(btn => {
+        if (btn.dataset.filter === filter) btn.classList.add('active');
+        else btn.classList.remove('active');
+      });
+      renderPopularContentTable();
+    }
+
+    function sortPopularContent(field) {
+      if (sortField === field) {
+        sortDesc = !sortDesc;
+      } else {
+        sortField = field;
+        sortDesc = true;
+      }
+      renderPopularContentTable();
+    }
+
+    function renderPopularContentTable() {
+      const tbody = document.getElementById('popularContentTableBody');
+      if (!tbody || !currentAnalyticsData) return;
+
+      let list = (currentAnalyticsData.popular_content || []).slice();
+
+      // Filter
+      if (popularFilter === 'poems') {
+        list = list.filter(item => item.is_poem);
+      } else if (popularFilter === 'articles') {
+        list = list.filter(item => !item.is_poem && item.path !== '/' && item.path !== '/poems' && item.path !== '/writings');
+      } else if (popularFilter === 'pages') {
+        list = list.filter(item => item.path === '/' || item.path === '/poems' || item.path === '/writings' || !item.is_poem);
+      }
+
+      // Sort
+      list.sort((a, b) => {
+        const valA = a[sortField] || 0;
+        const valB = b[sortField] || 0;
+        return sortDesc ? (valB - valA) : (valA - valB);
+      });
+
+      if (list.length === 0) {
+        tbody.innerHTML = \`<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">चुनी गई समयावधि में कोई सामग्री नहीं मिली (No content visits recorded in this period).</td></tr>\`;
+        return;
+      }
+
+      tbody.innerHTML = list.map((item, idx) => {
+        const rankClass = idx === 0 ? 'top-1' : (idx === 1 ? 'top-2' : (idx === 2 ? 'top-3' : ''));
+        const safePath = escape(item.path);
+        const safeTitle = escape(item.title);
+        return \`
+          <tr>
+            <td><span class="rank-badge \${rankClass}">\${idx + 1}</span></td>
+            <td>
+              <strong style="color: var(--text-main); font-size: 0.9rem;">\${safeTitle}</strong>
+              <div style="font-size: 0.76rem; margin-top: 2px;">
+                <a href="\${safePath}" target="_blank" style="color: #58a6ff; text-decoration: none;">\${safePath} ↗</a>
+              </div>
+            </td>
+            <td><span class="type-tag">\${escape(formatTypeDisplay(item.content_type))}</span></td>
+            <td style="text-align: right; font-weight: 600;">\${(item.views || 0).toLocaleString()}</td>
+            <td style="text-align: right; color: var(--accent); font-weight: 600;">\${(item.reads || 0).toLocaleString()}</td>
+            <td style="text-align: right;">
+              <span class="status-pill published" style="font-size: 0.74rem; padding: 0.15rem 0.5rem;">\${item.read_rate}%</span>
+            </td>
+            <td>
+              <div style="display: flex; align-items: center; gap: 0.4rem;">
+                <div class="progress-bar-wrap" style="margin: 0; flex: 1;">
+                  <div class="progress-bar-fill" style="width: \${Math.min(100, item.share_pct)}%;"></div>
+                </div>
+                <span style="font-size: 0.72rem; color: var(--text-muted); min-width: 32px; text-align: right;">\${item.share_pct}%</span>
+              </div>
+            </td>
+            <td style="text-align: center;">
+              <button class="btn btn-outline btn-sm" style="padding: 0.2rem 0.55rem; font-size: 0.75rem;" onclick="inspectPoemDetails('\${safePath}')" title="विस्तृत विश्लेषण">
+                विवरण ℹ️
+              </button>
+            </td>
+          </tr>
+        \`;
+      }).join('');
+    }
+
+    // ==================== POEM DETAIL MODAL ====================
+    function inspectPoemDetails(path) {
+      if (!currentAnalyticsData) return;
+      const item = (currentAnalyticsData.popular_content || []).find(p => p.path === path);
+      if (!item) return;
+
+      const elType = document.getElementById('pdmType');
+      if (elType) elType.innerText = formatTypeDisplay(item.content_type);
+      
+      const elTitle = document.getElementById('pdmTitle');
+      if (elTitle) elTitle.innerText = item.title;
+      
+      const link = document.getElementById('pdmUrl');
+      if (link) {
+        link.href = item.path;
+        link.innerText = item.path + ' ↗';
+      }
+
+      const elViews = document.getElementById('pdmViews');
+      if (elViews) elViews.innerText = (item.views || 0).toLocaleString();
+
+      const elReads = document.getElementById('pdmReads');
+      if (elReads) elReads.innerText = (item.reads || 0).toLocaleString();
+
+      const elRate = document.getElementById('pdmRate');
+      if (elRate) elRate.innerText = \`\${item.read_rate || 0}%\`;
+
+      const avgDur = item.avg_duration || 0;
+      const durStr = avgDur >= 60 ? \`\${Math.floor(avgDur/60)}m \${avgDur%60}s\` : \`\${avgDur}s\`;
+      const elDur = document.getElementById('pdmAvgDuration');
+      if (elDur) elDur.innerText = durStr;
+
+      const elShare = document.getElementById('pdmShare');
+      if (elShare) elShare.innerText = \`\${item.share_pct || 0}%\`;
+
+      const liveBtn = document.getElementById('pdmLiveBtn');
+      if (liveBtn) liveBtn.href = item.path;
+
+      const modal = document.getElementById('poemDetailModal');
+      if (modal) modal.classList.add('active');
+    }
+
+    function closePoemDetailModal() {
+      const modal = document.getElementById('poemDetailModal');
+      if (modal) modal.classList.remove('active');
+    }
+
+    // ==================== TRAFFIC SOURCES ====================
+    function renderTrafficSources(sources) {
+      const container = document.getElementById('sourcesContainer');
+      if (!container) return;
+
+      const total = sources.total || 0;
+      const counts = sources.counts || {};
+
+      const sourceList = [
+        { key: 'direct', label: 'सीधा प्रवेश (Direct Traffic / Bookmarks)', count: counts.direct || 0, icon: '🔗' },
+        { key: 'google', label: 'गूगल खोज (Google Search)', count: counts.google || 0, icon: '🔍' },
+        { key: 'instagram', label: 'इंस्टाग्राम (Instagram @ashabd0)', count: counts.instagram || 0, icon: '📸' },
+        { key: 'twitter', label: 'एक्स / ट्विटर (X / Twitter @ashabd0)', count: counts.twitter || 0, icon: '🐦' },
+        { key: 'search', label: 'अन्य खोज इंजन (Bing, DDG, Yahoo)', count: counts.search || 0, icon: '🔎' },
+        { key: 'social', label: 'अन्य सोशल (FB, LinkedIn, Reddit, YT)', count: counts.social || 0, icon: '👥' },
+        { key: 'other', label: 'अन्य बाह्य रेफरर्स (Other Referrers)', count: counts.other || 0, icon: '🌐' }
+      ];
+
+      if (total === 0) {
+        container.innerHTML = \`<p style="font-size: 0.85rem; color: var(--text-muted); text-align: center; padding: 1.5rem;">इस अवधि में कोई ट्रैफ़िक स्रोत दर्ज नहीं हुआ।</p>\`;
+        return;
+      }
+
+      container.innerHTML = sourceList.map(s => {
+        const pct = total > 0 ? Math.round((s.count / total) * 100) : 0;
+        return \`
+          <div class="progress-row">
+            <span style="display: flex; align-items: center; gap: 0.4rem; min-width: 190px;">
+              <span>\${s.icon}</span>
+              <span>\${escape(s.label)}</span>
+            </span>
+            <div class="progress-bar-wrap">
+              <div class="progress-bar-fill" style="width: \${pct}%;"></div>
+            </div>
+            <span style="font-weight: 600; min-width: 50px; text-align: right;">\${s.count.toLocaleString()}</span>
+            <span style="color: var(--text-muted); font-size: 0.75rem; min-width: 38px; text-align: right;">\${pct}%</span>
+          </div>
+        \`;
+      }).join('');
+    }
+
+    // ==================== DEMOGRAPHICS ====================
+    function renderDemographics(demo) {
+      // Countries
+      const cContainer = document.getElementById('countriesContainer');
+      if (cContainer) {
+        const countries = demo.countries || [];
+        if (countries.length === 0) {
+          cContainer.innerHTML = \`<div style="font-size: 0.82rem; color: var(--text-muted);">कोई देश डेटा नहीं मिला।</div>\`;
+        } else {
+          cContainer.innerHTML = countries.map(c => \`
+            <div class="progress-row" style="margin-bottom: 0.5rem;">
+              <span style="display: flex; align-items: center; gap: 0.4rem; min-width: 140px;">
+                <span>\${c.flag}</span>
+                <span>\${escape(c.name)}</span>
+              </span>
+              <div class="progress-bar-wrap">
+                <div class="progress-bar-fill" style="width: \${c.pct}%; background: #3fb950;"></div>
+              </div>
+              <span style="font-weight: 600; min-width: 40px; text-align: right;">\${c.visitors}</span>
+              <span style="color: var(--text-muted); font-size: 0.75rem; min-width: 34px; text-align: right;">\${c.pct}%</span>
+            </div>
+          \`).join('');
+        }
+      }
+
+      // Devices Segmented Bar
+      const dContainer = document.getElementById('devicesContainer');
+      if (dContainer) {
+        const devices = demo.devices || [];
+        const totalDev = devices.reduce((acc, d) => acc + d.visitors, 0);
+
+        let mobileCount = 0, desktopCount = 0, tabletCount = 0;
+        for (const d of devices) {
+          if (d.device_type === 'mobile') mobileCount += d.visitors;
+          else if (d.device_type === 'desktop') desktopCount += d.visitors;
+          else if (d.device_type === 'tablet') tabletCount += d.visitors;
+        }
+
+        const mPct = totalDev > 0 ? Math.round((mobileCount / totalDev) * 100) : 0;
+        const dPct = totalDev > 0 ? Math.round((desktopCount / totalDev) * 100) : 0;
+        const tPct = totalDev > 0 ? (100 - mPct - dPct) : 0;
+
+        dContainer.innerHTML = \`
+          <div class="device-bar-wrap">
+            <div class="device-bar-segment" style="width: \${mPct}%; background: #d4a373;" title="Mobile: \${mPct}%"></div>
+            <div class="device-bar-segment" style="width: \${dPct}%; background: #388bfd;" title="Desktop: \${dPct}%"></div>
+            <div class="device-bar-segment" style="width: \${tPct}%; background: #a371f7;" title="Tablet: \${tPct}%"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
+            <span><span style="color: #d4a373;">●</span> मोबाइल (Mobile): <strong>\${mPct}%</strong> (\${mobileCount})</span>
+            <span><span style="color: #388bfd;">●</span> डेस्कटॉप (Desktop): <strong>\${dPct}%</strong> (\${desktopCount})</span>
+            <span><span style="color: #a371f7;">●</span> टैबलेट (Tablet): <strong>\${tPct}%</strong> (\${tabletCount})</span>
+          </div>
+        \`;
+      }
+
+      // Browsers
+      const bContainer = document.getElementById('browsersContainer');
+      if (bContainer) {
+        const browsers = demo.browsers || [];
+        if (browsers.length === 0) {
+          bContainer.innerHTML = \`<span style="color: var(--text-muted);">डेटा उपलब्ध नहीं</span>\`;
+        } else {
+          bContainer.innerHTML = browsers.map(b => \`
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
+              <span>\${escape(b.browser)}</span>
+              <strong>\${b.visitors}</strong>
+            </div>
+          \`).join('');
+        }
+      }
+
+      // OS
+      const oContainer = document.getElementById('osContainer');
+      if (oContainer) {
+        const osList = demo.os || [];
+        if (osList.length === 0) {
+          oContainer.innerHTML = \`<span style="color: var(--text-muted);">डेटा उपलब्ध नहीं</span>\`;
+        } else {
+          oContainer.innerHTML = osList.map(o => \`
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
+              <span>\${escape(o.os)}</span>
+              <strong>\${o.visitors}</strong>
+            </div>
+          \`).join('');
+        }
+      }
+    }
+
+    // ==================== POETRY ENGAGEMENT ====================
+    function renderPoetryEngagement(pe) {
+      const elReads = document.getElementById('statPoemReads');
+      if (elReads) elReads.innerText = (pe.total_poem_reads || 0).toLocaleString();
+
+      const elRate = document.getElementById('statPoemReadRate');
+      if (elRate) elRate.innerText = \`\${pe.read_conversion_rate || 0}%\`;
+
+      const topList = document.getElementById('topReadPoemsList');
+      if (!topList) return;
+
+      const poems = pe.top_read_poems || [];
+      if (poems.length === 0) {
+        topList.innerHTML = \`<p style="font-size: 0.82rem; color: var(--text-muted);">इस अवधि में कोई कविता पठन दर्ज नहीं हुआ।</p>\`;
+        return;
+      }
+
+      topList.innerHTML = poems.slice(0, 5).map((p, idx) => \`
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.85rem;">
+          <div>
+            <strong style="color: var(--text-main);">\${idx + 1}. \${escape(p.title)}</strong>
+            <div style="font-size: 0.74rem; color: var(--text-muted);">
+              \${p.views} व्यूज़ · पठन दर: \${p.read_rate}%
+            </div>
+          </div>
+          <span class="status-pill published" style="font-size: 0.76rem;">
+            \${(p.reads || 0)} Reads
+          </span>
+        </div>
+      \`).join('');
+    }
+
+    // ==================== PERFORMANCE & ERRORS ====================
+    function renderPerformanceMetrics(perf) {
+      const elReqs = document.getElementById('statTotalRequests');
+      if (elReqs) elReqs.innerText = (perf.total_worker_requests || 0).toLocaleString();
+
+      const elHum = document.getElementById('statHumanRequests');
+      if (elHum) elHum.innerText = (perf.human_requests || 0).toLocaleString();
+
+      const elBot = document.getElementById('statBotRequests');
+      if (elBot) elBot.innerText = (perf.bot_requests || 0).toLocaleString();
+
+      const codes = perf.status_codes || [];
+      let c2xx = 0, c3xx = 0, c4xx = 0, c5xx = 0;
+      for (const row of codes) {
+        const code = parseInt(row.status_code, 10);
+        if (code >= 200 && code < 300) c2xx += row.count;
+        else if (code >= 300 && code < 400) c3xx += row.count;
+        else if (code >= 400 && code < 500) c4xx += row.count;
+        else if (code >= 500) c5xx += row.count;
+      }
+
+      const el2xx = document.getElementById('statStatus2xx');
+      if (el2xx) el2xx.innerText = c2xx.toLocaleString();
+
+      const el3xx = document.getElementById('statStatus3xx');
+      if (el3xx) el3xx.innerText = c3xx.toLocaleString();
+
+      const el4xx = document.getElementById('statStatus4xx');
+      if (el4xx) el4xx.innerText = c4xx.toLocaleString();
+
+      const el5xx = document.getElementById('statStatus5xx');
+      if (el5xx) el5xx.innerText = c5xx.toLocaleString();
+
+      const missingList = document.getElementById('missingUrlsList');
+      if (missingList) {
+        const urls = perf.top_404_urls || [];
+        if (urls.length === 0) {
+          missingList.innerHTML = \`<span style="color: var(--success); font-size: 0.82rem;">✅ कोई 404 टूटे लिंक दर्ज नहीं हुए (All clean)!</span>\`;
+        } else {
+          missingList.innerHTML = urls.map(u => \`
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.35rem 0; border-bottom: 1px solid rgba(255,255,255,0.04);">
+              <code style="color: var(--danger); font-size: 0.78rem;">\${escape(u.path)}</code>
+              <span class="status-pill draft" style="font-size: 0.72rem;">\${u.count} त्रुटियां</span>
+            </div>
+          \`).join('');
+        }
+      }
+    }
+
+    // ==================== EXPORT REPORTS (CSV / JSON) ====================
+    function exportAnalyticsReport(format) {
+      if (!currentAnalyticsData) {
+        alert('डेटा अभी लोड नहीं हुआ है। कृपया प्रतीक्षा करें।');
+        return;
+      }
+
+      const period = currentAnalyticsData.period || currentPeriod;
+      const dateStr = new Date().toISOString().slice(0, 10);
+      toggleExportMenu();
+
+      if (format === 'json') {
+        const jsonStr = JSON.stringify(currentAnalyticsData, null, 2);
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = \`ashabd-analytics-\${period}-\${dateStr}.json\`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else if (format === 'csv') {
+        const sum = currentAnalyticsData.summary || {};
+        let csvContent = '\\uFEFF'; // UTF-8 BOM for Excel / Devanagari Hindi support
+        csvContent += \`अशब्द (Ashabd) वेबसाइट आँकड़े विश्लेषण रिपोर्ट\\n\`;
+        csvContent += \`समयावधि (Period),\${period}\\n\`;
+        csvContent += \`दिनांक (Date),\${dateStr}\\n\\n\`;
+
+        csvContent += \`--- सारांश (Overview) ---\\n\`;
+        csvContent += \`मापदंड (Metric),संख्या (Value)\\n\`;
+        csvContent += \`कुल आगंतुक सत्र (Total Visitors),\${sum.total_visitors || 0}\\n\`;
+        csvContent += \`अद्वितीय आगंतुक (Unique Visitors),\${sum.unique_visitors || 0}\\n\`;
+        csvContent += \`कुल पेज व्यूज़ (Total Page Views),\${sum.page_views || 0}\\n\`;
+        csvContent += \`प्रकाशित कविताएं (Total Poems),\${sum.total_published_poems || 0}\\n\`;
+        csvContent += \`प्रकाशित लेख (Total Articles),\${sum.total_published_articles || 0}\\n\\n\`;
+
+        csvContent += \`--- सर्वाधिक लोकप्रिय रचनाएं व पन्ने (Popular Content) ---\\n\`;
+        csvContent += \`रैंक,शीर्षक (Title),URL,प्रकार (Type),व्यूज़ (Views),काव्य पाठ (Reads),पठन दर (Read Rate %),हिस्सा (Share %)\\n\`;
+
+        for (const item of (currentAnalyticsData.popular_content || [])) {
+          const rowTitle = \`"\${(item.title || '').replace(/"/g, '""')}"\`;
+          const rowPath = \`"\${(item.path || '').replace(/"/g, '""')}"\`;
+          const rowType = \`"\${(item.content_type || '').replace(/"/g, '""')}"\`;
+          csvContent += \`\${item.rank},\${rowTitle},\${rowPath},\${rowType},\${item.views},\${item.reads},\${item.read_rate}%,\${item.share_pct}%\\n\`;
+        }
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = \`ashabd-analytics-\${period}-\${dateStr}.csv\`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    }
+
     // Initialize
     checkAuth();
   </script>
 </body>
-</html>`;
+</html>
+`;
 }

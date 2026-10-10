@@ -11,6 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Serif+Devanagari:wght@400;500;600&family=Rozha+One&family=Tiro+Devanagari+Hindi:ital@0;1&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   
   <style>
     :root {
@@ -527,6 +528,315 @@
       main.workspace { padding: 1.25rem; }
       .nav-count { display: none; }
     }
+
+    /* ==================== ANALYTICS DASHBOARD STYLING ==================== */
+    .analytics-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+      margin-bottom: 1.5rem;
+    }
+    .live-pill {
+      display: inline-flex;
+      align-items: center;
+      background: rgba(63, 185, 80, 0.12);
+      border: 1px solid rgba(63, 185, 80, 0.3);
+      color: #3fb950;
+      font-size: 0.76rem;
+      font-weight: 600;
+      padding: 0.2rem 0.65rem;
+      border-radius: 999px;
+      letter-spacing: 0.02em;
+    }
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #3fb950;
+      display: inline-block;
+      margin-right: 6px;
+      box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.7);
+      animation: pulse-ring 2s infinite;
+    }
+    @keyframes pulse-ring {
+      0% { box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.7); }
+      70% { box-shadow: 0 0 0 8px rgba(63, 185, 80, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(63, 185, 80, 0); }
+    }
+    .analytics-actions {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+    .period-selector {
+      display: inline-flex;
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--radius);
+      padding: 3px;
+      gap: 2px;
+    }
+    .period-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      padding: 0.4rem 0.75rem;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .period-btn:hover {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.04);
+    }
+    .period-btn.active {
+      background: var(--accent);
+      color: #140b04;
+      font-weight: 600;
+    }
+    .custom-date-box {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--radius);
+      padding: 0.75rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.25rem;
+      font-size: 0.85rem;
+    }
+    .custom-date-box label {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      color: var(--text-muted);
+    }
+    .date-input {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--surface-border);
+      color: var(--text-main);
+      padding: 0.35rem 0.6rem;
+      border-radius: 4px;
+      font-size: 0.82rem;
+    }
+    .dropdown-wrap {
+      position: relative;
+      display: inline-block;
+    }
+    .dropdown-menu {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      margin-top: 4px;
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--radius);
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      z-index: 50;
+      min-width: 170px;
+      overflow: hidden;
+    }
+    .dropdown-menu button {
+      display: block;
+      width: 100%;
+      text-align: left;
+      padding: 0.6rem 0.95rem;
+      background: none;
+      border: none;
+      color: var(--text-main);
+      font-size: 0.82rem;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .dropdown-menu button:hover {
+      background: var(--surface-hover);
+      color: var(--accent);
+    }
+    .analytics-info-banner {
+      background: rgba(212, 163, 115, 0.07);
+      border: 1px solid rgba(212, 163, 115, 0.22);
+      border-radius: var(--radius);
+      padding: 0.85rem 1.15rem;
+      margin-bottom: 1.5rem;
+      display: flex;
+      gap: 0.85rem;
+      font-size: 0.82rem;
+      line-height: 1.6;
+      color: var(--text-muted);
+    }
+    .analytics-info-banner strong {
+      color: var(--text-main);
+    }
+    .stat-card-badge {
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      margin-left: 0.4rem;
+    }
+    .badge-up { background: rgba(63, 185, 80, 0.15); color: #3fb950; }
+    .badge-down { background: rgba(248, 81, 73, 0.15); color: #f85149; }
+    .stat-subtext {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.35rem;
+    }
+    .interval-strip {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 0.85rem;
+      margin-bottom: 2rem;
+    }
+    .interval-box {
+      background: rgba(0, 0, 0, 0.22);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--radius);
+      padding: 0.85rem 1rem;
+    }
+    .interval-box-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.25rem;
+    }
+    .interval-box-val {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+    .interval-box-sub {
+      font-size: 0.74rem;
+      color: var(--text-muted);
+      margin-top: 0.2rem;
+    }
+    .chart-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 1.25rem;
+      margin-bottom: 2rem;
+    }
+    @media (max-width: 980px) {
+      .chart-grid { grid-template-columns: 1fr; }
+    }
+    .chart-card {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+    }
+    .chart-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+    .chart-canvas-wrap {
+      position: relative;
+      height: 290px;
+      width: 100%;
+    }
+    .analytics-two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.25rem;
+      margin-bottom: 2rem;
+    }
+    @media (max-width: 980px) {
+      .analytics-two-col { grid-template-columns: 1fr; }
+    }
+    .progress-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.85rem;
+      margin-bottom: 0.85rem;
+      font-size: 0.85rem;
+    }
+    .progress-bar-wrap {
+      flex: 1;
+      height: 7px;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 999px;
+      overflow: hidden;
+      margin: 0 0.5rem;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 999px;
+      transition: width 0.4s ease;
+    }
+    .rank-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.08);
+      font-size: 0.74rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+    .rank-badge.top-1 { background: rgba(212, 163, 115, 0.25); color: var(--accent); }
+    .rank-badge.top-2 { background: rgba(192, 192, 192, 0.2); color: #d0d7de; }
+    .rank-badge.top-3 { background: rgba(205, 127, 50, 0.2); color: #e09f67; }
+    .filter-tab-bar {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+    .filter-tab-btn {
+      background: none;
+      border: 1px solid var(--surface-border);
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      padding: 0.35rem 0.8rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .filter-tab-btn.active {
+      background: rgba(212, 163, 115, 0.14);
+      border-color: var(--accent);
+      color: var(--accent);
+      font-weight: 600;
+    }
+    .status-pill-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 0.85rem;
+      margin-bottom: 1.25rem;
+    }
+    .status-pill-box {
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--radius);
+      padding: 0.75rem 1rem;
+      text-align: center;
+    }
+    .status-pill-code { font-size: 0.78rem; font-weight: 600; margin-bottom: 0.2rem; }
+    .status-pill-val { font-size: 1.35rem; font-weight: 700; color: var(--text-main); }
+    .device-bar-wrap {
+      display: flex;
+      height: 10px;
+      border-radius: 999px;
+      overflow: hidden;
+      margin: 1rem 0;
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .device-bar-segment {
+      height: 100%;
+      transition: width 0.3s ease;
+    }
   </style>
 </head>
 <body>
@@ -600,25 +910,28 @@
 
   <div class="admin-container">
     <aside class="sidebar">
-      <button class="nav-btn active" onclick="switchTab('overview')">
+      <button class="nav-btn active" id="btn-overview" onclick="switchTab('overview')">
         <span>📊 Overview</span>
       </button>
-      <button class="nav-btn" onclick="switchTab('all-writings')">
+      <button class="nav-btn" id="btn-analytics" onclick="switchTab('analytics')">
+        <span>📈 Website Analytics / वेबसाइट आँकड़े</span>
+      </button>
+      <button class="nav-btn" id="btn-all-writings" onclick="switchTab('all-writings')">
         <span>📜 All Writings</span>
         <span class="nav-count" id="countAll">0</span>
       </button>
-      <button class="nav-btn" onclick="openNewWriting()">
+      <button class="nav-btn" id="btn-new" onclick="openNewWriting()">
         <span>✍️ Add New Writing</span>
       </button>
-      <button class="nav-btn" onclick="switchTab('published')">
+      <button class="nav-btn" id="btn-published" onclick="switchTab('published')">
         <span>🌐 Published</span>
         <span class="nav-count" id="countPub">0</span>
       </button>
-      <button class="nav-btn" onclick="switchTab('drafts')">
+      <button class="nav-btn" id="btn-drafts" onclick="switchTab('drafts')">
         <span>📁 Drafts</span>
         <span class="nav-count" id="countDraft">0</span>
       </button>
-      <button class="nav-btn" onclick="switchTab('settings')">
+      <button class="nav-btn" id="btn-settings" onclick="switchTab('settings')">
         <span>⚙️ Settings &amp; D1</span>
       </button>
     </aside>
@@ -807,6 +1120,300 @@
         </form>
       </section>
 
+      <!-- ==================== VIEW: WEBSITE ANALYTICS ==================== -->
+      <section id="view-analytics" class="view-section">
+        <!-- Top Analytics Header with Period & Actions -->
+        <div class="analytics-header">
+          <div class="analytics-title-wrap">
+            <h2 class="section-title" style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+              <span>📈 Website Analytics (वेबसाइट आँकड़े)</span>
+              <span class="live-pill"><span class="pulse-dot"></span><span id="statActiveOnline">1</span> पाठक ऑनलाइन</span>
+            </h2>
+            <p style="font-size: 0.85rem; color: var(--text-muted);">
+              वास्तविक काव्य रुचि, पाठक उपस्थिति एवं ट्रैफ़िक विश्लेषण (Cloudflare Edge &amp; D1 Database)
+            </p>
+          </div>
+
+          <div class="analytics-actions">
+            <div class="period-selector" role="group" aria-label="Date Filter">
+              <button class="period-btn" data-period="today" onclick="setAnalyticsPeriod('today')">आज (Today)</button>
+              <button class="period-btn" data-period="yesterday" onclick="setAnalyticsPeriod('yesterday')">कल (Yesterday)</button>
+              <button class="period-btn active" data-period="7d" onclick="setAnalyticsPeriod('7d')">7 दिन (7 Days)</button>
+              <button class="period-btn" data-period="30d" onclick="setAnalyticsPeriod('30d')">30 दिन (30 Days)</button>
+              <button class="period-btn" data-period="90d" onclick="setAnalyticsPeriod('90d')">90 दिन (90 Days)</button>
+              <button class="period-btn" data-period="custom" onclick="toggleCustomDateInputs()">कस्टम (Custom)</button>
+            </div>
+
+            <button class="btn btn-outline btn-sm" id="btnRefreshAnalytics" onclick="refreshAnalytics()" title="ताज़ा करें">
+              <span id="refreshIcon">🔄</span> ताज़ा करें
+            </button>
+
+            <div class="dropdown-wrap">
+              <button class="btn btn-outline btn-sm" onclick="toggleExportMenu()" title="रिपोर्ट डाउनलोड करें">
+                <span>📥 रिपोर्ट (Export) ▾</span>
+              </button>
+              <div id="exportMenu" class="dropdown-menu" style="display: none;">
+                <button onclick="exportAnalyticsReport('csv')">📄 CSV फ़ाइल (.csv)</button>
+                <button onclick="exportAnalyticsReport('json')">📦 JSON फ़ाइल (.json)</button>
+              </div>
+            </div>
+
+            <button class="btn btn-outline btn-sm" onclick="triggerTestPing()" title="टेस्ट विज़िट भेजें">
+              <span>🧪 टेस्ट पिंग (Test Ping)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Custom Date Range Picker (Conditional) -->
+        <div id="customDateRangeBox" class="custom-date-box" style="display: none;">
+          <label>प्रारंभ (From): <input type="date" id="customStartDate" class="date-input"></label>
+          <label>समाप्ति (To): <input type="date" id="customEndDate" class="date-input"></label>
+          <button class="btn btn-accent btn-sm" onclick="applyCustomDateRange()">लागू करें (Apply)</button>
+        </div>
+
+        <!-- Privacy & Estimation Methodology Banner -->
+        <div class="analytics-info-banner">
+          <div style="font-size: 1.2rem;">🔒</div>
+          <div>
+            <strong>गोपनीयता-युक्त एवं प्रामाणिक मापन (Privacy-Preserving &amp; Verified Tracking):</strong>
+            यहाँ <strong>अद्वितीय आगंतुक (Unique Visitors)</strong> की गणना दैनिक क्रिप्टोग्राफ़िक हैश (Salted Daily SHA-256) के माध्यम से की जाती है। किसी भी पाठक का व्यक्तिगत आईपी पता या संवेदनशील डेटा सुरक्षित नहीं किया जाता।
+            <strong>पेज व्यूज़ (Page Views)</strong> कुल पन्नों के खुलने की संख्या है, जबकि <strong>सत्यापित काव्य पाठ (Verified Reads)</strong> उन पाठकों को दर्शाता है जिन्होंने रचना पर कम से कम 15–20 सेकंड व्यतीत किए या स्क्रॉल किया। स्वचालित बॉट्स को मानवीय आँकड़ों से अलग रखा गया है।
+          </div>
+        </div>
+
+        <!-- Section 2: Top Overview Summary Cards (6 Cards) -->
+        <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 1.5rem;">
+          <div class="stat-card">
+            <div class="stat-label">कुल आगंतुक सत्र (Total Visitors)</div>
+            <div class="stat-value" id="statTotalVisitors">0</div>
+            <div class="stat-subtext" id="statVisitorsGrowth">पिछले समय की तुलना में --</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">
+              अद्वितीय आगंतुक (Unique Visitors)
+              <span title="दैनिक साल्टेड हैश द्वारा संगणित (Daily Salted SHA-256)" style="cursor: help; opacity: 0.7;">ℹ️</span>
+            </div>
+            <div class="stat-value" id="statUniqueVisitors" style="color: var(--accent);">0</div>
+            <div class="stat-subtext">विशिष्ट पाठक (Distinct Individuals)</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">कुल पेज व्यूज़ (Total Page Views)</div>
+            <div class="stat-value" id="statTotalPageViews">0</div>
+            <div class="stat-subtext" id="statPageviewsGrowth">पन्नों का कुल पठन --</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">अभी सक्रिय (Currently Online)</div>
+            <div class="stat-value" style="color: #3fb950;">
+              <span class="pulse-dot"></span><span id="statActiveOnlineCard">0</span>
+            </div>
+            <div class="stat-subtext">गत 5 मिनट में सक्रिय पाठक</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">प्रकाशित कविताएं (Poems)</div>
+            <div class="stat-value" id="statTotalPoems" style="color: #388bfd;">0</div>
+            <div class="stat-subtext">वेबसाइट पर लाइव कविता संग्रह</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">प्रकाशित लेख व अन्य (Writings)</div>
+            <div class="stat-value" id="statTotalArticles" style="color: #a371f7;">0</div>
+            <div class="stat-subtext">लेख, निबंध, कहानियां व डायरी</div>
+          </div>
+        </div>
+
+        <!-- Section 2b: Multi-Period Quick Strip (Today, 7d, 30d, All-Time) -->
+        <div class="interval-strip">
+          <div class="interval-box">
+            <div class="interval-box-label">आज का ट्रैफ़िक (Today)</div>
+            <div class="interval-box-val" id="stripTodayViews">0 Views</div>
+            <div class="interval-box-sub" id="stripTodayVisitors">0 Visitors</div>
+          </div>
+          <div class="interval-box">
+            <div class="interval-box-label">गत 7 दिन (Last 7 Days)</div>
+            <div class="interval-box-val" id="strip7dViews">0 Views</div>
+            <div class="interval-box-sub" id="strip7dVisitors">0 Visitors</div>
+          </div>
+          <div class="interval-box">
+            <div class="interval-box-label">गत 30 दिन (Last 30 Days)</div>
+            <div class="interval-box-val" id="strip30dViews">0 Views</div>
+            <div class="interval-box-sub" id="strip30dVisitors">0 Visitors</div>
+          </div>
+          <div class="interval-box">
+            <div class="interval-box-label">सर्वकालिक कुल (All-Time)</div>
+            <div class="interval-box-val" id="stripAllViews">0 Views</div>
+            <div class="interval-box-sub" id="stripAllVisitors">0 Visitors</div>
+          </div>
+        </div>
+
+        <!-- Section 3: Interactive Traffic Charts (Over Time + Visitor Ratio) -->
+        <div class="chart-grid">
+          <div class="chart-card">
+            <div class="chart-card-header">
+              <div>
+                <h3 style="font-size: 1.05rem; font-weight: 600;">📊 ट्रैफ़िक रुझान (Traffic Over Time)</h3>
+                <p style="font-size: 0.78rem; color: var(--text-muted);">पेज व्यूज़ एवं अद्वितीय आगंतुक का दैनिक/घंटेवार विश्लेषण</p>
+              </div>
+            </div>
+            <div class="chart-canvas-wrap">
+              <canvas id="trafficTrendChart"></canvas>
+            </div>
+          </div>
+
+          <div class="chart-card">
+            <div class="chart-card-header">
+              <div>
+                <h3 style="font-size: 1.05rem; font-weight: 600;">👥 पाठक प्रकार (Visitor Ratio)</h3>
+                <p style="font-size: 0.78rem; color: var(--text-muted);">नए बनाम पुनः आने वाले पाठक</p>
+              </div>
+            </div>
+            <div class="chart-canvas-wrap" style="height: 230px;">
+              <canvas id="visitorRatioChart"></canvas>
+            </div>
+            <div id="visitorRatioLegend" style="display: flex; justify-content: center; gap: 1.5rem; margin-top: 0.8rem; font-size: 0.82rem;">
+              <span><span style="color: #d4a373;">●</span> नए पाठक: <strong id="lblNewVisitors">0</strong></span>
+              <span><span style="color: #3fb950;">●</span> पुनः पाठक: <strong id="lblReturningVisitors">0</strong></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 4: Most Popular Poems & Pages -->
+        <div class="editor-card" style="margin-bottom: 2rem;">
+          <div class="chart-card-header" style="flex-wrap: wrap; gap: 1rem;">
+            <div>
+              <h3 style="font-size: 1.1rem; font-weight: 600;">📖 सर्वाधिक पढ़ी गई रचनाएं एवं पृष्ठ (Most Popular Content)</h3>
+              <p style="font-size: 0.8rem; color: var(--text-muted);">चुनी गई समयावधि में पाठकों द्वारा सर्वाधिक पसंद किए गए पृष्ठ</p>
+            </div>
+            <div class="filter-tab-bar" style="margin-bottom: 0;">
+              <button class="filter-tab-btn active" data-filter="all" onclick="filterContentTable('all')">सभी (All)</button>
+              <button class="filter-tab-btn" data-filter="poems" onclick="filterContentTable('poems')">केवल कविताएं (Poems)</button>
+              <button class="filter-tab-btn" data-filter="articles" onclick="filterContentTable('articles')">लेख व अन्य (Articles)</button>
+              <button class="filter-tab-btn" data-filter="pages" onclick="filterContentTable('pages')">मुख्य पृष्ठ (Pages)</button>
+            </div>
+          </div>
+
+          <div class="table-card" style="border: none;">
+            <table class="writings-table">
+              <thead>
+                <tr>
+                  <th style="width: 48px;">#</th>
+                  <th>रचना / पृष्ठ शीर्षक (Title &amp; URL)</th>
+                  <th>प्रकार (Type)</th>
+                  <th style="text-align: right; cursor: pointer;" onclick="sortPopularContent('views')">व्यूज़ (Views) ↕</th>
+                  <th style="text-align: right; cursor: pointer;" onclick="sortPopularContent('reads')">काव्य पाठ (Reads) ↕</th>
+                  <th style="text-align: right;">पाठ दर (Read Rate)</th>
+                  <th style="width: 140px;">ट्रैफ़िक हिस्सा (Share)</th>
+                  <th style="text-align: center; width: 80px;">कार्रवाई</th>
+                </tr>
+              </thead>
+              <tbody id="popularContentTableBody">
+                <tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">आँकड़े लोड हो रहे हैं...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Section 5 & 6: Traffic Sources & Visitor Demographics (Two Column Layout) -->
+        <div class="analytics-two-col">
+          <!-- Column 1: Traffic Sources -->
+          <div class="editor-card">
+            <h3 style="font-size: 1.05rem; font-weight: 600; margin-bottom: 0.35rem;">🌐 आगंतुक स्रोत (Traffic Sources &amp; Referrers)</h3>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.25rem;">पाठक वेबसाइट तक कहाँ से पहुंचे</p>
+
+            <div id="sourcesContainer">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+
+          <!-- Column 2: Visitor Demographics -->
+          <div class="editor-card">
+            <h3 style="font-size: 1.05rem; font-weight: 600; margin-bottom: 0.35rem;">🌍 भौगोलिक उपस्थिति एवं उपकरण (Demographics)</h3>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.25rem;">पाठकों के देश, डिवाइस एवं ब्राउज़र का समग्र विवरण</p>
+
+            <h4 style="font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.6rem;">शीर्ष देश (Top Countries)</h4>
+            <div id="countriesContainer" style="margin-bottom: 1.4rem;">
+              <!-- Rendered dynamically -->
+            </div>
+
+            <h4 style="font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.3rem;">उपकरण श्रेणी (Device Categories)</h4>
+            <div id="devicesContainer">
+              <!-- Segmented bar -->
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1.2rem;">
+              <div>
+                <h4 style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.5rem;">शीर्ष ब्राउज़र (Browsers)</h4>
+                <div id="browsersContainer" style="font-size: 0.82rem;"></div>
+              </div>
+              <div>
+                <h4 style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.5rem;">ऑपरेटिंग सिस्टम (OS)</h4>
+                <div id="osContainer" style="font-size: 0.82rem;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 7 & 8: Poetry Engagement & Technical Performance -->
+        <div class="analytics-two-col">
+          <!-- Column 1: Poetry Engagement -->
+          <div class="editor-card">
+            <h3 style="font-size: 1.05rem; font-weight: 600; margin-bottom: 0.35rem;">✒️ काव्य सहभागिता (Poetry Engagement)</h3>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.25rem;">काव्य पाठकों का वास्तविक जुड़ाव और पठन समय</p>
+
+            <div class="stats-grid" style="grid-template-columns: 1fr 1fr; gap: 0.85rem; margin-bottom: 1.25rem;">
+              <div class="interval-box">
+                <div class="interval-box-label">सत्यापित काव्य पाठ (Reads)</div>
+                <div class="interval-box-val" id="statPoemReads" style="color: var(--accent);">0</div>
+                <div class="interval-box-sub">कम से कम 15s पठन</div>
+              </div>
+              <div class="interval-box">
+                <div class="interval-box-label">काव्य पठन दर (Read Rate)</div>
+                <div class="interval-box-val" id="statPoemReadRate">0%</div>
+                <div class="interval-box-sub">व्यूज़ से पठन रूपांतरण</div>
+              </div>
+            </div>
+
+            <h4 style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.6rem;">शीर्ष पठित कविताएं (Top Read Poems)</h4>
+            <div id="topReadPoemsList">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+
+          <!-- Column 2: Technical Performance & Broken Pages -->
+          <div class="editor-card">
+            <h3 style="font-size: 1.05rem; font-weight: 600; margin-bottom: 0.35rem;">⚡ प्रदर्शन एवं त्रुटि विश्लेषण (Operational Performance)</h3>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.25rem;">Cloudflare Worker संचालन, स्थिति कोड एवं अनुपलब्ध पन्ने</p>
+
+            <div class="status-pill-grid">
+              <div class="status-pill-box">
+                <div class="status-pill-code" style="color: var(--success);">2xx सफ़ल (Success)</div>
+                <div class="status-pill-val" id="statStatus2xx">0</div>
+              </div>
+              <div class="status-pill-box">
+                <div class="status-pill-code" style="color: #388bfd;">3xx पुनर्निर्देशन (Redirect)</div>
+                <div class="status-pill-val" id="statStatus3xx">0</div>
+              </div>
+              <div class="status-pill-box">
+                <div class="status-pill-code" style="color: var(--warning);">4xx त्रुटि (Client Err)</div>
+                <div class="status-pill-val" id="statStatus4xx">0</div>
+              </div>
+              <div class="status-pill-box">
+                <div class="status-pill-code" style="color: var(--danger);">5xx सर्वर (Server Err)</div>
+                <div class="status-pill-val" id="statStatus5xx">0</div>
+              </div>
+            </div>
+
+            <div style="margin-bottom: 1.25rem; font-size: 0.83rem; color: var(--text-muted); background: rgba(0,0,0,0.2); padding: 0.75rem 1rem; border-radius: var(--radius); line-height: 1.6;">
+              <div>🔹 कुल Worker अनुरोध (Requests): <strong id="statTotalRequests" style="color: var(--text-main);">0</strong></div>
+              <div>🔹 मानवीय विज़िट (Human): <strong id="statHumanRequests" style="color: var(--text-main);">0</strong> · बॉट फ़िल्टर (Bots): <strong id="statBotRequests" style="color: var(--text-main);">0</strong></div>
+            </div>
+
+            <h4 style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.6rem;">अनुपलब्ध या टूटे लिंक (404 Not Found URLs)</h4>
+            <div id="missingUrlsList" style="font-size: 0.82rem;">
+              <!-- 404 URLs table -->
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- VIEW 4: SETTINGS & D1 STATUS -->
       <section id="view-settings" class="view-section">
         <div class="section-header">
@@ -879,6 +1486,47 @@
     </div>
   </div>
 
+  <!-- ==================== POEM DETAIL INSPECTION MODAL ==================== -->
+  <div id="poemDetailModal" class="modal-overlay">
+    <div class="preview-modal-content" style="background: var(--surface); color: var(--text-main); border: 1px solid var(--surface-border); max-width: 680px; padding: 2.2rem;">
+      <button class="preview-close-btn" style="color: var(--text-main); background: rgba(255,255,255,0.08);" onclick="closePoemDetailModal()">&times;</button>
+      <div style="margin-bottom: 1.5rem;">
+        <span id="pdmType" class="type-tag" style="margin-bottom: 0.5rem; display: inline-block;">कविता</span>
+        <h2 id="pdmTitle" style="font-family: 'Rozha One', 'Tiro Devanagari Hindi', serif; font-size: 1.8rem; margin: 0.25rem 0 0.5rem; color: var(--accent);"></h2>
+        <a id="pdmUrl" href="#" target="_blank" style="font-size: 0.82rem; color: #58a6ff; text-decoration: none;">/poems/... ↗</a>
+      </div>
+
+      <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 1.5rem;">
+        <div class="interval-box">
+          <div class="interval-box-label">कुल व्यूज़ (Views)</div>
+          <div class="interval-box-val" id="pdmViews">0</div>
+        </div>
+        <div class="interval-box">
+          <div class="interval-box-label">काव्य पाठ (Reads)</div>
+          <div class="interval-box-val" id="pdmReads" style="color: var(--accent);">0</div>
+        </div>
+        <div class="interval-box">
+          <div class="interval-box-label">पाठ दर (Read Rate)</div>
+          <div class="interval-box-val" id="pdmRate" style="color: #3fb950;">0%</div>
+        </div>
+      </div>
+
+      <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--surface-border); border-radius: var(--radius); padding: 1.2rem; margin-bottom: 1.5rem;">
+        <h4 style="font-size: 0.88rem; margin-bottom: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">सत्यापन एवं जुड़ाव विवरण (Reading Verification)</h4>
+        <div style="font-size: 0.84rem; line-height: 1.8; color: var(--text-main);">
+          <div>⏱️ <strong>औसत पठन समय:</strong> <span id="pdmAvgDuration">--</span></div>
+          <div>📜 <strong>स्क्रॉल पूर्णता (Scroll Depth):</strong> पाठकों द्वारा 50% से अधिक स्क्रॉल</div>
+          <div>📊 <strong>ट्रैफ़िक हिस्सा:</strong> कुल काव्य ट्रैफ़िक का <span id="pdmShare">--%</span></div>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+        <button class="btn btn-outline btn-sm" onclick="closePoemDetailModal()">बंद करें (Close)</button>
+        <a id="pdmLiveBtn" href="#" target="_blank" class="btn btn-accent btn-sm" style="text-decoration: none;">वेबसाइट पर देखें ↗</a>
+      </div>
+    </div>
+  </div>
+
   <!-- Client-side Logic -->
   <script>
     let currentWritings = [];
@@ -891,7 +1539,11 @@
           const data = await res.json();
           if (data.authenticated) {
             document.getElementById('authOverlay').style.display = 'none';
-            loadWritings();
+            if (window.location.pathname === '/admin/analytics') {
+              switchTab('analytics');
+            } else {
+              loadWritings();
+            }
           } else if (data.needs_setup) {
             showSetup();
           } else {
@@ -939,7 +1591,11 @@
         const data = await res.json();
         if (res.ok && data.success) {
           document.getElementById('authOverlay').style.display = 'none';
-          loadWritings();
+          if (window.location.pathname === '/admin/analytics') {
+            switchTab('analytics');
+          } else {
+            loadWritings();
+          }
         } else {
           errBox.innerText = data.error || 'अमान्य पासवर्ड (Invalid password)';
           errBox.style.display = 'block';
@@ -1060,34 +1716,59 @@
       document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
 
       if (tab === 'overview') {
-        document.getElementById('view-overview').classList.add('active');
-        document.querySelector('.nav-btn:nth-child(1)').classList.add('active');
+        document.getElementById('view-overview')?.classList.add('active');
+        document.getElementById('btn-overview')?.classList.add('active');
+      } else if (tab === 'analytics') {
+        document.getElementById('view-analytics')?.classList.add('active');
+        document.getElementById('btn-analytics')?.classList.add('active');
+        loadAnalyticsData();
       } else if (tab === 'all-writings') {
-        document.getElementById('view-list').classList.add('active');
+        document.getElementById('view-list')?.classList.add('active');
         document.getElementById('listSectionTitle').innerText = 'All Writings';
         document.getElementById('statusFilter').value = 'all';
-        document.querySelector('.nav-btn:nth-child(2)').classList.add('active');
+        document.getElementById('btn-all-writings')?.classList.add('active');
         loadWritings();
       } else if (tab === 'published') {
-        document.getElementById('view-list').classList.add('active');
+        document.getElementById('view-list')?.classList.add('active');
         document.getElementById('listSectionTitle').innerText = 'Published Writings';
         document.getElementById('statusFilter').value = 'Published';
-        document.querySelector('.nav-btn:nth-child(4)').classList.add('active');
+        document.getElementById('btn-published')?.classList.add('active');
         loadWritings();
       } else if (tab === 'drafts') {
-        document.getElementById('view-list').classList.add('active');
+        document.getElementById('view-list')?.classList.add('active');
         document.getElementById('listSectionTitle').innerText = 'Drafts';
         document.getElementById('statusFilter').value = 'Draft';
-        document.querySelector('.nav-btn:nth-child(5)').classList.add('active');
+        document.getElementById('btn-drafts')?.classList.add('active');
         loadWritings();
       } else if (tab === 'editor') {
-        document.getElementById('view-editor').classList.add('active');
-        document.querySelector('.nav-btn:nth-child(3)').classList.add('active');
+        document.getElementById('view-editor')?.classList.add('active');
+        document.getElementById('btn-new')?.classList.add('active');
       } else if (tab === 'settings') {
-        document.getElementById('view-settings').classList.add('active');
-        document.querySelector('.nav-btn:nth-child(6)').classList.add('active');
+        document.getElementById('view-settings')?.classList.add('active');
+        document.getElementById('btn-settings')?.classList.add('active');
       }
+
+      // History navigation synchronization
+      try {
+        if (tab === 'analytics') {
+          if (window.location.pathname !== '/admin/analytics') {
+            history.pushState({ tab: 'analytics' }, '', '/admin/analytics');
+          }
+        } else {
+          if (window.location.pathname === '/admin/analytics') {
+            history.pushState({ tab }, '', '/admin');
+          }
+        }
+      } catch (_) {}
     }
+
+    window.addEventListener('popstate', (e) => {
+      if (window.location.pathname === '/admin/analytics' || (e.state && e.state.tab === 'analytics')) {
+        switchTab('analytics');
+      } else {
+        switchTab('overview');
+      }
+    });
 
     function openNewWriting() {
       document.getElementById('editWritingId').value = '';
@@ -1541,6 +2222,778 @@
     function escape(str) {
       if (!str) return '';
       return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // ==================== WEBSITE ANALYTICS ENGINE ====================
+    let currentAnalyticsData = null;
+    let currentPeriod = '7d';
+    let popularFilter = 'all';
+    let sortField = 'views';
+    let sortDesc = true;
+    let trafficTrendChartInstance = null;
+    let visitorRatioChartInstance = null;
+
+    function setAnalyticsPeriod(period) {
+      currentPeriod = period;
+      document.querySelectorAll('.period-btn').forEach(btn => {
+        if (btn.dataset.period === period) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      });
+      const customBox = document.getElementById('customDateRangeBox');
+      if (period === 'custom') {
+        if (customBox) customBox.style.display = 'flex';
+      } else {
+        if (customBox) customBox.style.display = 'none';
+        loadAnalyticsData();
+      }
+    }
+
+    function toggleCustomDateInputs() {
+      const customBox = document.getElementById('customDateRangeBox');
+      if (!customBox) return;
+      if (customBox.style.display === 'flex') {
+        customBox.style.display = 'none';
+      } else {
+        customBox.style.display = 'flex';
+        setAnalyticsPeriod('custom');
+      }
+    }
+
+    function applyCustomDateRange() {
+      const s = document.getElementById('customStartDate')?.value;
+      const e = document.getElementById('customEndDate')?.value;
+      if (!s || !e) {
+        alert('कृपया प्रारंभ और समाप्ति दोनों तिथियां चुनें (Please select both start and end dates).');
+        return;
+      }
+      if (s > e) {
+        alert('प्रारंभ तिथि समाप्ति तिथि से पूर्व होनी चाहिए (Start date cannot be after end date).');
+        return;
+      }
+      loadAnalyticsData();
+    }
+
+    function toggleExportMenu() {
+      const menu = document.getElementById('exportMenu');
+      if (menu) {
+        menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+      }
+    }
+
+    document.addEventListener('click', (e) => {
+      const menu = document.getElementById('exportMenu');
+      if (menu && menu.style.display === 'block') {
+        if (!e.target.closest('.dropdown-wrap')) {
+          menu.style.display = 'none';
+        }
+      }
+    });
+
+    async function triggerTestPing() {
+      try {
+        const res = await fetch('/api/analytics/test-ping', { method: 'POST' });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          alert('🧪 टेस्ट पिंग सफलतापूर्वक दर्ज किया गया!\n(Verified test ping recorded successfully!)\n\nआँकड़े ताज़ा किए जा रहे हैं...');
+          await loadAnalyticsData();
+        } else {
+          alert('टेस्ट पिंग असफल: ' + (data.error || 'Unknown error'));
+        }
+      } catch (err) {
+        alert('टेस्ट पिंग त्रुटि: ' + err.message);
+      }
+    }
+
+    async function refreshAnalytics() {
+      const icon = document.getElementById('refreshIcon');
+      if (icon) icon.style.display = 'inline-block';
+      await loadAnalyticsData();
+    }
+
+    async function loadAnalyticsData() {
+      const refreshBtn = document.getElementById('btnRefreshAnalytics');
+      if (refreshBtn) refreshBtn.disabled = true;
+
+      try {
+        let url = `/api/analytics/data?period=${encodeURIComponent(currentPeriod)}`;
+        if (currentPeriod === 'custom') {
+          const s = document.getElementById('customStartDate')?.value;
+          const e = document.getElementById('customEndDate')?.value;
+          if (s && e) {
+            url += `&startDate=${encodeURIComponent(s)}&endDate=${encodeURIComponent(e)}`;
+          }
+        }
+
+        const res = await fetch(url);
+        if (res.status === 401) {
+          showLogin();
+          return;
+        }
+
+        const data = await res.json();
+        if (data.error) {
+          console.error('Analytics load error:', data.error);
+          return;
+        }
+
+        currentAnalyticsData = data;
+        renderAnalyticsUI(data);
+      } catch (err) {
+        console.error('Failed to load analytics:', err);
+      } finally {
+        if (refreshBtn) refreshBtn.disabled = false;
+      }
+    }
+
+    function renderAnalyticsUI(data) {
+      if (!data) return;
+
+      const sum = data.summary || {};
+
+      // 1. Overview Summary Cards
+      const elTot = document.getElementById('statTotalVisitors');
+      if (elTot) elTot.innerText = (sum.total_visitors || 0).toLocaleString();
+
+      const elUniq = document.getElementById('statUniqueVisitors');
+      if (elUniq) elUniq.innerText = (sum.unique_visitors || 0).toLocaleString();
+
+      const elPv = document.getElementById('statTotalPageViews');
+      if (elPv) elPv.innerText = (sum.page_views || 0).toLocaleString();
+      
+      const activeOnline = sum.active_online || 0;
+      const elActive1 = document.getElementById('statActiveOnline');
+      const elActive2 = document.getElementById('statActiveOnlineCard');
+      if (elActive1) elActive1.innerText = activeOnline;
+      if (elActive2) elActive2.innerText = activeOnline;
+
+      const elPoems = document.getElementById('statTotalPoems');
+      if (elPoems) elPoems.innerText = (sum.total_published_poems || 0).toLocaleString();
+
+      const elArts = document.getElementById('statTotalArticles');
+      if (elArts) elArts.innerText = (sum.total_published_articles || 0).toLocaleString();
+
+      // Growth tags
+      const vGrowth = sum.growth?.visitors_pct || 0;
+      const pGrowth = sum.growth?.pageviews_pct || 0;
+      const elVGrowth = document.getElementById('statVisitorsGrowth');
+      const elPGrowth = document.getElementById('statPageviewsGrowth');
+
+      if (elVGrowth) {
+        elVGrowth.innerHTML = vGrowth !== 0
+          ? `<span class="stat-card-badge ${vGrowth > 0 ? 'badge-up' : 'badge-down'}">${vGrowth > 0 ? '▲ +' : '▼ '}${vGrowth}%</span> पिछले समय की तुलना में`
+          : `स्थिर / नया विश्लेषण`;
+      }
+      if (elPGrowth) {
+        elPGrowth.innerHTML = pGrowth !== 0
+          ? `<span class="stat-card-badge ${pGrowth > 0 ? 'badge-up' : 'badge-down'}">${pGrowth > 0 ? '▲ +' : '▼ '}${pGrowth}%</span> पिछले समय की तुलना में`
+          : `कुल पन्नों का समग्र पठन`;
+      }
+
+      // 2. Multi-Period Interval Strip
+      const intervals = sum.intervals || {};
+      const formatInterval = (obj) => {
+        const views = (obj?.views || 0).toLocaleString();
+        const visitors = (obj?.visitors || 0).toLocaleString();
+        return { views: `${views} Views`, visitors: `${visitors} Visitors` };
+      };
+
+      const tI = formatInterval(intervals.today);
+      const elTv = document.getElementById('stripTodayViews');
+      const elTu = document.getElementById('stripTodayVisitors');
+      if (elTv) elTv.innerText = tI.views;
+      if (elTu) elTu.innerText = tI.visitors;
+
+      const sI = formatInterval(intervals.last_7d);
+      const elSv = document.getElementById('strip7dViews');
+      const elSu = document.getElementById('strip7dVisitors');
+      if (elSv) elSv.innerText = sI.views;
+      if (elSu) elSu.innerText = sI.visitors;
+
+      const mI = formatInterval(intervals.last_30d);
+      const elMv = document.getElementById('strip30dViews');
+      const elMu = document.getElementById('strip30dVisitors');
+      if (elMv) elMv.innerText = mI.views;
+      if (elMu) elMu.innerText = mI.visitors;
+
+      const aI = formatInterval(intervals.all_time);
+      const elAv = document.getElementById('stripAllViews');
+      const elAu = document.getElementById('stripAllVisitors');
+      if (elAv) elAv.innerText = aI.views;
+      if (elAu) elAu.innerText = aI.visitors;
+
+      // 3. Render Charts
+      renderTrafficChart(data.chart_points || []);
+      renderRatioChart(data.demographics?.visitors_ratio || {});
+
+      // 4. Popular Content Table
+      renderPopularContentTable();
+
+      // 5. Traffic Sources Breakdown
+      renderTrafficSources(data.traffic_sources || {});
+
+      // 6. Demographics
+      renderDemographics(data.demographics || {});
+
+      // 7. Poetry Engagement
+      renderPoetryEngagement(data.poetry_engagement || {});
+
+      // 8. Performance & Errors
+      renderPerformanceMetrics(data.performance || {});
+    }
+
+    // ==================== TRAFFIC CHARTS ====================
+    function renderTrafficChart(points) {
+      const ctx = document.getElementById('trafficTrendChart');
+      if (!ctx || typeof Chart === 'undefined') return;
+
+      if (trafficTrendChartInstance) {
+        trafficTrendChartInstance.destroy();
+      }
+
+      const labels = points.map(p => p.label);
+      const pageviews = points.map(p => p.pageviews);
+      const visitors = points.map(p => p.visitors);
+      const reads = points.map(p => p.reads);
+
+      trafficTrendChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'पेज व्यूज़ (Page Views)',
+              data: pageviews,
+              borderColor: '#d4a373',
+              backgroundColor: 'rgba(212, 163, 115, 0.14)',
+              fill: true,
+              tension: 0.35,
+              borderWidth: 2,
+              pointBackgroundColor: '#d4a373',
+              pointRadius: points.length > 30 ? 0 : 3,
+              pointHoverRadius: 5
+            },
+            {
+              label: 'अद्वितीय आगंतुक (Unique Visitors)',
+              data: visitors,
+              borderColor: '#3fb950',
+              backgroundColor: 'rgba(63, 185, 80, 0.08)',
+              fill: true,
+              tension: 0.35,
+              borderWidth: 2,
+              pointBackgroundColor: '#3fb950',
+              pointRadius: points.length > 30 ? 0 : 3,
+              pointHoverRadius: 5
+            },
+            {
+              label: 'सत्यापित काव्य पाठ (Verified Reads)',
+              data: reads,
+              borderColor: '#58a6ff',
+              borderDash: [5, 5],
+              fill: false,
+              tension: 0.35,
+              borderWidth: 2,
+              pointBackgroundColor: '#58a6ff',
+              pointRadius: points.length > 30 ? 0 : 3,
+              pointHoverRadius: 5
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: {
+            mode: 'index',
+            intersect: false
+          },
+          plugins: {
+            legend: {
+              position: 'top',
+              labels: {
+                color: '#c9d1d9',
+                boxWidth: 12,
+                font: { size: 12 }
+              }
+            },
+            tooltip: {
+              backgroundColor: '#161b22',
+              titleColor: '#f0f6fc',
+              bodyColor: '#c9d1d9',
+              borderColor: '#30363d',
+              borderWidth: 1,
+              padding: 10
+            }
+          },
+          scales: {
+            x: {
+              grid: { color: 'rgba(255, 255, 255, 0.05)' },
+              ticks: { color: '#8b949e', maxRotation: 45, font: { size: 11 } }
+            },
+            y: {
+              beginAtZero: true,
+              grid: { color: 'rgba(255, 255, 255, 0.05)' },
+              ticks: { color: '#8b949e', precision: 0, font: { size: 11 } }
+            }
+          }
+        }
+      });
+    }
+
+    function renderRatioChart(ratio) {
+      const ctx = document.getElementById('visitorRatioChart');
+      if (!ctx || typeof Chart === 'undefined') return;
+
+      if (visitorRatioChartInstance) {
+        visitorRatioChartInstance.destroy();
+      }
+
+      const newV = ratio.new_visitors || 0;
+      const retV = ratio.returning_visitors || 0;
+
+      const lblNew = document.getElementById('lblNewVisitors');
+      const lblRet = document.getElementById('lblReturningVisitors');
+      if (lblNew) lblNew.innerText = newV.toLocaleString();
+      if (lblRet) lblRet.innerText = retV.toLocaleString();
+
+      const total = newV + retV;
+      const dataValues = total > 0 ? [newV, retV] : [1, 0];
+      const backgroundColors = total > 0 ? ['#d4a373', '#3fb950'] : ['rgba(255,255,255,0.1)', 'transparent'];
+
+      visitorRatioChartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['नए पाठक (New)', 'पुनः आने वाले पाठक (Returning)'],
+          datasets: [{
+            data: dataValues,
+            backgroundColor: backgroundColors,
+            borderColor: '#181b21',
+            borderWidth: 3,
+            hoverOffset: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '72%',
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: '#161b22',
+              titleColor: '#f0f6fc',
+              bodyColor: '#c9d1d9',
+              borderColor: '#30363d',
+              borderWidth: 1,
+              callbacks: {
+                label: function(item) {
+                  if (total === 0) return ' अभी कोई डेटा नहीं';
+                  const val = item.raw || 0;
+                  const pct = Math.round((val / total) * 100);
+                  return ` ${item.label}: ${val} (${pct}%)`;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // ==================== POPULAR CONTENT TABLE ====================
+    function filterContentTable(filter) {
+      popularFilter = filter;
+      document.querySelectorAll('.filter-tab-btn').forEach(btn => {
+        if (btn.dataset.filter === filter) btn.classList.add('active');
+        else btn.classList.remove('active');
+      });
+      renderPopularContentTable();
+    }
+
+    function sortPopularContent(field) {
+      if (sortField === field) {
+        sortDesc = !sortDesc;
+      } else {
+        sortField = field;
+        sortDesc = true;
+      }
+      renderPopularContentTable();
+    }
+
+    function renderPopularContentTable() {
+      const tbody = document.getElementById('popularContentTableBody');
+      if (!tbody || !currentAnalyticsData) return;
+
+      let list = (currentAnalyticsData.popular_content || []).slice();
+
+      // Filter
+      if (popularFilter === 'poems') {
+        list = list.filter(item => item.is_poem);
+      } else if (popularFilter === 'articles') {
+        list = list.filter(item => !item.is_poem && item.path !== '/' && item.path !== '/poems' && item.path !== '/writings');
+      } else if (popularFilter === 'pages') {
+        list = list.filter(item => item.path === '/' || item.path === '/poems' || item.path === '/writings' || !item.is_poem);
+      }
+
+      // Sort
+      list.sort((a, b) => {
+        const valA = a[sortField] || 0;
+        const valB = b[sortField] || 0;
+        return sortDesc ? (valB - valA) : (valA - valB);
+      });
+
+      if (list.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">चुनी गई समयावधि में कोई सामग्री नहीं मिली (No content visits recorded in this period).</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = list.map((item, idx) => {
+        const rankClass = idx === 0 ? 'top-1' : (idx === 1 ? 'top-2' : (idx === 2 ? 'top-3' : ''));
+        const safePath = escape(item.path);
+        const safeTitle = escape(item.title);
+        return `
+          <tr>
+            <td><span class="rank-badge ${rankClass}">${idx + 1}</span></td>
+            <td>
+              <strong style="color: var(--text-main); font-size: 0.9rem;">${safeTitle}</strong>
+              <div style="font-size: 0.76rem; margin-top: 2px;">
+                <a href="${safePath}" target="_blank" style="color: #58a6ff; text-decoration: none;">${safePath} ↗</a>
+              </div>
+            </td>
+            <td><span class="type-tag">${escape(formatTypeDisplay(item.content_type))}</span></td>
+            <td style="text-align: right; font-weight: 600;">${(item.views || 0).toLocaleString()}</td>
+            <td style="text-align: right; color: var(--accent); font-weight: 600;">${(item.reads || 0).toLocaleString()}</td>
+            <td style="text-align: right;">
+              <span class="status-pill published" style="font-size: 0.74rem; padding: 0.15rem 0.5rem;">${item.read_rate}%</span>
+            </td>
+            <td>
+              <div style="display: flex; align-items: center; gap: 0.4rem;">
+                <div class="progress-bar-wrap" style="margin: 0; flex: 1;">
+                  <div class="progress-bar-fill" style="width: ${Math.min(100, item.share_pct)}%;"></div>
+                </div>
+                <span style="font-size: 0.72rem; color: var(--text-muted); min-width: 32px; text-align: right;">${item.share_pct}%</span>
+              </div>
+            </td>
+            <td style="text-align: center;">
+              <button class="btn btn-outline btn-sm" style="padding: 0.2rem 0.55rem; font-size: 0.75rem;" onclick="inspectPoemDetails('${safePath}')" title="विस्तृत विश्लेषण">
+                विवरण ℹ️
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // ==================== POEM DETAIL MODAL ====================
+    function inspectPoemDetails(path) {
+      if (!currentAnalyticsData) return;
+      const item = (currentAnalyticsData.popular_content || []).find(p => p.path === path);
+      if (!item) return;
+
+      const elType = document.getElementById('pdmType');
+      if (elType) elType.innerText = formatTypeDisplay(item.content_type);
+      
+      const elTitle = document.getElementById('pdmTitle');
+      if (elTitle) elTitle.innerText = item.title;
+      
+      const link = document.getElementById('pdmUrl');
+      if (link) {
+        link.href = item.path;
+        link.innerText = item.path + ' ↗';
+      }
+
+      const elViews = document.getElementById('pdmViews');
+      if (elViews) elViews.innerText = (item.views || 0).toLocaleString();
+
+      const elReads = document.getElementById('pdmReads');
+      if (elReads) elReads.innerText = (item.reads || 0).toLocaleString();
+
+      const elRate = document.getElementById('pdmRate');
+      if (elRate) elRate.innerText = `${item.read_rate || 0}%`;
+
+      const avgDur = item.avg_duration || 0;
+      const durStr = avgDur >= 60 ? `${Math.floor(avgDur/60)}m ${avgDur%60}s` : `${avgDur}s`;
+      const elDur = document.getElementById('pdmAvgDuration');
+      if (elDur) elDur.innerText = durStr;
+
+      const elShare = document.getElementById('pdmShare');
+      if (elShare) elShare.innerText = `${item.share_pct || 0}%`;
+
+      const liveBtn = document.getElementById('pdmLiveBtn');
+      if (liveBtn) liveBtn.href = item.path;
+
+      const modal = document.getElementById('poemDetailModal');
+      if (modal) modal.classList.add('active');
+    }
+
+    function closePoemDetailModal() {
+      const modal = document.getElementById('poemDetailModal');
+      if (modal) modal.classList.remove('active');
+    }
+
+    // ==================== TRAFFIC SOURCES ====================
+    function renderTrafficSources(sources) {
+      const container = document.getElementById('sourcesContainer');
+      if (!container) return;
+
+      const total = sources.total || 0;
+      const counts = sources.counts || {};
+
+      const sourceList = [
+        { key: 'direct', label: 'सीधा प्रवेश (Direct Traffic / Bookmarks)', count: counts.direct || 0, icon: '🔗' },
+        { key: 'google', label: 'गूगल खोज (Google Search)', count: counts.google || 0, icon: '🔍' },
+        { key: 'instagram', label: 'इंस्टाग्राम (Instagram @ashabd0)', count: counts.instagram || 0, icon: '📸' },
+        { key: 'twitter', label: 'एक्स / ट्विटर (X / Twitter @ashabd0)', count: counts.twitter || 0, icon: '🐦' },
+        { key: 'search', label: 'अन्य खोज इंजन (Bing, DDG, Yahoo)', count: counts.search || 0, icon: '🔎' },
+        { key: 'social', label: 'अन्य सोशल (FB, LinkedIn, Reddit, YT)', count: counts.social || 0, icon: '👥' },
+        { key: 'other', label: 'अन्य बाह्य रेफरर्स (Other Referrers)', count: counts.other || 0, icon: '🌐' }
+      ];
+
+      if (total === 0) {
+        container.innerHTML = `<p style="font-size: 0.85rem; color: var(--text-muted); text-align: center; padding: 1.5rem;">इस अवधि में कोई ट्रैफ़िक स्रोत दर्ज नहीं हुआ।</p>`;
+        return;
+      }
+
+      container.innerHTML = sourceList.map(s => {
+        const pct = total > 0 ? Math.round((s.count / total) * 100) : 0;
+        return `
+          <div class="progress-row">
+            <span style="display: flex; align-items: center; gap: 0.4rem; min-width: 190px;">
+              <span>${s.icon}</span>
+              <span>${escape(s.label)}</span>
+            </span>
+            <div class="progress-bar-wrap">
+              <div class="progress-bar-fill" style="width: ${pct}%;"></div>
+            </div>
+            <span style="font-weight: 600; min-width: 50px; text-align: right;">${s.count.toLocaleString()}</span>
+            <span style="color: var(--text-muted); font-size: 0.75rem; min-width: 38px; text-align: right;">${pct}%</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ==================== DEMOGRAPHICS ====================
+    function renderDemographics(demo) {
+      // Countries
+      const cContainer = document.getElementById('countriesContainer');
+      if (cContainer) {
+        const countries = demo.countries || [];
+        if (countries.length === 0) {
+          cContainer.innerHTML = `<div style="font-size: 0.82rem; color: var(--text-muted);">कोई देश डेटा नहीं मिला।</div>`;
+        } else {
+          cContainer.innerHTML = countries.map(c => `
+            <div class="progress-row" style="margin-bottom: 0.5rem;">
+              <span style="display: flex; align-items: center; gap: 0.4rem; min-width: 140px;">
+                <span>${c.flag}</span>
+                <span>${escape(c.name)}</span>
+              </span>
+              <div class="progress-bar-wrap">
+                <div class="progress-bar-fill" style="width: ${c.pct}%; background: #3fb950;"></div>
+              </div>
+              <span style="font-weight: 600; min-width: 40px; text-align: right;">${c.visitors}</span>
+              <span style="color: var(--text-muted); font-size: 0.75rem; min-width: 34px; text-align: right;">${c.pct}%</span>
+            </div>
+          `).join('');
+        }
+      }
+
+      // Devices Segmented Bar
+      const dContainer = document.getElementById('devicesContainer');
+      if (dContainer) {
+        const devices = demo.devices || [];
+        const totalDev = devices.reduce((acc, d) => acc + d.visitors, 0);
+
+        let mobileCount = 0, desktopCount = 0, tabletCount = 0;
+        for (const d of devices) {
+          if (d.device_type === 'mobile') mobileCount += d.visitors;
+          else if (d.device_type === 'desktop') desktopCount += d.visitors;
+          else if (d.device_type === 'tablet') tabletCount += d.visitors;
+        }
+
+        const mPct = totalDev > 0 ? Math.round((mobileCount / totalDev) * 100) : 0;
+        const dPct = totalDev > 0 ? Math.round((desktopCount / totalDev) * 100) : 0;
+        const tPct = totalDev > 0 ? (100 - mPct - dPct) : 0;
+
+        dContainer.innerHTML = `
+          <div class="device-bar-wrap">
+            <div class="device-bar-segment" style="width: ${mPct}%; background: #d4a373;" title="Mobile: ${mPct}%"></div>
+            <div class="device-bar-segment" style="width: ${dPct}%; background: #388bfd;" title="Desktop: ${dPct}%"></div>
+            <div class="device-bar-segment" style="width: ${tPct}%; background: #a371f7;" title="Tablet: ${tPct}%"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
+            <span><span style="color: #d4a373;">●</span> मोबाइल (Mobile): <strong>${mPct}%</strong> (${mobileCount})</span>
+            <span><span style="color: #388bfd;">●</span> डेस्कटॉप (Desktop): <strong>${dPct}%</strong> (${desktopCount})</span>
+            <span><span style="color: #a371f7;">●</span> टैबलेट (Tablet): <strong>${tPct}%</strong> (${tabletCount})</span>
+          </div>
+        `;
+      }
+
+      // Browsers
+      const bContainer = document.getElementById('browsersContainer');
+      if (bContainer) {
+        const browsers = demo.browsers || [];
+        if (browsers.length === 0) {
+          bContainer.innerHTML = `<span style="color: var(--text-muted);">डेटा उपलब्ध नहीं</span>`;
+        } else {
+          bContainer.innerHTML = browsers.map(b => `
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
+              <span>${escape(b.browser)}</span>
+              <strong>${b.visitors}</strong>
+            </div>
+          `).join('');
+        }
+      }
+
+      // OS
+      const oContainer = document.getElementById('osContainer');
+      if (oContainer) {
+        const osList = demo.os || [];
+        if (osList.length === 0) {
+          oContainer.innerHTML = `<span style="color: var(--text-muted);">डेटा उपलब्ध नहीं</span>`;
+        } else {
+          oContainer.innerHTML = osList.map(o => `
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
+              <span>${escape(o.os)}</span>
+              <strong>${o.visitors}</strong>
+            </div>
+          `).join('');
+        }
+      }
+    }
+
+    // ==================== POETRY ENGAGEMENT ====================
+    function renderPoetryEngagement(pe) {
+      const elReads = document.getElementById('statPoemReads');
+      if (elReads) elReads.innerText = (pe.total_poem_reads || 0).toLocaleString();
+
+      const elRate = document.getElementById('statPoemReadRate');
+      if (elRate) elRate.innerText = `${pe.read_conversion_rate || 0}%`;
+
+      const topList = document.getElementById('topReadPoemsList');
+      if (!topList) return;
+
+      const poems = pe.top_read_poems || [];
+      if (poems.length === 0) {
+        topList.innerHTML = `<p style="font-size: 0.82rem; color: var(--text-muted);">इस अवधि में कोई कविता पठन दर्ज नहीं हुआ।</p>`;
+        return;
+      }
+
+      topList.innerHTML = poems.slice(0, 5).map((p, idx) => `
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.85rem;">
+          <div>
+            <strong style="color: var(--text-main);">${idx + 1}. ${escape(p.title)}</strong>
+            <div style="font-size: 0.74rem; color: var(--text-muted);">
+              ${p.views} व्यूज़ · पठन दर: ${p.read_rate}%
+            </div>
+          </div>
+          <span class="status-pill published" style="font-size: 0.76rem;">
+            ${(p.reads || 0)} Reads
+          </span>
+        </div>
+      `).join('');
+    }
+
+    // ==================== PERFORMANCE & ERRORS ====================
+    function renderPerformanceMetrics(perf) {
+      const elReqs = document.getElementById('statTotalRequests');
+      if (elReqs) elReqs.innerText = (perf.total_worker_requests || 0).toLocaleString();
+
+      const elHum = document.getElementById('statHumanRequests');
+      if (elHum) elHum.innerText = (perf.human_requests || 0).toLocaleString();
+
+      const elBot = document.getElementById('statBotRequests');
+      if (elBot) elBot.innerText = (perf.bot_requests || 0).toLocaleString();
+
+      const codes = perf.status_codes || [];
+      let c2xx = 0, c3xx = 0, c4xx = 0, c5xx = 0;
+      for (const row of codes) {
+        const code = parseInt(row.status_code, 10);
+        if (code >= 200 && code < 300) c2xx += row.count;
+        else if (code >= 300 && code < 400) c3xx += row.count;
+        else if (code >= 400 && code < 500) c4xx += row.count;
+        else if (code >= 500) c5xx += row.count;
+      }
+
+      const el2xx = document.getElementById('statStatus2xx');
+      if (el2xx) el2xx.innerText = c2xx.toLocaleString();
+
+      const el3xx = document.getElementById('statStatus3xx');
+      if (el3xx) el3xx.innerText = c3xx.toLocaleString();
+
+      const el4xx = document.getElementById('statStatus4xx');
+      if (el4xx) el4xx.innerText = c4xx.toLocaleString();
+
+      const el5xx = document.getElementById('statStatus5xx');
+      if (el5xx) el5xx.innerText = c5xx.toLocaleString();
+
+      const missingList = document.getElementById('missingUrlsList');
+      if (missingList) {
+        const urls = perf.top_404_urls || [];
+        if (urls.length === 0) {
+          missingList.innerHTML = `<span style="color: var(--success); font-size: 0.82rem;">✅ कोई 404 टूटे लिंक दर्ज नहीं हुए (All clean)!</span>`;
+        } else {
+          missingList.innerHTML = urls.map(u => `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.35rem 0; border-bottom: 1px solid rgba(255,255,255,0.04);">
+              <code style="color: var(--danger); font-size: 0.78rem;">${escape(u.path)}</code>
+              <span class="status-pill draft" style="font-size: 0.72rem;">${u.count} त्रुटियां</span>
+            </div>
+          `).join('');
+        }
+      }
+    }
+
+    // ==================== EXPORT REPORTS (CSV / JSON) ====================
+    function exportAnalyticsReport(format) {
+      if (!currentAnalyticsData) {
+        alert('डेटा अभी लोड नहीं हुआ है। कृपया प्रतीक्षा करें।');
+        return;
+      }
+
+      const period = currentAnalyticsData.period || currentPeriod;
+      const dateStr = new Date().toISOString().slice(0, 10);
+      toggleExportMenu();
+
+      if (format === 'json') {
+        const jsonStr = JSON.stringify(currentAnalyticsData, null, 2);
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `ashabd-analytics-${period}-${dateStr}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else if (format === 'csv') {
+        const sum = currentAnalyticsData.summary || {};
+        let csvContent = '\uFEFF'; // UTF-8 BOM for Excel / Devanagari Hindi support
+        csvContent += `अशब्द (Ashabd) वेबसाइट आँकड़े विश्लेषण रिपोर्ट\n`;
+        csvContent += `समयावधि (Period),${period}\n`;
+        csvContent += `दिनांक (Date),${dateStr}\n\n`;
+
+        csvContent += `--- सारांश (Overview) ---\n`;
+        csvContent += `मापदंड (Metric),संख्या (Value)\n`;
+        csvContent += `कुल आगंतुक सत्र (Total Visitors),${sum.total_visitors || 0}\n`;
+        csvContent += `अद्वितीय आगंतुक (Unique Visitors),${sum.unique_visitors || 0}\n`;
+        csvContent += `कुल पेज व्यूज़ (Total Page Views),${sum.page_views || 0}\n`;
+        csvContent += `प्रकाशित कविताएं (Total Poems),${sum.total_published_poems || 0}\n`;
+        csvContent += `प्रकाशित लेख (Total Articles),${sum.total_published_articles || 0}\n\n`;
+
+        csvContent += `--- सर्वाधिक लोकप्रिय रचनाएं व पन्ने (Popular Content) ---\n`;
+        csvContent += `रैंक,शीर्षक (Title),URL,प्रकार (Type),व्यूज़ (Views),काव्य पाठ (Reads),पठन दर (Read Rate %),हिस्सा (Share %)\n`;
+
+        for (const item of (currentAnalyticsData.popular_content || [])) {
+          const rowTitle = `"${(item.title || '').replace(/"/g, '""')}"`;
+          const rowPath = `"${(item.path || '').replace(/"/g, '""')}"`;
+          const rowType = `"${(item.content_type || '').replace(/"/g, '""')}"`;
+          csvContent += `${item.rank},${rowTitle},${rowPath},${rowType},${item.views},${item.reads},${item.read_rate}%,${item.share_pct}%\n`;
+        }
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `ashabd-analytics-${period}-${dateStr}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
     }
 
     // Initialize
