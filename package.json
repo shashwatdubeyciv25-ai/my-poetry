@@ -1,0 +1,9 @@
+{
+  "name": "my-poetry",
+  "version": "1.0.0",
+  "description": "Ashabd (अशब्द) — Antique Poetry Manuscript & Platform",
+  "private": true,
+  "scripts": {
+    "deploy": "wrangler deploy"
+  }
+}

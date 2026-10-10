@@ -19,6 +19,9 @@ export default {
       // ------------------------------------------------------------------------
       // 1. ROUTE: Admin Dashboard Page (/admin, /admin/)
       // ------------------------------------------------------------------------
+      if (pathname === '/admin.html') {
+        return Response.redirect(new URL('/admin', request.url), 302);
+      }
       if (pathname === '/admin' || pathname === '/admin/') {
         return handleAdminPage(request, env);
       }
