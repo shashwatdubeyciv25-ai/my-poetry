@@ -907,11 +907,18 @@ function formatDate(timestamp) {
   });
 }
 
+function formatContentType(type) {
+  if (!type || type.toLowerCase() === 'poetry') {
+    return 'कविता';
+  }
+  return type;
+}
+
 function renderPoemHtml(poem) {
   const safeTitle = escapeHtml(poem.title);
   const safeSubtitle = poem.subtitle ? escapeHtml(poem.subtitle) : '';
   const safeContent = escapeHtml(poem.content);
-  const safeType = escapeHtml(poem.content_type || 'Poetry');
+  const safeType = escapeHtml(formatContentType(poem.content_type));
   const dateStr = formatDate(poem.published_at || poem.created_at);
   const tagsList = poem.tags ? poem.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
 
@@ -1034,6 +1041,7 @@ function renderPoemHtml(poem) {
 
     .poem-type-badge {
       display: inline-block;
+      font-family: 'Tiro Devanagari Hindi', 'Noto Serif Devanagari', serif;
       font-size: 0.75rem;
       letter-spacing: 0.12em;
       text-transform: uppercase;
@@ -1153,7 +1161,7 @@ function renderPoemHtml(poem) {
 
     <article>
       <header class="poem-header">
-        <span class="poem-type-badge">${safeType}</span>
+        <span class="poem-type-badge" lang="hi">${safeType}</span>
         <h1 class="poem-title" lang="hi">${safeTitle}</h1>
         ${safeSubtitle ? `<p class="poem-subtitle">${safeSubtitle}</p>` : ''}
         <div class="poem-meta">
@@ -1335,7 +1343,7 @@ function renderArchiveHtml(writings) {
               <h2 class="writing-item-title">${escapeHtml(w.title)}</h2>
               ${w.subtitle ? `<p class="writing-item-subtitle">${escapeHtml(w.subtitle)}</p>` : ''}
               <div class="writing-item-meta">
-                <span>${escapeHtml(w.content_type || 'Poetry')}</span>
+                <span>${escapeHtml(formatContentType(w.content_type))}</span>
                 <span>·</span>
                 <time>${formatDate(w.published_at || w.created_at)}</time>
               </div>
