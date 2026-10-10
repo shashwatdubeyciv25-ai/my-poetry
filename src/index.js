@@ -104,9 +104,9 @@ export default {
       }
 
       // ------------------------------------------------------------------------
-      // 5. ROUTE: Public Poem & Writing Dynamic Pages (/poetry/:slug, /writing/:slug)
+      // 5. ROUTE: Public Poem & Writing Dynamic Pages (/poems/:slug, /poetry/:slug, /writing/:slug)
       // ------------------------------------------------------------------------
-      const poemMatch = pathname.match(/^\/(?:poetry|writing|writings)\/([^\/]+)$/);
+      const poemMatch = pathname.match(/^\/(?:poetry|poems|poem|writing|writings)\/([^\/]+)$/);
       if (poemMatch && request.method === 'GET') {
         const rawSlug = poemMatch[1];
         const slug = decodeURIComponent(rawSlug);
@@ -114,9 +114,9 @@ export default {
       }
 
       // ------------------------------------------------------------------------
-      // 6. ROUTE: Public Poetry Collection / Archive (/poetry, /writings)
+      // 6. ROUTE: Public Poetry Collection / Archive (/poems, /poetry, /writings)
       // ------------------------------------------------------------------------
-      if ((pathname === '/poetry' || pathname === '/poetry/' || pathname === '/writings' || pathname === '/writings/') && request.method === 'GET') {
+      if ((pathname === '/poems' || pathname === '/poems/' || pathname === '/poetry' || pathname === '/poetry/' || pathname === '/writings' || pathname === '/writings/') && request.method === 'GET') {
         return handlePublicArchivePage(request, env);
       }
 
@@ -1073,7 +1073,7 @@ function renderPoemHtml(poem) {
   <main class="manuscript-page">
     <nav class="marginalia-nav" aria-label="Navigation">
       <a href="/" class="brand-back-link" title="वापस अशब्द मुख्य पृष्ठ पर">अशब्द</a>
-      <a href="/poetry" class="collection-link">रचना संग्रह ↗</a>
+      <a href="/poems" class="collection-link">रचना संग्रह ↗</a>
     </nav>
 
     <article>
@@ -1253,7 +1253,7 @@ function renderArchiveHtml(writings) {
       <ul class="writings-list">
         ${writings.map(w => `
           <li class="writing-item">
-            <a href="/poetry/${encodeURIComponent(w.slug)}" class="writing-link">
+            <a href="/poems/${encodeURIComponent(w.slug)}" class="writing-link">
               <h2 class="writing-item-title">${escapeHtml(w.title)}</h2>
               ${w.subtitle ? `<p class="writing-item-subtitle">${escapeHtml(w.subtitle)}</p>` : ''}
               <div class="writing-item-meta">

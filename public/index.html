@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>अशब्द</title>
   
-  <meta name="description" content="अशब्द — An antique manuscript experience.">
+  <meta name="description" content="अशब्द — An antique poetry manuscript.">
   <meta name="theme-color" content="#2b180d">
 
   <!-- Favicons for browser tab -->
@@ -14,10 +14,10 @@
   <link rel="icon" type="image/png" sizes="16x16" href="ashabd_website_logo_pack/favicons_and_icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="ashabd_website_logo_pack/favicons_and_icons/apple-touch-icon-180x180.png">
 
-  <!-- Open Graph & Social SEO using Official OG Banner -->
+  <!-- Open Graph & Social SEO -->
   <meta property="og:type" content="website">
   <meta property="og:title" content="अशब्द">
-  <meta property="og:description" content="अशब्द — An antique manuscript experience.">
+  <meta property="og:description" content="अशब्द — An antique poetry manuscript.">
   <meta property="og:url" content="https://ashabd.in">
   <meta property="og:image" content="ashabd_website_logo_pack/social_media_and_og/og-banner-1200x630.jpg">
 
@@ -25,65 +25,57 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:site" content="@ashabd0">
   <meta name="twitter:title" content="अशब्द">
-  <meta name="twitter:description" content="अशब्द — An antique manuscript experience.">
+  <meta name="twitter:description" content="अशब्द — An antique poetry manuscript.">
   <meta name="twitter:image" content="ashabd_website_logo_pack/social_media_and_og/og-banner-1200x630.jpg">
 
   <!-- Traditional Classical Devanagari Web Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Devanagari:wght@400;500;600;700&family=Rozha+One&family=Tiro+Devanagari+Hindi:ital@0;1&family=Yatra+One&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Rozha+One&family=Tiro+Devanagari+Hindi:ital@0;1&family=Noto+Serif+Devanagari:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <!-- Background Canvas for Organic Antique Staining, Creases, Tide Marks & Fibers -->
-  <canvas id="parchment-canvas"></canvas>
+  <!-- Full-Screen Horizontal Antique Parchment Background (from exact reference image) -->
+  <div class="parchment-background" aria-hidden="true"></div>
 
-  <!-- Procedural Antique Paper Grain Overlay -->
-  <div class="paper-grain-overlay"></div>
+  <!-- Organic Canvas for Fluid Edge Stains & Texture Fibers -->
+  <canvas id="parchment-canvas" aria-hidden="true"></canvas>
 
-  <!-- Deep Antique Edge Vignette & Corner Scorches -->
-  <div class="vignette-overlay"></div>
+  <!-- Procedural Micro Cellulose Noise Overlay -->
+  <div class="paper-grain-overlay" aria-hidden="true"></div>
 
-  <!-- Sacred Minimal Centerpiece: Only the Word "अशब्द" -->
+  <!-- Deep Edge Vignette & Corner Scorches -->
+  <div class="vignette-overlay" aria-hidden="true"></div>
+
+  <!-- Minimal Centerpiece: Centered Word "अशब्द" + Clickable Interactive Arrow -->
   <main class="parchment-container">
-    <div class="word-wrapper">
-      <h1 class="sacred-word" lang="hi">अशब्द</h1>
+    <div class="centerpiece-group">
+      <div class="word-wrapper">
+        <h1 class="sr-only">अशब्द</h1>
+        <picture>
+          <source srcset="ashabd_text.webp" type="image/webp">
+          <img src="ashabd_text.png" alt="अशब्द" class="sacred-word-img" width="1428" height="380" draggable="false">
+        </picture>
+      </div>
+
+      <!-- Functional Clickable Arrow: Navigates to /poems -->
+      <a href="/poems" class="explore-arrow-link" aria-label="Explore poems" title="Explore poems">
+        <svg class="arrow-svg" viewBox="0 0 170 44" width="170" height="44" aria-hidden="true" focusable="false">
+          <path fill-rule="evenodd" d="M 166.75 20.75 L 166.5 21.75 L 167.25 23.0 L 168.25 23.25 L 169.5 22.5 L 169.75 21.0 L 168.5 20.5 Z M 135.75 21.25 L 135.75 21.75 L 137.25 23.0 L 139.0 22.75 L 140.0 22.0 L 140.0 21.0 L 139.0 20.75 L 138.0 20.0 L 137.25 20.0 Z M 162.0 19.75 L 160.5 21.0 L 160.5 21.75 L 161.25 23.25 L 162.0 23.75 L 162.75 23.75 L 164.25 22.5 L 164.75 21.5 L 163.5 20.0 Z M 0.0 20.5 L 0.0 22.0 L 17.5 22.25 L 41.25 22.0 L 49.5 22.25 L 66.25 22.25 L 68.25 22.0 L 68.5 22.25 L 70.25 22.25 L 70.5 22.0 L 108.25 22.75 L 109.5 21.75 L 111.5 23.5 L 112.75 22.75 L 113.25 21.75 L 113.25 21.0 L 112.75 20.0 L 112.25 19.75 L 111.0 20.0 L 110.0 21.0 L 105.25 20.5 L 85.5 19.75 L 5.75 19.75 L 1.5 20.0 Z M 116.5 20.0 L 115.75 21.0 L 115.75 22.25 L 117.0 23.75 L 119.5 24.0 L 120.75 23.0 L 121.0 22.5 L 120.75 20.0 L 119.0 19.25 L 118.25 19.25 L 117.75 19.75 Z M 127.5 18.0 L 125.0 20.5 L 124.75 22.0 L 126.0 23.75 L 127.5 25.0 L 130.5 25.0 L 132.75 22.75 L 133.0 20.5 L 130.5 18.0 L 129.75 17.75 Z M 127.0 0.0 L 127.0 1.0 L 127.75 2.0 L 127.75 3.0 L 128.75 4.5 L 129.0 6.0 L 129.75 6.75 L 130.0 8.0 L 133.75 12.75 L 139.5 18.0 L 140.0 18.0 L 141.75 19.0 L 142.5 19.75 L 143.75 20.0 L 144.5 20.75 L 146.75 21.0 L 147.0 21.5 L 146.5 22.0 L 143.75 23.0 L 143.0 23.75 L 142.25 23.75 L 141.0 24.75 L 140.0 25.0 L 139.25 26.0 L 138.0 26.5 L 133.75 30.5 L 132.0 32.75 L 132.0 33.25 L 131.0 34.0 L 130.75 34.75 L 130.0 35.5 L 129.75 36.5 L 129.0 37.25 L 128.75 38.75 L 128.0 39.5 L 127.75 41.0 L 127.0 42.0 L 127.0 43.75 L 127.75 43.75 L 128.0 42.75 L 130.0 40.25 L 130.75 38.5 L 135.5 33.75 L 137.25 32.75 L 139.5 30.75 L 141.25 30.0 L 142.25 29.0 L 143.5 28.75 L 145.5 27.25 L 147.0 26.75 L 147.75 26.0 L 149.0 25.75 L 149.75 25.0 L 151.5 24.75 L 152.25 24.0 L 153.75 24.0 L 155.75 23.0 L 158.0 22.75 L 158.75 21.75 L 158.5 21.0 L 158.0 20.75 L 156.0 20.75 L 155.25 20.0 L 154.5 19.75 L 152.75 19.75 L 151.75 19.0 L 150.0 18.75 L 149.25 18.0 L 147.75 17.75 L 147.0 17.0 L 145.5 16.75 L 144.75 16.0 L 143.0 15.0 L 142.5 15.0 L 141.25 13.75 L 139.5 13.0 L 137.5 11.0 L 136.5 10.5 L 131.0 5.0 L 129.75 3.0 L 129.0 2.5 L 128.75 1.25 L 127.75 0.5 L 127.75 0.0 Z" />
+        </svg>
+      </a>
     </div>
   </main>
 
-  <!-- Subtle Antique Ink Social Margins at the Foot of the Page -->
-  <footer class="parchment-footer">
-    <nav class="subtle-social-links" aria-label="Official Social Channels">
-      <a href="https://www.instagram.com/ashabd0/" target="_blank" rel="noopener noreferrer" class="ink-social-link" title="Instagram: @ashabd0" aria-label="Instagram: @ashabd0">
-        <svg class="ink-icon" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
-          <rect x="2" y="2" width="20" height="20" rx="5.5" ry="5.5" fill="none" stroke="currentColor" stroke-width="1.6"/>
-          <circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
-          <circle cx="17.4" cy="6.6" r="1.1" fill="currentColor"/>
-        </svg>
-        <span class="ink-handle">ashabd0</span>
-      </a>
-
-      <span class="ink-separator" aria-hidden="true">·</span>
-
-      <a href="https://x.com/ashabd0/" target="_blank" rel="noopener noreferrer" class="ink-social-link" title="X: @ashabd0" aria-label="X / Twitter: @ashabd0">
-        <svg class="ink-icon" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" fill="currentColor"/>
-        </svg>
-        <span class="ink-handle">ashabd0</span>
-      </a>
-    </nav>
-  </footer>
-
-  <!-- SVG Filter for Antique Ink Bleed on Handmade Fibrous Paper -->
+  <!-- SVG Filter for Antique Ink Bleed on Fibrous Parchment -->
   <svg class="svg-filters" aria-hidden="true" focusable="false">
     <defs>
-      <!-- Microscopic Ink Bleed & Fiber Feathering Filter -->
       <filter id="ink-bleed" x="-10%" y="-10%" width="120%" height="120%">
         <feTurbulence type="fractalNoise" baseFrequency="0.065" numOctaves="4" result="noise" />
-        <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.2" xChannelSelector="R" yChannelSelector="G" result="displaced" />
-        <feGaussianBlur in="displaced" stdDeviation="0.4" result="blurred" />
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.0" xChannelSelector="R" yChannelSelector="G" result="displaced" />
+        <feGaussianBlur in="displaced" stdDeviation="0.35" result="blurred" />
         <feMerge>
           <feMergeNode in="blurred" />
           <feMergeNode in="displaced" />

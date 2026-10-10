@@ -1,6 +1,6 @@
 /* ==========================================================================
-   अशब्द (A-Shabd) — Antique Manuscript Single Page Experience
-   Centuries-Old Weathered Parchment with Organic Stains & Walnut Gall Ink
+   अशब्द (Ashabd.in) — Antique Manuscript Single-Page Experience
+   Centuries-Old Weathered Parchment with Sacred Word & Interactive Arrow
    ========================================================================== */
 
 /* ---------------- Resets & Zero-Scroll Setup ---------------- */
@@ -22,40 +22,26 @@ html, body {
   position: fixed;
   top: 0;
   left: 0;
-  background-color: #24140a;
+  background-color: #1c0e07;
   cursor: default;
 }
 
-/* ---------------- Layer 1: Base Tonal Ground & Stains ---------------- */
-body {
-  /* Warm antique cream/beige base */
-  background: #ecdcb9;
-
-  /* Layered organic stains: rust, burnt umber, tea, and moisture tide-lines */
-  background-image:
-    /* Central sweet-spot: softly luminous antique paper */
-    radial-gradient(ellipse 65% 55% at 50% 50%, #fbf5e8 0%, #f5ebd3 45%, rgba(240, 227, 201, 0.4) 80%, transparent 100%),
-
-    /* Top-left scorched antique corner */
-    radial-gradient(ellipse 45% 40% at 0% 0%, #2f170a 0%, #582b13 22%, #85451e 40%, rgba(133, 69, 30, 0.2) 65%, transparent 100%),
-
-    /* Bottom-right weathered dark corner */
-    radial-gradient(ellipse 50% 45% at 100% 100%, #251207 0%, #4e2510 25%, #7a3d1c 45%, rgba(122, 61, 28, 0.18) 70%, transparent 100%),
-
-    /* Bottom-left moisture & rust stain */
-    radial-gradient(ellipse 40% 35% at 0% 100%, #3a1c0d 0%, #693418 20%, #944b24 38%, rgba(148, 75, 36, 0.15) 60%, transparent 100%),
-
-    /* Top-right dried tea stain */
-    radial-gradient(ellipse 42% 38% at 100% 0%, #33190b 0%, #5e2c13 22%, #8a4520 42%, rgba(138, 69, 32, 0.18) 65%, transparent 100%),
-
-    /* Irregular perimeter edge foxing and oxidation bands */
-    radial-gradient(circle at 18% 45%, rgba(139, 69, 19, 0.14) 0%, transparent 40%),
-    radial-gradient(circle at 82% 52%, rgba(158, 74, 43, 0.12) 0%, transparent 38%),
-    radial-gradient(circle at 48% 92%, rgba(99, 51, 24, 0.18) 0%, transparent 42%),
-    radial-gradient(circle at 52% 8%, rgba(105, 52, 24, 0.15) 0%, transparent 38%);
+/* ---------------- Layer 1: Photographic Parchment Ground from Reference ---------------- */
+.parchment-background {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: #ebdcb7;
+  background-image: url('parchment_background.webp'), url('parchment_background.jpg');
+  background-position: center center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  z-index: 0;
+  pointer-events: none;
 }
 
-/* ---------------- Layer 2: Organic Canvas Background ---------------- */
+/* ---------------- Layer 2: Canvas Procedural Stains & Creases ---------------- */
 #parchment-canvas {
   position: fixed;
   inset: 0;
@@ -66,7 +52,7 @@ body {
   display: block;
 }
 
-/* ---------------- Layer 3: Procedural SVG Grain & Fiber Overlay ---------------- */
+/* ---------------- Layer 3: Micro Paper Grain Texture ---------------- */
 .paper-grain-overlay {
   position: fixed;
   inset: 0;
@@ -74,15 +60,13 @@ body {
   height: 100vh;
   pointer-events: none;
   z-index: 2;
-  opacity: 0.38;
+  opacity: 0.28;
   mix-blend-mode: multiply;
-
-  /* High-frequency cellulose micro-noise */
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 240 240'%3E%3Cfilter id='agedPaperNoise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.055' numOctaves='5' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.28  0 0 0 0 0.16  0 0 0 0 0.08  0 0 0 0.45 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23agedPaperNoise)'/%3E%3C/svg%3E");
   background-repeat: repeat;
 }
 
-/* ---------------- Layer 4: Deep Antique Vignette & Candlelight Atmosphere ---------------- */
+/* ---------------- Layer 4: Deep Weathered Vignette & Candlelight Atmosphere ---------------- */
 .vignette-overlay {
   position: fixed;
   inset: 0;
@@ -90,29 +74,15 @@ body {
   height: 100vh;
   pointer-events: none;
   z-index: 3;
-
-  /* Deep burning vignette along outer edges */
-  background: radial-gradient(ellipse 75% 70% at 50% 50%, transparent 45%, rgba(68, 34, 15, 0.28) 75%, rgba(36, 17, 7, 0.65) 92%, rgba(20, 9, 3, 0.88) 100%);
+  background: radial-gradient(ellipse 75% 70% at 50% 50%, transparent 48%, rgba(68, 34, 15, 0.22) 74%, rgba(36, 17, 7, 0.58) 92%, rgba(20, 9, 3, 0.85) 100%);
   mix-blend-mode: multiply;
-
-  /* Extremely slow, barely perceptible breathing ambient light */
-  animation: candle-drift 16s ease-in-out infinite alternate;
+  animation: candle-drift 18s ease-in-out infinite alternate;
 }
 
-/* Very subtle organic illumination modulation (breathing old manuscript room ambiance) */
 @keyframes candle-drift {
-  0% {
-    opacity: 0.94;
-    transform: scale(1.0);
-  }
-  50% {
-    opacity: 1.0;
-    transform: scale(1.008);
-  }
-  100% {
-    opacity: 0.96;
-    transform: scale(1.003);
-  }
+  0%   { opacity: 0.94; transform: scale(1.0); }
+  50%  { opacity: 1.0; transform: scale(1.006); }
+  100% { opacity: 0.96; transform: scale(1.002); }
 }
 
 /* ---------------- Centerpiece Container ---------------- */
@@ -124,8 +94,22 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 2rem;
+  padding: 1.5rem;
   overflow: hidden;
+}
+
+.centerpiece-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  gap: clamp(1rem, 3.8vh, 2.4rem);
+  /* Optical alignment with reference image center */
+  transform: translateY(-0.8vh);
 }
 
 .word-wrapper {
@@ -134,120 +118,103 @@ body {
   justify-content: center;
   text-align: center;
   position: relative;
-}
-
-/* ---------------- The Sacred Word: "अशब्द" ---------------- */
-.sacred-word {
-  /* Classical Devanagari Serif Typography */
-  font-family: 'Rozha One', 'Tiro Devanagari Hindi', 'Noto Serif Devanagari', serif;
-  font-weight: 500;
-  
-  /* Large, commanding, yet dignified and proportionate scale */
-  font-size: clamp(3.8rem, 11vw, 8.2rem);
-  line-height: 1.15;
-  letter-spacing: 0.08em;
-
-  /* Ancient Walnut Gall & Iron Ink Tone */
-  color: #24160c;
-
-  /* SVG Ink Bleed & Fiber Feathering */
-  filter: url(#ink-bleed);
-
-  /* Subtle ink soak halo into the fibrous paper */
-  text-shadow:
-    0 0 1px rgba(36, 22, 12, 0.65),
-    0 1px 2px rgba(36, 22, 12, 0.35),
-    0 0 16px rgba(120, 65, 25, 0.08);
-
-  /* Natural antique ink opacity with microscopic texture bleed */
-  opacity: 0.94;
-
-  /* Clean subpixel smoothing */
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-
-  position: relative;
-  display: inline-block;
-}
-
-/* Subtle aged ink fading variation across the letterpress contour */
-.sacred-word::before {
-  content: "अशब्द";
-  position: absolute;
-  top: 0;
-  left: 0;
   width: 100%;
-  height: 100%;
-  color: #1a0f08;
-  opacity: 0.3;
-  filter: blur(1.5px);
-  pointer-events: none;
-  z-index: -1;
 }
 
-/* ---------------- Layer 5: Understated Monochromatic Social Footing ---------------- */
-.parchment-footer {
-  position: fixed;
-  bottom: clamp(1.2rem, 3.2vh, 2.2rem);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 15;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-}
-
-.subtle-social-links {
+.word-wrapper picture {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.85rem;
+  margin: 0 auto;
 }
 
-.ink-social-link {
-  color: #442a1a;
-  text-decoration: none;
+/* Screen-reader accessibility for sacred word */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------------- The Sacred Word: "अशब्द" ---------------- */
+.sacred-word-img {
+  width: clamp(260px, 32vw, 540px);
+  max-width: 86vw;
+  height: auto;
+  aspect-ratio: 1428 / 380;
+  display: block;
+  margin: 0 auto;
+  mix-blend-mode: multiply;
+  opacity: 0.96;
+  filter: drop-shadow(0 0 1px rgba(36, 22, 12, 0.45));
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ---------------- Functional Interactive Arrow ---------------- */
+.explore-arrow-link {
   display: inline-flex;
   align-items: center;
-  gap: 0.38rem;
-  font-family: 'Tiro Devanagari Hindi', 'Noto Serif Devanagari', Georgia, serif;
-  font-size: clamp(0.72rem, 1.1vw, 0.82rem);
-  letter-spacing: 0.08em;
-  opacity: 0.42;
-  mix-blend-mode: multiply;
-  transition: opacity 0.4s ease, color 0.4s ease, transform 0.4s ease;
-  cursor: pointer;
-  -webkit-user-select: none;
-  user-select: none;
-  padding: 0.3rem 0.4rem;
-}
-
-.ink-social-link:hover,
-.ink-social-link:focus-visible {
-  opacity: 0.88;
-  color: #1c0e07;
+  justify-content: center;
+  /* Comfortable, accessible touch/click target without visible box or borders */
+  padding: 0.75rem 1.8rem;
+  background: transparent;
+  border: none;
   outline: none;
-}
+  text-decoration: none;
+  cursor: pointer;
 
-.ink-icon {
-  display: block;
-  flex-shrink: 0;
-  color: currentColor;
-}
+  /* Matches authentic iron ink color */
+  color: #2a160b;
+  opacity: 0.88;
+  mix-blend-mode: multiply;
 
-.ink-handle {
-  display: inline-block;
-  font-weight: 500;
-  line-height: 1;
-}
-
-.ink-separator {
-  color: #5c381f;
-  opacity: 0.32;
+  /* Smooth organic hover transition */
+  transition: opacity 0.35s ease, filter 0.35s ease;
   user-select: none;
-  font-size: 0.85rem;
-  line-height: 1;
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* ---------------- Hidden SVG Filters ---------------- */
+.explore-arrow-link .arrow-svg {
+  /* Exactly 50% of the word "अशब्द" width (word is clamp(280px, 34vw, 560px)) */
+  width: clamp(140px, 17vw, 280px);
+  height: auto;
+  aspect-ratio: 170 / 44;
+  fill: currentColor;
+  filter: url(#ink-bleed);
+  display: block;
+  transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1), fill 0.35s ease;
+  transform: translateX(0);
+}
+
+/* Hover state: gentle rightward glide & slight ink darkening */
+.explore-arrow-link:hover {
+  opacity: 1;
+}
+
+.explore-arrow-link:hover .arrow-svg {
+  transform: translateX(8px);
+  fill: #140702;
+}
+
+/* Active / Tap state on press */
+.explore-arrow-link:active .arrow-svg {
+  transform: translateX(12px) scale(0.98);
+}
+
+/* Accessible keyboard navigation focus */
+.explore-arrow-link:focus-visible {
+  outline: 1px dashed rgba(68, 34, 15, 0.45);
+  outline-offset: 6px;
+  border-radius: 4px;
+}
+
+/* ---------------- Hidden SVG Filter Definition ---------------- */
 .svg-filters {
   position: absolute;
   width: 0;
@@ -258,24 +225,35 @@ body {
 
 /* ---------------- Responsive Fine-Tuning ---------------- */
 @media (max-width: 600px) {
-  .sacred-word {
-    font-size: clamp(3.2rem, 15vw, 5.2rem);
-    letter-spacing: 0.05em;
+  .parchment-container {
+    padding: 1rem;
   }
 
-  .subtle-social-links {
-    gap: 0.65rem;
+  .centerpiece-group {
+    gap: 1.15rem;
+    transform: translateY(-1.5vh);
   }
 
-  .ink-social-link {
-    font-size: 0.72rem;
-    gap: 0.32rem;
+  .sacred-word-img {
+    width: clamp(200px, 72vw, 290px);
+    max-width: 82vw;
+  }
+
+  .explore-arrow-link {
+    padding: 0.9rem 1.8rem; /* Larger tap target on mobile */
+  }
+
+  .explore-arrow-link .arrow-svg {
+    width: clamp(105px, 36vw, 150px);
   }
 }
 
 @media (min-width: 1800px) {
-  .sacred-word {
-    font-size: 8.5rem;
-    letter-spacing: 0.09em;
+  .sacred-word-img {
+    width: 620px;
+  }
+
+  .explore-arrow-link .arrow-svg {
+    width: 310px;
   }
 }
