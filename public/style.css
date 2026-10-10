@@ -157,7 +157,7 @@ html, body {
   user-select: none;
 }
 
-/* ---------------- Functional Interactive Arrow ---------------- */
+/* ---------------- Functional Interactive Arrow with Travelling Light ---------------- */
 .explore-arrow-link {
   display: inline-flex;
   align-items: center;
@@ -170,13 +170,11 @@ html, body {
   text-decoration: none;
   cursor: pointer;
 
-  /* Matches authentic aged dark-brown ink color */
   color: #2b180d;
-  opacity: 0.88;
-  mix-blend-mode: multiply;
+  opacity: 0.92;
 
   /* Smooth organic hover transition */
-  transition: opacity 0.35s ease, filter 0.35s ease;
+  transition: opacity 0.35s ease;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
@@ -186,11 +184,55 @@ html, body {
   width: clamp(125px, 15vw, 240px);
   height: auto;
   aspect-ratio: 170 / 44;
-  fill: currentColor;
-  filter: url(#ink-bleed);
   display: block;
-  transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1), fill 0.35s ease;
+  transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
   transform: translateX(0);
+}
+
+/* Original dark-brown antique ink arrow */
+.arrow-base {
+  fill: #2b180d;
+  opacity: 0.88;
+  mix-blend-mode: multiply;
+  filter: url(#ink-bleed);
+  transition: fill 0.35s ease;
+}
+
+/* Travelling light beam layer (clipped to exact arrow shape) */
+.arrow-glimmer-layer {
+  pointer-events: none;
+  filter: drop-shadow(0 0 1.5px rgba(255, 235, 165, 0.75));
+}
+
+.arrow-glimmer-group {
+  animation: arrow-glimmer-travel 4.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  will-change: transform, opacity;
+}
+
+@keyframes arrow-glimmer-travel {
+  0% {
+    transform: translateX(-40px);
+    opacity: 0;
+  }
+  12% {
+    transform: translateX(-40px);
+    opacity: 0;
+  }
+  18% {
+    opacity: 1;
+  }
+  64% {
+    transform: translateX(215px);
+    opacity: 1;
+  }
+  72% {
+    transform: translateX(225px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(225px);
+    opacity: 0;
+  }
 }
 
 /* Hover state: gentle rightward glide & slight ink darkening */
@@ -200,6 +242,9 @@ html, body {
 
 .explore-arrow-link:hover .arrow-svg {
   transform: translateX(8px);
+}
+
+.explore-arrow-link:hover .arrow-base {
   fill: #140702;
 }
 
@@ -426,5 +471,16 @@ html, body {
   .email-icon-link .email-svg {
     width: 20px;
     height: 20px;
+  }
+}
+
+/* ---------------- Accessibility: Reduced Motion ---------------- */
+@media (prefers-reduced-motion: reduce) {
+  .arrow-glimmer-group {
+    animation: none !important;
+    display: none !important;
+  }
+  .explore-arrow-link .arrow-svg {
+    transition: none !important;
   }
 }
