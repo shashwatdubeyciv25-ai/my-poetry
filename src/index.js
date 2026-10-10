@@ -562,7 +562,7 @@ async function handleAnalyticsCollect(request, env, ctx) {
 }
 
 const COUNTRY_MAP = {
-  IN: { name: 'भारत (India)', flag: '🇮🇳' },
+  IN: { name: 'India', flag: '🇮🇳' },
   US: { name: 'United States', flag: '🇺🇸' },
   GB: { name: 'United Kingdom', flag: '🇬🇧' },
   CA: { name: 'Canada', flag: '🇨🇦' },
@@ -571,13 +571,13 @@ const COUNTRY_MAP = {
   FR: { name: 'France', flag: '🇫🇷' },
   AE: { name: 'United Arab Emirates', flag: '🇦🇪' },
   SG: { name: 'Singapore', flag: '🇸🇬' },
-  NP: { name: 'नेपाल (Nepal)', flag: '🇳🇵' },
+  NP: { name: 'Nepal', flag: '🇳🇵' },
   PK: { name: 'Pakistan', flag: '🇵🇰' },
   BD: { name: 'Bangladesh', flag: '🇧🇩' },
   NL: { name: 'Netherlands', flag: '🇳🇱' },
   RU: { name: 'Russia', flag: '🇷🇺' },
   JP: { name: 'Japan', flag: '🇯🇵' },
-  XX: { name: 'स्थानीय / अज्ञात (Local / Unknown)', flag: '🌐' }
+  XX: { name: 'Unknown / Local', flag: '🌐' }
 };
 
 async function handleGetAnalyticsData(request, env) {
@@ -807,10 +807,10 @@ async function handleGetAnalyticsData(request, env) {
       type = wr.content_type || 'Poetry';
       is_poem = (type === 'Poetry' || type === 'कविता');
     } else if (row.path === '/') {
-      title = 'अशब्द — मुख्य पृष्ठ (Landing Page)';
+      title = 'Ashabd — Home Page';
       type = 'Landing Page';
     } else if (row.path === '/poems' || row.path === '/poetry' || row.path === '/writings') {
-      title = 'प्रकाशित रचना संग्रह (Poetry Collection Archive)';
+      title = 'Poetry Collection Archive';
       type = 'Collection';
     } else {
       const m = row.path.match(/^\/(?:poems|poetry|writing|writings)\/([^\/]+)$/);
@@ -3310,7 +3310,7 @@ function getAdminDashboardHtml() {
         <span>📊 Overview</span>
       </button>
       <button class="nav-btn" id="btn-analytics" onclick="switchTab('analytics')">
-        <span>📈 Website Analytics / वेबसाइट आँकड़े</span>
+        <span>📈 Website Analytics</span>
       </button>
       <button class="nav-btn" id="btn-all-writings" onclick="switchTab('all-writings')">
         <span>📜 All Writings</span>
@@ -3522,119 +3522,119 @@ function getAdminDashboardHtml() {
         <div class="analytics-header">
           <div class="analytics-title-wrap">
             <h2 class="section-title" style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-              <span>📈 Website Analytics (वेबसाइट आँकड़े)</span>
-              <span class="live-pill"><span class="pulse-dot"></span><span id="statActiveOnline">1</span> पाठक ऑनलाइन</span>
+              <span>📈 Website Analytics</span>
+              <span class="live-pill"><span class="pulse-dot"></span><span id="statActiveOnline">0</span> Online Now</span>
             </h2>
             <p style="font-size: 0.85rem; color: var(--text-muted);">
-              वास्तविक काव्य रुचि, पाठक उपस्थिति एवं ट्रैफ़िक विश्लेषण (Cloudflare Edge &amp; D1 Database)
+              Real-time readership engagement, visitor presence &amp; traffic analytics (Cloudflare Edge &amp; D1 Database)
             </p>
           </div>
 
           <div class="analytics-actions">
             <div class="period-selector" role="group" aria-label="Date Filter">
-              <button class="period-btn" data-period="today" onclick="setAnalyticsPeriod('today')">आज (Today)</button>
-              <button class="period-btn" data-period="yesterday" onclick="setAnalyticsPeriod('yesterday')">कल (Yesterday)</button>
-              <button class="period-btn active" data-period="7d" onclick="setAnalyticsPeriod('7d')">7 दिन (7 Days)</button>
-              <button class="period-btn" data-period="30d" onclick="setAnalyticsPeriod('30d')">30 दिन (30 Days)</button>
-              <button class="period-btn" data-period="90d" onclick="setAnalyticsPeriod('90d')">90 दिन (90 Days)</button>
-              <button class="period-btn" data-period="custom" onclick="toggleCustomDateInputs()">कस्टम (Custom)</button>
+              <button class="period-btn" data-period="today" onclick="setAnalyticsPeriod('today')">Today</button>
+              <button class="period-btn" data-period="yesterday" onclick="setAnalyticsPeriod('yesterday')">Yesterday</button>
+              <button class="period-btn active" data-period="7d" onclick="setAnalyticsPeriod('7d')">7 Days</button>
+              <button class="period-btn" data-period="30d" onclick="setAnalyticsPeriod('30d')">30 Days</button>
+              <button class="period-btn" data-period="90d" onclick="setAnalyticsPeriod('90d')">90 Days</button>
+              <button class="period-btn" data-period="custom" onclick="toggleCustomDateInputs()">Custom</button>
             </div>
 
-            <button class="btn btn-outline btn-sm" id="btnRefreshAnalytics" onclick="refreshAnalytics()" title="ताज़ा करें">
-              <span id="refreshIcon">🔄</span> ताज़ा करें
+            <button class="btn btn-outline btn-sm" id="btnRefreshAnalytics" onclick="refreshAnalytics()" title="Refresh Analytics">
+              <span id="refreshIcon">🔄</span> Refresh
             </button>
 
             <div class="dropdown-wrap">
-              <button class="btn btn-outline btn-sm" onclick="toggleExportMenu()" title="रिपोर्ट डाउनलोड करें">
-                <span>📥 रिपोर्ट (Export) ▾</span>
+              <button class="btn btn-outline btn-sm" onclick="toggleExportMenu()" title="Download Analytics Report">
+                <span>📥 Export Report ▾</span>
               </button>
               <div id="exportMenu" class="dropdown-menu" style="display: none;">
-                <button onclick="exportAnalyticsReport('csv')">📄 CSV फ़ाइल (.csv)</button>
-                <button onclick="exportAnalyticsReport('json')">📦 JSON फ़ाइल (.json)</button>
+                <button onclick="exportAnalyticsReport('csv')">📄 CSV Spreadsheet (.csv)</button>
+                <button onclick="exportAnalyticsReport('json')">📦 JSON Data (.json)</button>
               </div>
             </div>
 
-            <button class="btn btn-outline btn-sm" onclick="triggerTestPing()" title="टेस्ट विज़िट भेजें">
-              <span>🧪 टेस्ट पिंग (Test Ping)</span>
+            <button class="btn btn-outline btn-sm" onclick="triggerTestPing()" title="Record Test Visit">
+              <span>🧪 Test Ping</span>
             </button>
           </div>
         </div>
 
         <!-- Custom Date Range Picker (Conditional) -->
         <div id="customDateRangeBox" class="custom-date-box" style="display: none;">
-          <label>प्रारंभ (From): <input type="date" id="customStartDate" class="date-input"></label>
-          <label>समाप्ति (To): <input type="date" id="customEndDate" class="date-input"></label>
-          <button class="btn btn-accent btn-sm" onclick="applyCustomDateRange()">लागू करें (Apply)</button>
+          <label>From: <input type="date" id="customStartDate" class="date-input"></label>
+          <label>To: <input type="date" id="customEndDate" class="date-input"></label>
+          <button class="btn btn-accent btn-sm" onclick="applyCustomDateRange()">Apply</button>
         </div>
 
         <!-- Privacy & Estimation Methodology Banner -->
         <div class="analytics-info-banner">
           <div style="font-size: 1.2rem;">🔒</div>
           <div>
-            <strong>गोपनीयता-युक्त एवं प्रामाणिक मापन (Privacy-Preserving &amp; Verified Tracking):</strong>
-            यहाँ <strong>अद्वितीय आगंतुक (Unique Visitors)</strong> की गणना दैनिक क्रिप्टोग्राफ़िक हैश (Salted Daily SHA-256) के माध्यम से की जाती है। किसी भी पाठक का व्यक्तिगत आईपी पता या संवेदनशील डेटा सुरक्षित नहीं किया जाता।
-            <strong>पेज व्यूज़ (Page Views)</strong> कुल पन्नों के खुलने की संख्या है, जबकि <strong>सत्यापित काव्य पाठ (Verified Reads)</strong> उन पाठकों को दर्शाता है जिन्होंने रचना पर कम से कम 15–20 सेकंड व्यतीत किए या स्क्रॉल किया। स्वचालित बॉट्स को मानवीय आँकड़ों से अलग रखा गया है।
+            <strong>Privacy-Preserving &amp; Verified Analytics:</strong>
+            <strong>Unique Visitors</strong> are calculated using a daily cryptographic hash (Salted Daily SHA-256). No individual IP addresses or personal data are ever stored.
+            <strong>Page Views</strong> measure total page visits, while <strong>Verified Reads</strong> track readers who spent at least 15–20 seconds reading or scrolled past 50% of the content. Automated bots are isolated from human traffic metrics.
           </div>
         </div>
 
         <!-- Section 2: Top Overview Summary Cards (6 Cards) -->
         <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 1.5rem;">
           <div class="stat-card">
-            <div class="stat-label">कुल आगंतुक सत्र (Total Visitors)</div>
+            <div class="stat-label">Total Visitors</div>
             <div class="stat-value" id="statTotalVisitors">0</div>
-            <div class="stat-subtext" id="statVisitorsGrowth">पिछले समय की तुलना में --</div>
+            <div class="stat-subtext" id="statVisitorsGrowth">vs. previous period</div>
           </div>
           <div class="stat-card">
             <div class="stat-label">
-              अद्वितीय आगंतुक (Unique Visitors)
-              <span title="दैनिक साल्टेड हैश द्वारा संगणित (Daily Salted SHA-256)" style="cursor: help; opacity: 0.7;">ℹ️</span>
+              Unique Visitors
+              <span title="Calculated via Salted Daily SHA-256 Hash" style="cursor: help; opacity: 0.7;">ℹ️</span>
             </div>
             <div class="stat-value" id="statUniqueVisitors" style="color: var(--accent);">0</div>
-            <div class="stat-subtext">विशिष्ट पाठक (Distinct Individuals)</div>
+            <div class="stat-subtext">Distinct Individuals</div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">कुल पेज व्यूज़ (Total Page Views)</div>
+            <div class="stat-label">Total Page Views</div>
             <div class="stat-value" id="statTotalPageViews">0</div>
-            <div class="stat-subtext" id="statPageviewsGrowth">पन्नों का कुल पठन --</div>
+            <div class="stat-subtext" id="statPageviewsGrowth">Total pages read</div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">अभी सक्रिय (Currently Online)</div>
+            <div class="stat-label">Currently Online</div>
             <div class="stat-value" style="color: #3fb950;">
               <span class="pulse-dot"></span><span id="statActiveOnlineCard">0</span>
             </div>
-            <div class="stat-subtext">गत 5 मिनट में सक्रिय पाठक</div>
+            <div class="stat-subtext">Active in last 5 minutes</div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">प्रकाशित कविताएं (Poems)</div>
+            <div class="stat-label">Published Poems</div>
             <div class="stat-value" id="statTotalPoems" style="color: #388bfd;">0</div>
-            <div class="stat-subtext">वेबसाइट पर लाइव कविता संग्रह</div>
+            <div class="stat-subtext">Live poetry collection</div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">प्रकाशित लेख व अन्य (Writings)</div>
+            <div class="stat-label">Published Articles &amp; Others</div>
             <div class="stat-value" id="statTotalArticles" style="color: #a371f7;">0</div>
-            <div class="stat-subtext">लेख, निबंध, कहानियां व डायरी</div>
+            <div class="stat-subtext">Articles, essays &amp; diaries</div>
           </div>
         </div>
 
         <!-- Section 2b: Multi-Period Quick Strip (Today, 7d, 30d, All-Time) -->
         <div class="interval-strip">
           <div class="interval-box">
-            <div class="interval-box-label">आज का ट्रैफ़िक (Today)</div>
+            <div class="interval-box-label">Today's Traffic</div>
             <div class="interval-box-val" id="stripTodayViews">0 Views</div>
             <div class="interval-box-sub" id="stripTodayVisitors">0 Visitors</div>
           </div>
           <div class="interval-box">
-            <div class="interval-box-label">गत 7 दिन (Last 7 Days)</div>
+            <div class="interval-box-label">Last 7 Days</div>
             <div class="interval-box-val" id="strip7dViews">0 Views</div>
             <div class="interval-box-sub" id="strip7dVisitors">0 Visitors</div>
           </div>
           <div class="interval-box">
-            <div class="interval-box-label">गत 30 दिन (Last 30 Days)</div>
+            <div class="interval-box-label">Last 30 Days</div>
             <div class="interval-box-val" id="strip30dViews">0 Views</div>
             <div class="interval-box-sub" id="strip30dVisitors">0 Visitors</div>
           </div>
           <div class="interval-box">
-            <div class="interval-box-label">सर्वकालिक कुल (All-Time)</div>
+            <div class="interval-box-label">All-Time Total</div>
             <div class="interval-box-val" id="stripAllViews">0 Views</div>
             <div class="interval-box-sub" id="stripAllVisitors">0 Visitors</div>
           </div>
@@ -3645,8 +3645,8 @@ function getAdminDashboardHtml() {
           <div class="chart-card">
             <div class="chart-card-header">
               <div>
-                <h3 style="font-size: 1.05rem; font-weight: 600;">📊 ट्रैफ़िक रुझान (Traffic Over Time)</h3>
-                <p style="font-size: 0.78rem; color: var(--text-muted);">पेज व्यूज़ एवं अद्वितीय आगंतुक का दैनिक/घंटेवार विश्लेषण</p>
+                <h3 style="font-size: 1.05rem; font-weight: 600;">📊 Traffic Over Time</h3>
+                <p style="font-size: 0.78rem; color: var(--text-muted);">Hourly &amp; daily trends for page views, unique visitors and verified reads</p>
               </div>
             </div>
             <div class="chart-canvas-wrap">
@@ -3657,16 +3657,16 @@ function getAdminDashboardHtml() {
           <div class="chart-card">
             <div class="chart-card-header">
               <div>
-                <h3 style="font-size: 1.05rem; font-weight: 600;">👥 पाठक प्रकार (Visitor Ratio)</h3>
-                <p style="font-size: 0.78rem; color: var(--text-muted);">नए बनाम पुनः आने वाले पाठक</p>
+                <h3 style="font-size: 1.05rem; font-weight: 600;">👥 Visitor Ratio</h3>
+                <p style="font-size: 0.78rem; color: var(--text-muted);">New vs. returning visitors</p>
               </div>
             </div>
             <div class="chart-canvas-wrap" style="height: 230px;">
               <canvas id="visitorRatioChart"></canvas>
             </div>
             <div id="visitorRatioLegend" style="display: flex; justify-content: center; gap: 1.5rem; margin-top: 0.8rem; font-size: 0.82rem;">
-              <span><span style="color: #d4a373;">●</span> नए पाठक: <strong id="lblNewVisitors">0</strong></span>
-              <span><span style="color: #3fb950;">●</span> पुनः पाठक: <strong id="lblReturningVisitors">0</strong></span>
+              <span><span style="color: #d4a373;">●</span> New Visitors: <strong id="lblNewVisitors">0</strong></span>
+              <span><span style="color: #3fb950;">●</span> Returning Visitors: <strong id="lblReturningVisitors">0</strong></span>
             </div>
           </div>
         </div>
@@ -3675,14 +3675,14 @@ function getAdminDashboardHtml() {
         <div class="editor-card" style="margin-bottom: 2rem;">
           <div class="chart-card-header" style="flex-wrap: wrap; gap: 1rem;">
             <div>
-              <h3 style="font-size: 1.1rem; font-weight: 600;">📖 सर्वाधिक पढ़ी गई रचनाएं एवं पृष्ठ (Most Popular Content)</h3>
-              <p style="font-size: 0.8rem; color: var(--text-muted);">चुनी गई समयावधि में पाठकों द्वारा सर्वाधिक पसंद किए गए पृष्ठ</p>
+              <h3 style="font-size: 1.1rem; font-weight: 600;">📖 Most Popular Content &amp; Pages</h3>
+              <p style="font-size: 0.8rem; color: var(--text-muted);">Most viewed and read content during the selected period</p>
             </div>
             <div class="filter-tab-bar" style="margin-bottom: 0;">
-              <button class="filter-tab-btn active" data-filter="all" onclick="filterContentTable('all')">सभी (All)</button>
-              <button class="filter-tab-btn" data-filter="poems" onclick="filterContentTable('poems')">केवल कविताएं (Poems)</button>
-              <button class="filter-tab-btn" data-filter="articles" onclick="filterContentTable('articles')">लेख व अन्य (Articles)</button>
-              <button class="filter-tab-btn" data-filter="pages" onclick="filterContentTable('pages')">मुख्य पृष्ठ (Pages)</button>
+              <button class="filter-tab-btn active" data-filter="all" onclick="filterContentTable('all')">All</button>
+              <button class="filter-tab-btn" data-filter="poems" onclick="filterContentTable('poems')">Poems Only</button>
+              <button class="filter-tab-btn" data-filter="articles" onclick="filterContentTable('articles')">Articles &amp; Writings</button>
+              <button class="filter-tab-btn" data-filter="pages" onclick="filterContentTable('pages')">Main Pages</button>
             </div>
           </div>
 
@@ -3691,17 +3691,17 @@ function getAdminDashboardHtml() {
               <thead>
                 <tr>
                   <th style="width: 48px;">#</th>
-                  <th>रचना / पृष्ठ शीर्षक (Title &amp; URL)</th>
-                  <th>प्रकार (Type)</th>
-                  <th style="text-align: right; cursor: pointer;" onclick="sortPopularContent('views')">व्यूज़ (Views) ↕</th>
-                  <th style="text-align: right; cursor: pointer;" onclick="sortPopularContent('reads')">काव्य पाठ (Reads) ↕</th>
-                  <th style="text-align: right;">पाठ दर (Read Rate)</th>
-                  <th style="width: 140px;">ट्रैफ़िक हिस्सा (Share)</th>
-                  <th style="text-align: center; width: 80px;">कार्रवाई</th>
+                  <th>Content / Page Title &amp; URL</th>
+                  <th>Type</th>
+                  <th style="text-align: right; cursor: pointer;" onclick="sortPopularContent('views')">Views ↕</th>
+                  <th style="text-align: right; cursor: pointer;" onclick="sortPopularContent('reads')">Verified Reads ↕</th>
+                  <th style="text-align: right;">Read Rate</th>
+                  <th style="width: 140px;">Traffic Share</th>
+                  <th style="text-align: center; width: 80px;">Action</th>
                 </tr>
               </thead>
               <tbody id="popularContentTableBody">
-                <tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">आँकड़े लोड हो रहे हैं...</td></tr>
+                <tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">Loading analytics data...</td></tr>
               </tbody>
             </table>
           </div>
@@ -3711,8 +3711,8 @@ function getAdminDashboardHtml() {
         <div class="analytics-two-col">
           <!-- Column 1: Traffic Sources -->
           <div class="editor-card">
-            <h3 style="font-size: 1.05rem; font-weight: 600; margin-bottom: 0.35rem;">🌐 आगंतुक स्रोत (Traffic Sources &amp; Referrers)</h3>
-            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.25rem;">पाठक वेबसाइट तक कहाँ से पहुंचे</p>
+            <h3 style="font-size: 1.05rem; font-weight: 600; margin-bottom: 0.35rem;">🌐 Traffic Sources &amp; Referrers</h3>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.25rem;">Where visitors are arriving from</p>
 
             <div id="sourcesContainer">
               <!-- Rendered dynamically -->
@@ -3721,26 +3721,26 @@ function getAdminDashboardHtml() {
 
           <!-- Column 2: Visitor Demographics -->
           <div class="editor-card">
-            <h3 style="font-size: 1.05rem; font-weight: 600; margin-bottom: 0.35rem;">🌍 भौगोलिक उपस्थिति एवं उपकरण (Demographics)</h3>
-            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.25rem;">पाठकों के देश, डिवाइस एवं ब्राउज़र का समग्र विवरण</p>
+            <h3 style="font-size: 1.05rem; font-weight: 600; margin-bottom: 0.35rem;">🌍 Visitor Demographics &amp; Devices</h3>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.25rem;">Country origins, device types, and browsers</p>
 
-            <h4 style="font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.6rem;">शीर्ष देश (Top Countries)</h4>
+            <h4 style="font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.6rem;">Top Countries</h4>
             <div id="countriesContainer" style="margin-bottom: 1.4rem;">
               <!-- Rendered dynamically -->
             </div>
 
-            <h4 style="font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.3rem;">उपकरण श्रेणी (Device Categories)</h4>
+            <h4 style="font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.3rem;">Device Categories</h4>
             <div id="devicesContainer">
               <!-- Segmented bar -->
             </div>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1.2rem;">
               <div>
-                <h4 style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.5rem;">शीर्ष ब्राउज़र (Browsers)</h4>
+                <h4 style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.5rem;">Top Browsers</h4>
                 <div id="browsersContainer" style="font-size: 0.82rem;"></div>
               </div>
               <div>
-                <h4 style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.5rem;">ऑपरेटिंग सिस्टम (OS)</h4>
+                <h4 style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.5rem;">Operating Systems</h4>
                 <div id="osContainer" style="font-size: 0.82rem;"></div>
               </div>
             </div>
@@ -3751,23 +3751,23 @@ function getAdminDashboardHtml() {
         <div class="analytics-two-col">
           <!-- Column 1: Poetry Engagement -->
           <div class="editor-card">
-            <h3 style="font-size: 1.05rem; font-weight: 600; margin-bottom: 0.35rem;">✒️ काव्य सहभागिता (Poetry Engagement)</h3>
-            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.25rem;">काव्य पाठकों का वास्तविक जुड़ाव और पठन समय</p>
+            <h3 style="font-size: 1.05rem; font-weight: 600; margin-bottom: 0.35rem;">✒️ Poetry Engagement</h3>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.25rem;">Reader engagement and verification on poems</p>
 
             <div class="stats-grid" style="grid-template-columns: 1fr 1fr; gap: 0.85rem; margin-bottom: 1.25rem;">
               <div class="interval-box">
-                <div class="interval-box-label">सत्यापित काव्य पाठ (Reads)</div>
+                <div class="interval-box-label">Verified Reads</div>
                 <div class="interval-box-val" id="statPoemReads" style="color: var(--accent);">0</div>
-                <div class="interval-box-sub">कम से कम 15s पठन</div>
+                <div class="interval-box-sub">Spent &ge;15s reading</div>
               </div>
               <div class="interval-box">
-                <div class="interval-box-label">काव्य पठन दर (Read Rate)</div>
+                <div class="interval-box-label">Poem Read Rate</div>
                 <div class="interval-box-val" id="statPoemReadRate">0%</div>
-                <div class="interval-box-sub">व्यूज़ से पठन रूपांतरण</div>
+                <div class="interval-box-sub">Views to read conversion</div>
               </div>
             </div>
 
-            <h4 style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.6rem;">शीर्ष पठित कविताएं (Top Read Poems)</h4>
+            <h4 style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.6rem;">Top Read Poems</h4>
             <div id="topReadPoemsList">
               <!-- Rendered dynamically -->
             </div>
@@ -3775,34 +3775,34 @@ function getAdminDashboardHtml() {
 
           <!-- Column 2: Technical Performance & Broken Pages -->
           <div class="editor-card">
-            <h3 style="font-size: 1.05rem; font-weight: 600; margin-bottom: 0.35rem;">⚡ प्रदर्शन एवं त्रुटि विश्लेषण (Operational Performance)</h3>
-            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.25rem;">Cloudflare Worker संचालन, स्थिति कोड एवं अनुपलब्ध पन्ने</p>
+            <h3 style="font-size: 1.05rem; font-weight: 600; margin-bottom: 0.35rem;">⚡ Performance &amp; Broken Links</h3>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.25rem;">Cloudflare Worker execution, HTTP status codes &amp; 404 errors</p>
 
             <div class="status-pill-grid">
               <div class="status-pill-box">
-                <div class="status-pill-code" style="color: var(--success);">2xx सफ़ल (Success)</div>
+                <div class="status-pill-code" style="color: var(--success);">2xx Success</div>
                 <div class="status-pill-val" id="statStatus2xx">0</div>
               </div>
               <div class="status-pill-box">
-                <div class="status-pill-code" style="color: #388bfd;">3xx पुनर्निर्देशन (Redirect)</div>
+                <div class="status-pill-code" style="color: #388bfd;">3xx Redirect</div>
                 <div class="status-pill-val" id="statStatus3xx">0</div>
               </div>
               <div class="status-pill-box">
-                <div class="status-pill-code" style="color: var(--warning);">4xx त्रुटि (Client Err)</div>
+                <div class="status-pill-code" style="color: var(--warning);">4xx Client Err</div>
                 <div class="status-pill-val" id="statStatus4xx">0</div>
               </div>
               <div class="status-pill-box">
-                <div class="status-pill-code" style="color: var(--danger);">5xx सर्वर (Server Err)</div>
+                <div class="status-pill-code" style="color: var(--danger);">5xx Server Err</div>
                 <div class="status-pill-val" id="statStatus5xx">0</div>
               </div>
             </div>
 
             <div style="margin-bottom: 1.25rem; font-size: 0.83rem; color: var(--text-muted); background: rgba(0,0,0,0.2); padding: 0.75rem 1rem; border-radius: var(--radius); line-height: 1.6;">
-              <div>🔹 कुल Worker अनुरोध (Requests): <strong id="statTotalRequests" style="color: var(--text-main);">0</strong></div>
-              <div>🔹 मानवीय विज़िट (Human): <strong id="statHumanRequests" style="color: var(--text-main);">0</strong> · बॉट फ़िल्टर (Bots): <strong id="statBotRequests" style="color: var(--text-main);">0</strong></div>
+              <div>🔹 Total Worker Requests: <strong id="statTotalRequests" style="color: var(--text-main);">0</strong></div>
+              <div>🔹 Human Visits: <strong id="statHumanRequests" style="color: var(--text-main);">0</strong> · Filtered Bots: <strong id="statBotRequests" style="color: var(--text-main);">0</strong></div>
             </div>
 
-            <h4 style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.6rem;">अनुपलब्ध या टूटे लिंक (404 Not Found URLs)</h4>
+            <h4 style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.6rem;">Missing or Broken Pages (404 Not Found URLs)</h4>
             <div id="missingUrlsList" style="font-size: 0.82rem;">
               <!-- 404 URLs table -->
             </div>
@@ -3887,38 +3887,38 @@ function getAdminDashboardHtml() {
     <div class="preview-modal-content" style="background: var(--surface); color: var(--text-main); border: 1px solid var(--surface-border); max-width: 680px; padding: 2.2rem;">
       <button class="preview-close-btn" style="color: var(--text-main); background: rgba(255,255,255,0.08);" onclick="closePoemDetailModal()">&times;</button>
       <div style="margin-bottom: 1.5rem;">
-        <span id="pdmType" class="type-tag" style="margin-bottom: 0.5rem; display: inline-block;">कविता</span>
+        <span id="pdmType" class="type-tag" style="margin-bottom: 0.5rem; display: inline-block;">Poetry</span>
         <h2 id="pdmTitle" style="font-family: 'Rozha One', 'Tiro Devanagari Hindi', serif; font-size: 1.8rem; margin: 0.25rem 0 0.5rem; color: var(--accent);"></h2>
         <a id="pdmUrl" href="#" target="_blank" style="font-size: 0.82rem; color: #58a6ff; text-decoration: none;">/poems/... ↗</a>
       </div>
 
       <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 1.5rem;">
         <div class="interval-box">
-          <div class="interval-box-label">कुल व्यूज़ (Views)</div>
+          <div class="interval-box-label">Total Views</div>
           <div class="interval-box-val" id="pdmViews">0</div>
         </div>
         <div class="interval-box">
-          <div class="interval-box-label">काव्य पाठ (Reads)</div>
+          <div class="interval-box-label">Verified Reads</div>
           <div class="interval-box-val" id="pdmReads" style="color: var(--accent);">0</div>
         </div>
         <div class="interval-box">
-          <div class="interval-box-label">पाठ दर (Read Rate)</div>
+          <div class="interval-box-label">Read Rate</div>
           <div class="interval-box-val" id="pdmRate" style="color: #3fb950;">0%</div>
         </div>
       </div>
 
       <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--surface-border); border-radius: var(--radius); padding: 1.2rem; margin-bottom: 1.5rem;">
-        <h4 style="font-size: 0.88rem; margin-bottom: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">सत्यापन एवं जुड़ाव विवरण (Reading Verification)</h4>
+        <h4 style="font-size: 0.88rem; margin-bottom: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">Verification &amp; Engagement Breakdown</h4>
         <div style="font-size: 0.84rem; line-height: 1.8; color: var(--text-main);">
-          <div>⏱️ <strong>औसत पठन समय:</strong> <span id="pdmAvgDuration">--</span></div>
-          <div>📜 <strong>स्क्रॉल पूर्णता (Scroll Depth):</strong> पाठकों द्वारा 50% से अधिक स्क्रॉल</div>
-          <div>📊 <strong>ट्रैफ़िक हिस्सा:</strong> कुल काव्य ट्रैफ़िक का <span id="pdmShare">--%</span></div>
+          <div>⏱️ <strong>Average Reading Duration:</strong> <span id="pdmAvgDuration">--</span></div>
+          <div>📜 <strong>Scroll Completion:</strong> Readers who scrolled over 50% of the content</div>
+          <div>📊 <strong>Traffic Share:</strong> <span id="pdmShare">--%</span> of total poem traffic</div>
         </div>
       </div>
 
       <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
-        <button class="btn btn-outline btn-sm" onclick="closePoemDetailModal()">बंद करें (Close)</button>
-        <a id="pdmLiveBtn" href="#" target="_blank" class="btn btn-accent btn-sm" style="text-decoration: none;">वेबसाइट पर देखें ↗</a>
+        <button class="btn btn-outline btn-sm" onclick="closePoemDetailModal()">Close</button>
+        <a id="pdmLiveBtn" href="#" target="_blank" class="btn btn-accent btn-sm" style="text-decoration: none;">View Live on Website ↗</a>
       </div>
     </div>
   </div>
@@ -4662,11 +4662,11 @@ function getAdminDashboardHtml() {
       const s = document.getElementById('customStartDate')?.value;
       const e = document.getElementById('customEndDate')?.value;
       if (!s || !e) {
-        alert('कृपया प्रारंभ और समाप्ति दोनों तिथियां चुनें (Please select both start and end dates).');
+        alert('Please select both start and end dates.');
         return;
       }
       if (s > e) {
-        alert('प्रारंभ तिथि समाप्ति तिथि से पूर्व होनी चाहिए (Start date cannot be after end date).');
+        alert('Start date cannot be after end date.');
         return;
       }
       loadAnalyticsData();
@@ -4693,13 +4693,13 @@ function getAdminDashboardHtml() {
         const res = await fetch('/api/analytics/test-ping', { method: 'POST' });
         const data = await res.json();
         if (res.ok && data.success) {
-          alert('🧪 टेस्ट पिंग सफलतापूर्वक दर्ज किया गया!\\n(Verified test ping recorded successfully!)\\n\\nआँकड़े ताज़ा किए जा रहे हैं...');
+          alert('🧪 Test visit ping recorded successfully!\\n\\nRefreshing analytics data...');
           await loadAnalyticsData();
         } else {
-          alert('टेस्ट पिंग असफल: ' + (data.error || 'Unknown error'));
+          alert('Test ping failed: ' + (data.error || 'Unknown error'));
         }
       } catch (err) {
-        alert('टेस्ट पिंग त्रुटि: ' + err.message);
+        alert('Test ping error: ' + err.message);
       }
     }
 
@@ -4779,13 +4779,13 @@ function getAdminDashboardHtml() {
 
       if (elVGrowth) {
         elVGrowth.innerHTML = vGrowth !== 0
-          ? \`<span class="stat-card-badge \${vGrowth > 0 ? 'badge-up' : 'badge-down'}">\${vGrowth > 0 ? '▲ +' : '▼ '}\${vGrowth}%</span> पिछले समय की तुलना में\`
-          : \`स्थिर / नया विश्लेषण\`;
+          ? \`<span class="stat-card-badge \${vGrowth > 0 ? 'badge-up' : 'badge-down'}">\${vGrowth > 0 ? '▲ +' : '▼ '}\${vGrowth}%</span> vs. previous period\`
+          : \`Steady baseline\`;
       }
       if (elPGrowth) {
         elPGrowth.innerHTML = pGrowth !== 0
-          ? \`<span class="stat-card-badge \${pGrowth > 0 ? 'badge-up' : 'badge-down'}">\${pGrowth > 0 ? '▲ +' : '▼ '}\${pGrowth}%</span> पिछले समय की तुलना में\`
-          : \`कुल पन्नों का समग्र पठन\`;
+          ? \`<span class="stat-card-badge \${pGrowth > 0 ? 'badge-up' : 'badge-down'}">\${pGrowth > 0 ? '▲ +' : '▼ '}\${pGrowth}%</span> vs. previous period\`
+          : \`Total page views recorded\`;
       }
 
       // 2. Multi-Period Interval Strip
@@ -4860,7 +4860,7 @@ function getAdminDashboardHtml() {
           labels,
           datasets: [
             {
-              label: 'पेज व्यूज़ (Page Views)',
+              label: 'Page Views',
               data: pageviews,
               borderColor: '#d4a373',
               backgroundColor: 'rgba(212, 163, 115, 0.14)',
@@ -4872,7 +4872,7 @@ function getAdminDashboardHtml() {
               pointHoverRadius: 5
             },
             {
-              label: 'अद्वितीय आगंतुक (Unique Visitors)',
+              label: 'Unique Visitors',
               data: visitors,
               borderColor: '#3fb950',
               backgroundColor: 'rgba(63, 185, 80, 0.08)',
@@ -4884,7 +4884,7 @@ function getAdminDashboardHtml() {
               pointHoverRadius: 5
             },
             {
-              label: 'सत्यापित काव्य पाठ (Verified Reads)',
+              label: 'Verified Reads',
               data: reads,
               borderColor: '#58a6ff',
               borderDash: [5, 5],
@@ -4960,7 +4960,7 @@ function getAdminDashboardHtml() {
       visitorRatioChartInstance = new Chart(ctx, {
         type: 'doughnut',
         data: {
-          labels: ['नए पाठक (New)', 'पुनः आने वाले पाठक (Returning)'],
+          labels: ['New Visitors', 'Returning Visitors'],
           datasets: [{
             data: dataValues,
             backgroundColor: backgroundColors,
@@ -4983,7 +4983,7 @@ function getAdminDashboardHtml() {
               borderWidth: 1,
               callbacks: {
                 label: function(item) {
-                  if (total === 0) return ' अभी कोई डेटा नहीं';
+                  if (total === 0) return ' No data yet';
                   const val = item.raw || 0;
                   const pct = Math.round((val / total) * 100);
                   return \` \${item.label}: \${val} (\${pct}%)\`;
@@ -5038,7 +5038,7 @@ function getAdminDashboardHtml() {
       });
 
       if (list.length === 0) {
-        tbody.innerHTML = \`<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">चुनी गई समयावधि में कोई सामग्री नहीं मिली (No content visits recorded in this period).</td></tr>\`;
+        tbody.innerHTML = \`<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">No content visits recorded in this period.</td></tr>\`;
         return;
       }
 
@@ -5070,8 +5070,8 @@ function getAdminDashboardHtml() {
               </div>
             </td>
             <td style="text-align: center;">
-              <button class="btn btn-outline btn-sm" style="padding: 0.2rem 0.55rem; font-size: 0.75rem;" onclick="inspectPoemDetails('\${safePath}')" title="विस्तृत विश्लेषण">
-                विवरण ℹ️
+              <button class="btn btn-outline btn-sm" style="padding: 0.2rem 0.55rem; font-size: 0.75rem;" onclick="inspectPoemDetails('\${safePath}')" title="Detailed Analysis">
+                Details ℹ️
               </button>
             </td>
           </tr>
@@ -5135,17 +5135,17 @@ function getAdminDashboardHtml() {
       const counts = sources.counts || {};
 
       const sourceList = [
-        { key: 'direct', label: 'सीधा प्रवेश (Direct Traffic / Bookmarks)', count: counts.direct || 0, icon: '🔗' },
-        { key: 'google', label: 'गूगल खोज (Google Search)', count: counts.google || 0, icon: '🔍' },
-        { key: 'instagram', label: 'इंस्टाग्राम (Instagram @ashabd0)', count: counts.instagram || 0, icon: '📸' },
-        { key: 'twitter', label: 'एक्स / ट्विटर (X / Twitter @ashabd0)', count: counts.twitter || 0, icon: '🐦' },
-        { key: 'search', label: 'अन्य खोज इंजन (Bing, DDG, Yahoo)', count: counts.search || 0, icon: '🔎' },
-        { key: 'social', label: 'अन्य सोशल (FB, LinkedIn, Reddit, YT)', count: counts.social || 0, icon: '👥' },
-        { key: 'other', label: 'अन्य बाह्य रेफरर्स (Other Referrers)', count: counts.other || 0, icon: '🌐' }
+        { key: 'direct', label: 'Direct Traffic / Bookmarks', count: counts.direct || 0, icon: '🔗' },
+        { key: 'google', label: 'Google Search', count: counts.google || 0, icon: '🔍' },
+        { key: 'instagram', label: 'Instagram (@ashabd0)', count: counts.instagram || 0, icon: '📸' },
+        { key: 'twitter', label: 'X / Twitter (@ashabd0)', count: counts.twitter || 0, icon: '🐦' },
+        { key: 'search', label: 'Search Engines (Bing, DDG, Yahoo)', count: counts.search || 0, icon: '🔎' },
+        { key: 'social', label: 'Social Media (FB, LinkedIn, Reddit, YT)', count: counts.social || 0, icon: '👥' },
+        { key: 'other', label: 'Other Referrers', count: counts.other || 0, icon: '🌐' }
       ];
 
       if (total === 0) {
-        container.innerHTML = \`<p style="font-size: 0.85rem; color: var(--text-muted); text-align: center; padding: 1.5rem;">इस अवधि में कोई ट्रैफ़िक स्रोत दर्ज नहीं हुआ।</p>\`;
+        container.innerHTML = \`<p style="font-size: 0.85rem; color: var(--text-muted); text-align: center; padding: 1.5rem;">No traffic sources recorded in this period.</p>\`;
         return;
       }
 
@@ -5174,7 +5174,7 @@ function getAdminDashboardHtml() {
       if (cContainer) {
         const countries = demo.countries || [];
         if (countries.length === 0) {
-          cContainer.innerHTML = \`<div style="font-size: 0.82rem; color: var(--text-muted);">कोई देश डेटा नहीं मिला।</div>\`;
+          cContainer.innerHTML = \`<div style="font-size: 0.82rem; color: var(--text-muted);">No country data available.</div>\`;
         } else {
           cContainer.innerHTML = countries.map(c => \`
             <div class="progress-row" style="margin-bottom: 0.5rem;">
@@ -5216,9 +5216,9 @@ function getAdminDashboardHtml() {
             <div class="device-bar-segment" style="width: \${tPct}%; background: #a371f7;" title="Tablet: \${tPct}%"></div>
           </div>
           <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
-            <span><span style="color: #d4a373;">●</span> मोबाइल (Mobile): <strong>\${mPct}%</strong> (\${mobileCount})</span>
-            <span><span style="color: #388bfd;">●</span> डेस्कटॉप (Desktop): <strong>\${dPct}%</strong> (\${desktopCount})</span>
-            <span><span style="color: #a371f7;">●</span> टैबलेट (Tablet): <strong>\${tPct}%</strong> (\${tabletCount})</span>
+            <span><span style="color: #d4a373;">●</span> Mobile: <strong>\${mPct}%</strong> (\${mobileCount})</span>
+            <span><span style="color: #388bfd;">●</span> Desktop: <strong>\${dPct}%</strong> (\${desktopCount})</span>
+            <span><span style="color: #a371f7;">●</span> Tablet: <strong>\${tPct}%</strong> (\${tabletCount})</span>
           </div>
         \`;
       }
@@ -5228,7 +5228,7 @@ function getAdminDashboardHtml() {
       if (bContainer) {
         const browsers = demo.browsers || [];
         if (browsers.length === 0) {
-          bContainer.innerHTML = \`<span style="color: var(--text-muted);">डेटा उपलब्ध नहीं</span>\`;
+          bContainer.innerHTML = \`<span style="color: var(--text-muted);">No data available</span>\`;
         } else {
           bContainer.innerHTML = browsers.map(b => \`
             <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
@@ -5244,7 +5244,7 @@ function getAdminDashboardHtml() {
       if (oContainer) {
         const osList = demo.os || [];
         if (osList.length === 0) {
-          oContainer.innerHTML = \`<span style="color: var(--text-muted);">डेटा उपलब्ध नहीं</span>\`;
+          oContainer.innerHTML = \`<span style="color: var(--text-muted);">No data available</span>\`;
         } else {
           oContainer.innerHTML = osList.map(o => \`
             <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
@@ -5269,7 +5269,7 @@ function getAdminDashboardHtml() {
 
       const poems = pe.top_read_poems || [];
       if (poems.length === 0) {
-        topList.innerHTML = \`<p style="font-size: 0.82rem; color: var(--text-muted);">इस अवधि में कोई कविता पठन दर्ज नहीं हुआ।</p>\`;
+        topList.innerHTML = \`<p style="font-size: 0.82rem; color: var(--text-muted);">No poem reads recorded in this period.</p>\`;
         return;
       }
 
@@ -5278,7 +5278,7 @@ function getAdminDashboardHtml() {
           <div>
             <strong style="color: var(--text-main);">\${idx + 1}. \${escape(p.title)}</strong>
             <div style="font-size: 0.74rem; color: var(--text-muted);">
-              \${p.views} व्यूज़ · पठन दर: \${p.read_rate}%
+              \${p.views} views · Read rate: \${p.read_rate}%
             </div>
           </div>
           <span class="status-pill published" style="font-size: 0.76rem;">
@@ -5325,12 +5325,12 @@ function getAdminDashboardHtml() {
       if (missingList) {
         const urls = perf.top_404_urls || [];
         if (urls.length === 0) {
-          missingList.innerHTML = \`<span style="color: var(--success); font-size: 0.82rem;">✅ कोई 404 टूटे लिंक दर्ज नहीं हुए (All clean)!</span>\`;
+          missingList.innerHTML = \`<span style="color: var(--success); font-size: 0.82rem;">✅ No 404 broken links recorded (All clean)!</span>\`;
         } else {
           missingList.innerHTML = urls.map(u => \`
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.35rem 0; border-bottom: 1px solid rgba(255,255,255,0.04);">
               <code style="color: var(--danger); font-size: 0.78rem;">\${escape(u.path)}</code>
-              <span class="status-pill draft" style="font-size: 0.72rem;">\${u.count} त्रुटियां</span>
+              <span class="status-pill draft" style="font-size: 0.72rem;">\${u.count} errors</span>
             </div>
           \`).join('');
         }
@@ -5340,7 +5340,7 @@ function getAdminDashboardHtml() {
     // ==================== EXPORT REPORTS (CSV / JSON) ====================
     function exportAnalyticsReport(format) {
       if (!currentAnalyticsData) {
-        alert('डेटा अभी लोड नहीं हुआ है। कृपया प्रतीक्षा करें।');
+        alert('Analytics data is still loading. Please wait.');
         return;
       }
 
@@ -5359,21 +5359,21 @@ function getAdminDashboardHtml() {
         URL.revokeObjectURL(url);
       } else if (format === 'csv') {
         const sum = currentAnalyticsData.summary || {};
-        let csvContent = '\\uFEFF'; // UTF-8 BOM for Excel / Devanagari Hindi support
-        csvContent += \`अशब्द (Ashabd) वेबसाइट आँकड़े विश्लेषण रिपोर्ट\\n\`;
-        csvContent += \`समयावधि (Period),\${period}\\n\`;
-        csvContent += \`दिनांक (Date),\${dateStr}\\n\\n\`;
+        let csvContent = '\\uFEFF';
+        csvContent += \`Ashabd Website Analytics Report\\n\`;
+        csvContent += \`Period,\${period}\\n\`;
+        csvContent += \`Date,\${dateStr}\\n\\n\`;
 
-        csvContent += \`--- सारांश (Overview) ---\\n\`;
-        csvContent += \`मापदंड (Metric),संख्या (Value)\\n\`;
-        csvContent += \`कुल आगंतुक सत्र (Total Visitors),\${sum.total_visitors || 0}\\n\`;
-        csvContent += \`अद्वितीय आगंतुक (Unique Visitors),\${sum.unique_visitors || 0}\\n\`;
-        csvContent += \`कुल पेज व्यूज़ (Total Page Views),\${sum.page_views || 0}\\n\`;
-        csvContent += \`प्रकाशित कविताएं (Total Poems),\${sum.total_published_poems || 0}\\n\`;
-        csvContent += \`प्रकाशित लेख (Total Articles),\${sum.total_published_articles || 0}\\n\\n\`;
+        csvContent += \`--- Overview ---\\n\`;
+        csvContent += \`Metric,Value\\n\`;
+        csvContent += \`Total Visitors,\${sum.total_visitors || 0}\\n\`;
+        csvContent += \`Unique Visitors,\${sum.unique_visitors || 0}\\n\`;
+        csvContent += \`Total Page Views,\${sum.page_views || 0}\\n\`;
+        csvContent += \`Total Published Poems,\${sum.total_published_poems || 0}\\n\`;
+        csvContent += \`Total Published Articles,\${sum.total_published_articles || 0}\\n\\n\`;
 
-        csvContent += \`--- सर्वाधिक लोकप्रिय रचनाएं व पन्ने (Popular Content) ---\\n\`;
-        csvContent += \`रैंक,शीर्षक (Title),URL,प्रकार (Type),व्यूज़ (Views),काव्य पाठ (Reads),पठन दर (Read Rate %),हिस्सा (Share %)\\n\`;
+        csvContent += \`--- Most Popular Content & Pages ---\\n\`;
+        csvContent += \`Rank,Title,URL,Type,Views,Verified Reads,Read Rate (%),Share (%)\\n\`;
 
         for (const item of (currentAnalyticsData.popular_content || [])) {
           const rowTitle = \`"\${(item.title || '').replace(/"/g, '""')}"\`;
