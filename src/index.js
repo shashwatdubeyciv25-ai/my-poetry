@@ -12,6 +12,13 @@
 
 export default {
   async fetch(request, env, ctx) {
+    // Normalize D1 database binding so both 'ashabd-db' and 'DB' work seamlessly
+    if (!env.DB && env['ashabd-db']) {
+      env.DB = env['ashabd-db'];
+    } else if (!env['ashabd-db'] && env.DB) {
+      env['ashabd-db'] = env.DB;
+    }
+
     const url = new URL(request.url);
     const pathname = url.pathname;
 
@@ -495,10 +502,11 @@ async function handleAuthCheck(request, env) {
    ========================================================================== */
 
 function checkDatabase(env) {
-  if (!env.DB) {
-    throw new Error("Cloudflare D1 database binding 'DB' is missing. Please bind your D1 database to the variable name 'DB'.");
+  const db = env.DB || env['ashabd-db'];
+  if (!db) {
+    throw new Error("Cloudflare D1 database binding ('ashabd-db' or 'DB') is missing. Please check your wrangler.jsonc or Cloudflare bindings.");
   }
-  return env.DB;
+  return db;
 }
 
 /**

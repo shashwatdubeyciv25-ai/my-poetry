@@ -6,5 +6,12 @@
   "assets": {
     "directory": "./public",
     "binding": "ASSETS"
-  }
+  },
+  "d1_databases": [
+    {
+      "binding": "ashabd-db",
+      "database_name": "ashabd-db",
+      "database_id": "4bfd735c-4955-46b0-a1d5-d8caf792f798"
+    }
+  ]
 }
