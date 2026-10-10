@@ -771,10 +771,10 @@
               </div>
 
               <div class="form-group">
-                <label class="form-label" for="writingStatus">Status</label>
+                <label class="form-label" for="writingStatus">Status (स्थिति)</label>
                 <select id="writingStatus" class="select-input" style="width: 100%;">
-                  <option value="Draft">Draft (ड्राफ्ट - निजी)</option>
-                  <option value="Published">Published (सार्वजनिक रूप से प्रकाशित)</option>
+                  <option value="Published">🚀 Published (सार्वजनिक - ashabd.in/poems पर तुरंत लाइव दिखेगी)</option>
+                  <option value="Draft">📁 Draft (निजी ड्राफ्ट - केवल डैशबोर्ड में रहेगी, वेबसाइट पर नहीं दिखेगी)</option>
                 </select>
               </div>
             </div>
@@ -789,12 +789,15 @@
               <textarea id="writingContent" class="form-textarea" placeholder="यहाँ अपनी कविता या लेख लिखें... छंद और पंक्तियाँ ज्यों की त्यों सुरक्षित रहेंगी।" required oninput="updateStats()"></textarea>
             </div>
 
-            <div class="editor-actions">
+            <div class="editor-actions" style="flex-wrap: wrap; gap: 0.8rem;">
               <button type="button" class="btn btn-outline" onclick="openPreview()">
                 👁️ Preview on Website
               </button>
-              <button type="submit" class="btn btn-accent" id="saveBtn">
-                💾 Save Writing
+              <button type="button" class="btn btn-outline" onclick="saveWritingWithStatus('Draft')" id="saveDraftBtn">
+                📁 Save as Draft (ड्राफ्ट में रखें)
+              </button>
+              <button type="button" class="btn btn-accent" onclick="saveWritingWithStatus('Published')" id="savePublishBtn" style="font-weight: 600; padding: 0.6rem 1.4rem;">
+                🚀 Publish Live (वेबसाइट पर प्रकाशित करें)
               </button>
               <button type="button" class="btn btn-outline" onclick="switchTab('all-writings')">
                 Cancel
@@ -1094,7 +1097,7 @@
       document.getElementById('writingSlug').value = '';
       document.getElementById('writingType').value = 'Poetry';
       document.getElementById('writingTags').value = '';
-      document.getElementById('writingStatus').value = 'Draft';
+      document.getElementById('writingStatus').value = 'Published';
       document.getElementById('writingContent').value = '';
       updateStats();
       switchTab('editor');
@@ -1163,20 +1166,20 @@
           <td><span class="type-tag">${escape(item.content_type || 'Poetry')}</span></td>
           <td>
             <span class="status-pill ${item.status === 'Published' ? 'published' : 'draft'}">
-              ${item.status}
+              ${item.status === 'Published' ? '✓ Published (लाइव)' : '📁 Draft (निजी)'}
             </span>
           </td>
           <td style="color: var(--text-muted); font-size: 0.8rem;">
             ${new Date(item.updated_at).toLocaleDateString()}
           </td>
           <td>
-            <div class="row-actions">
-              <button class="icon-btn" onclick="editWriting('${item.id}')" title="Edit">✏️</button>
+            <div class="row-actions" style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+              <button class="icon-btn" onclick="editWriting('${item.id}')" title="Edit Writing">✏️</button>
               ${item.status === 'Published' ? `
-                <a href="/poetry/${encodeURIComponent(item.slug)}" target="_blank" class="icon-btn" title="View Public Page">↗</a>
-                <button class="icon-btn" onclick="toggleStatus('${item.id}', 'Draft')" title="Unpublish">📁</button>
+                <a href="/poems/${encodeURIComponent(item.slug)}" target="_blank" class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: 0.78rem; text-decoration: none;" title="View Live on Website">👁️ View ↗</a>
+                <button class="icon-btn" onclick="toggleStatus('${item.id}', 'Draft')" title="Move to Drafts">📁</button>
               ` : `
-                <button class="icon-btn" onclick="toggleStatus('${item.id}', 'Published')" title="Publish">🌐</button>
+                <button class="btn btn-accent" onclick="toggleStatus('${item.id}', 'Published')" style="padding: 0.25rem 0.65rem; font-size: 0.78rem; font-weight: 600;" title="Publish Live to Website immediately">🚀 Publish Live</button>
               `}
               <button class="icon-btn danger" onclick="deleteWriting('${item.id}', '${escape(item.title)}')" title="Delete">🗑️</button>
             </div>
@@ -1195,11 +1198,21 @@
         <tr>
           <td><span class="table-title">${escape(item.title)}</span></td>
           <td><span class="type-tag">${escape(item.content_type || 'Poetry')}</span></td>
-          <td><span class="status-pill ${item.status === 'Published' ? 'published' : 'draft'}">${item.status}</span></td>
+          <td>
+            <span class="status-pill ${item.status === 'Published' ? 'published' : 'draft'}">
+              ${item.status === 'Published' ? '✓ Published (लाइव)' : '📁 Draft'}
+            </span>
+          </td>
           <td style="color: var(--text-muted); font-size: 0.8rem;">${new Date(item.updated_at).toLocaleDateString()}</td>
           <td>
-            <button class="icon-btn" onclick="editWriting('${item.id}')" title="Edit">✏️</button>
-            ${item.status === 'Published' ? `<a href="/poetry/${encodeURIComponent(item.slug)}" target="_blank" class="icon-btn" title="View Live">↗</a>` : ''}
+            <div style="display: flex; align-items: center; gap: 0.4rem;">
+              <button class="icon-btn" onclick="editWriting('${item.id}')" title="Edit">✏️</button>
+              ${item.status === 'Published' ? `
+                <a href="/poems/${encodeURIComponent(item.slug)}" target="_blank" class="btn btn-outline" style="padding: 0.2rem 0.55rem; font-size: 0.75rem; text-decoration: none;" title="View Live">👁️ View ↗</a>
+              ` : `
+                <button class="btn btn-accent" onclick="toggleStatus('${item.id}', 'Published')" style="padding: 0.2rem 0.55rem; font-size: 0.75rem; font-weight: 600;" title="Publish Live to Website">🚀 Publish Live</button>
+              `}
+            </div>
           </td>
         </tr>
       `).join('');
@@ -1218,7 +1231,7 @@
           document.getElementById('writingSlug').value = w.slug || '';
           document.getElementById('writingType').value = w.content_type || 'Poetry';
           document.getElementById('writingTags').value = w.tags || '';
-          document.getElementById('writingStatus').value = w.status || 'Draft';
+          document.getElementById('writingStatus').value = w.status || 'Published';
           document.getElementById('writingContent').value = w.content || '';
           updateStats();
           switchTab('editor');
@@ -1228,24 +1241,48 @@
       }
     }
 
+    async function saveWritingWithStatus(forcedStatus) {
+      if (forcedStatus) {
+        document.getElementById('writingStatus').value = forcedStatus;
+      }
+      return handleSaveWriting();
+    }
+
     async function handleSaveWriting(e) {
-      e.preventDefault();
+      if (e && e.preventDefault) e.preventDefault();
+
+      const title = document.getElementById('writingTitle').value.trim();
+      const content = document.getElementById('writingContent').value.trim();
+      const status = document.getElementById('writingStatus').value;
+
+      if (!title) {
+        alert('कृपया शीर्षक (Title) दर्ज करें।');
+        document.getElementById('writingTitle').focus();
+        return;
+      }
+      if (!content) {
+        alert('कृपया रचना पाठ (Content) दर्ज करें।');
+        document.getElementById('writingContent').focus();
+        return;
+      }
+
       const id = document.getElementById('editWritingId').value;
       const isNew = !id;
 
       const payload = {
-        title: document.getElementById('writingTitle').value.trim(),
+        title,
         subtitle: document.getElementById('writingSubtitle').value.trim(),
         slug: document.getElementById('writingSlug').value.trim(),
         content_type: document.getElementById('writingType').value,
         tags: document.getElementById('writingTags').value.trim(),
-        status: document.getElementById('writingStatus').value,
-        content: document.getElementById('writingContent').value
+        status,
+        content
       };
 
-      const btn = document.getElementById('saveBtn');
-      btn.disabled = true;
-      btn.innerText = 'सुरक्षित हो रहा है...';
+      const savePublishBtn = document.getElementById('savePublishBtn');
+      const saveDraftBtn = document.getElementById('saveDraftBtn');
+      if (savePublishBtn) savePublishBtn.disabled = true;
+      if (saveDraftBtn) saveDraftBtn.disabled = true;
 
       try {
         const url = isNew ? '/api/writings' : '/api/writings/' + id;
@@ -1257,17 +1294,22 @@
         });
         const data = await res.json();
         if (res.ok && data.success) {
-          alert('रचना सुरक्षित कर दी गई (Writing saved successfully!)');
-          loadWritings();
-          switchTab('all-writings');
+          const itemSlug = data.writing?.slug || payload.slug;
+          if (status === 'Published') {
+            alert(`🎉 सफलता! आपकी रचना वेबसाइट पर प्रकाशित (Publish) हो गई है!\n(Published live on website!)\n\nवेबसाइट पर देखने के लिए:\nhttps://ashabd.in/poems/${encodeURIComponent(itemSlug)}`);
+          } else {
+            alert(`📁 रचना ड्राफ्ट (Draft) के रूप में सुरक्षित हो गई है।\n(Saved as private draft.)\n\n⚠️ ध्यान दें: यह वेबसाइट पर तब तक नहीं दिखेगी जब तक आप इसे "Publish Live" नहीं करते।`);
+          }
+          await loadWritings();
+          switchTab(status === 'Published' ? 'published' : 'drafts');
         } else {
-          alert('Error: ' + (data.error || 'Failed to save'));
+          alert('❌ सुरक्षित करने में त्रुटि: ' + (data.error || 'Failed to save'));
         }
       } catch (err) {
         alert('Save error: ' + err.message);
       } finally {
-        btn.disabled = false;
-        btn.innerText = '💾 Save Writing';
+        if (savePublishBtn) savePublishBtn.disabled = false;
+        if (saveDraftBtn) saveDraftBtn.disabled = false;
       }
     }
 
@@ -1278,8 +1320,16 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: newStatus })
         });
-        if (res.ok) {
-          loadWritings();
+        const data = await res.json();
+        if (res.ok && data.success) {
+          if (newStatus === 'Published') {
+            alert('🎉 रचना सफलतापूर्वक प्रकाशित कर दी गई है!\nअब यह ashabd.in/poems पर लाइव दिखाई देगी।');
+          } else {
+            alert('📁 रचना ड्राफ्ट में बदल दी गई है (अब यह वेबसाइट पर छिपी रहेगी)।');
+          }
+          await loadWritings();
+        } else {
+          alert('Status update failed: ' + (data.error || 'Unknown error'));
         }
       } catch (e) {
         alert('Status update failed: ' + e.message);

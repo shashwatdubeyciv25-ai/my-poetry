@@ -282,6 +282,38 @@ async function ensureAdminUsersTable(db) {
   `).run();
 }
 
+let writingsTableEnsured = false;
+async function ensureWritingsTable(db) {
+  if (!db || writingsTableEnsured) return;
+  try {
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS writings (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        slug TEXT NOT NULL UNIQUE,
+        subtitle TEXT,
+        content TEXT NOT NULL,
+        content_type TEXT NOT NULL DEFAULT 'Poetry',
+        tags TEXT,
+        status TEXT NOT NULL DEFAULT 'Draft',
+        cover_image_key TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        published_at INTEGER
+      )
+    `).run();
+    try {
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_writings_status ON writings(status)`).run();
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_writings_slug ON writings(slug)`).run();
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_writings_published_at ON writings(published_at DESC)`).run();
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_writings_updated_at ON writings(updated_at DESC)`).run();
+    } catch (_) {}
+    writingsTableEnsured = true;
+  } catch (e) {
+    console.warn('ensureWritingsTable notice:', e?.message || e);
+  }
+}
+
 async function handleLogin(request, env) {
   let body;
   try {
@@ -501,11 +533,12 @@ async function handleAuthCheck(request, env) {
    DATABASE & CONTENT MANAGEMENT HANDLERS (D1)
    ========================================================================== */
 
-function checkDatabase(env) {
+async function checkDatabase(env) {
   const db = env.DB || env['ashabd-db'];
   if (!db) {
     throw new Error("Cloudflare D1 database binding ('ashabd-db' or 'DB') is missing. Please check your wrangler.jsonc or Cloudflare bindings.");
   }
+  await ensureWritingsTable(db);
   return db;
 }
 
@@ -544,7 +577,7 @@ async function getUniqueSlug(db, baseSlug, excludeId = null) {
 }
 
 async function handleListWritingsAdmin(request, env) {
-  const db = checkDatabase(env);
+  const db = await checkDatabase(env);
   const url = new URL(request.url);
   const statusFilter = url.searchParams.get('status'); // 'all', 'Published', 'Draft'
   const typeFilter = url.searchParams.get('type');
@@ -594,7 +627,7 @@ async function handleListWritingsAdmin(request, env) {
 }
 
 async function handleGetWritingAdmin(id, env) {
-  const db = checkDatabase(env);
+  const db = await checkDatabase(env);
   const writing = await db.prepare('SELECT * FROM writings WHERE id = ?').bind(id).first();
   if (!writing) {
     return jsonResponse({ error: 'Writing not found' }, 404);
@@ -603,7 +636,7 @@ async function handleGetWritingAdmin(id, env) {
 }
 
 async function handleCreateWriting(request, env) {
-  const db = checkDatabase(env);
+  const db = await checkDatabase(env);
   const body = await request.json();
 
   const title = (body.title || '').trim();
@@ -650,7 +683,7 @@ async function handleCreateWriting(request, env) {
 }
 
 async function handleUpdateWriting(id, request, env) {
-  const db = checkDatabase(env);
+  const db = await checkDatabase(env);
   const body = await request.json();
 
   const existing = await db.prepare('SELECT * FROM writings WHERE id = ?').bind(id).first();
@@ -700,7 +733,7 @@ async function handleUpdateWriting(id, request, env) {
 }
 
 async function handleToggleStatus(id, request, env) {
-  const db = checkDatabase(env);
+  const db = await checkDatabase(env);
   const body = await request.json();
   const nextStatus = body.status === 'Published' ? 'Published' : 'Draft';
 
@@ -722,7 +755,7 @@ async function handleToggleStatus(id, request, env) {
 }
 
 async function handleDeleteWriting(id, env) {
-  const db = checkDatabase(env);
+  const db = await checkDatabase(env);
   await db.prepare('DELETE FROM writings WHERE id = ?').bind(id).run();
   return jsonResponse({ success: true, message: 'Writing deleted successfully.' });
 }
@@ -732,80 +765,122 @@ async function handleDeleteWriting(id, env) {
    ========================================================================== */
 
 async function handlePublicWritingsList(request, env) {
-  if (!env.DB) {
+  const db = env.DB || env['ashabd-db'];
+  if (!db) {
     return jsonResponse({ writings: [] });
   }
 
-  const { results: writings } = await env.DB.prepare(`
-    SELECT id, title, slug, subtitle, content_type, tags, published_at
-    FROM writings
-    WHERE status = 'Published'
-    ORDER BY published_at DESC
-  `).all();
+  try {
+    await ensureWritingsTable(db);
+    const { results: writings } = await db.prepare(`
+      SELECT id, title, slug, subtitle, content_type, tags, published_at, created_at
+      FROM writings
+      WHERE status = 'Published'
+      ORDER BY COALESCE(published_at, created_at) DESC
+    `).all();
 
-  return jsonResponse({ writings: writings || [] }, 200, {
-    'Cache-Control': 'public, max-age=60, s-maxage=300'
-  });
+    return jsonResponse({ writings: writings || [] }, 200, {
+      'Cache-Control': 'no-cache, no-store, must-revalidate'
+    });
+  } catch (err) {
+    console.error('Public writings query error:', err);
+    return jsonResponse({ writings: [] });
+  }
 }
 
 /**
  * Public SSR Page for /poetry/:slug and /writing/:slug
  */
 async function handlePublicPoemPage(slug, request, env) {
-  if (!env.DB) {
+  const db = env.DB || env['ashabd-db'];
+  if (!db) {
     return new Response(renderNotFoundHtml('डेटाबेस कनेक्टेड नहीं है (Database not configured).'), {
       status: 503,
-      headers: { 'Content-Type': 'text/html; charset=utf-8' }
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+      }
     });
   }
 
-  const writing = await env.DB.prepare(`
-    SELECT * FROM writings WHERE slug = ? AND status = 'Published'
-  `).bind(slug).first();
+  try {
+    await ensureWritingsTable(db);
+    const writing = await db.prepare(`
+      SELECT * FROM writings WHERE slug = ? AND status = 'Published'
+    `).bind(slug).first();
 
-  if (!writing) {
-    return new Response(renderNotFoundHtml(), {
-      status: 404,
-      headers: { 'Content-Type': 'text/html; charset=utf-8' }
-    });
-  }
-
-  const html = renderPoemHtml(writing);
-  return new Response(html, {
-    status: 200,
-    headers: {
-      'Content-Type': 'text/html; charset=utf-8',
-      'Cache-Control': 'public, max-age=120, s-maxage=600'
+    if (!writing) {
+      return new Response(renderNotFoundHtml(), {
+        status: 404,
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        }
+      });
     }
-  });
+
+    const html = renderPoemHtml(writing);
+    return new Response(html, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+      }
+    });
+  } catch (err) {
+    console.error('Public poem query error:', err);
+    return new Response(renderNotFoundHtml('रचना लोड करने में समस्या आई।'), {
+      status: 500,
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+      }
+    });
+  }
 }
 
 /**
- * Public SSR Page for /poetry and /writings Archive
+ * Public SSR Page for /poetry, /poems, and /writings Archive
  */
 async function handlePublicArchivePage(request, env) {
-  if (!env.DB) {
+  const db = env.DB || env['ashabd-db'];
+  if (!db) {
     return new Response(renderArchiveHtml([]), {
       status: 200,
-      headers: { 'Content-Type': 'text/html; charset=utf-8' }
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+      }
     });
   }
 
-  const { results: writings } = await env.DB.prepare(`
-    SELECT id, title, slug, subtitle, content_type, tags, published_at
-    FROM writings
-    WHERE status = 'Published'
-    ORDER BY published_at DESC
-  `).all();
+  try {
+    await ensureWritingsTable(db);
+    const { results: writings } = await db.prepare(`
+      SELECT id, title, slug, subtitle, content_type, tags, published_at, created_at
+      FROM writings
+      WHERE status = 'Published'
+      ORDER BY COALESCE(published_at, created_at) DESC
+    `).all();
 
-  const html = renderArchiveHtml(writings || []);
-  return new Response(html, {
-    status: 200,
-    headers: {
-      'Content-Type': 'text/html; charset=utf-8',
-      'Cache-Control': 'public, max-age=60, s-maxage=300'
-    }
-  });
+    const html = renderArchiveHtml(writings || []);
+    return new Response(html, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+      }
+    });
+  } catch (err) {
+    console.error('Public archive query error:', err);
+    return new Response(renderArchiveHtml([]), {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+      }
+    });
+  }
 }
 
 /* ==========================================================================
@@ -1246,8 +1321,11 @@ function renderArchiveHtml(writings) {
 
     ${writings.length === 0 ? `
       <div class="empty-state">
-        <p>अभी कोई रचना प्रकाशित नहीं है।</p>
-        <p style="font-size: 0.85rem; margin-top: 0.5rem;">शब्द जल्द ही साकार होंगे...</p>
+        <p style="font-size: 1.25rem; margin-bottom: 0.5rem;">अभी कोई रचना प्रकाशित नहीं है।</p>
+        <p style="font-size: 0.95rem; opacity: 0.8; margin-bottom: 1.5rem;">शब्द जल्द ही साकार होंगे...</p>
+        <p style="font-size: 0.82rem; color: #7a4828; border: 1px dashed rgba(122, 72, 40, 0.4); padding: 0.8rem 1rem; border-radius: 6px; max-width: 440px; margin: 0 auto; line-height: 1.6;">
+          🔒 <strong>कवि/लेखक के लिए:</strong> यदि आपने डैशबोर्ड में रचना सुरक्षित की है, तो सुनिश्चित करें कि उसका स्टेटस <strong>"Published"</strong> है। <a href="/admin" style="color: #4a2711; font-weight: bold; text-decoration: underline;">डैशबोर्ड खोलें ↗</a>
+        </p>
       </div>
     ` : `
       <ul class="writings-list">
@@ -1259,7 +1337,7 @@ function renderArchiveHtml(writings) {
               <div class="writing-item-meta">
                 <span>${escapeHtml(w.content_type || 'Poetry')}</span>
                 <span>·</span>
-                <time>${formatDate(w.published_at)}</time>
+                <time>${formatDate(w.published_at || w.created_at)}</time>
               </div>
             </a>
           </li>
@@ -2095,10 +2173,10 @@ function getAdminDashboardHtml() {
               </div>
 
               <div class="form-group">
-                <label class="form-label" for="writingStatus">Status</label>
+                <label class="form-label" for="writingStatus">Status (स्थिति)</label>
                 <select id="writingStatus" class="select-input" style="width: 100%;">
-                  <option value="Draft">Draft (ड्राफ्ट - निजी)</option>
-                  <option value="Published">Published (सार्वजनिक रूप से प्रकाशित)</option>
+                  <option value="Published">🚀 Published (सार्वजनिक - ashabd.in/poems पर तुरंत लाइव दिखेगी)</option>
+                  <option value="Draft">📁 Draft (निजी ड्राफ्ट - केवल डैशबोर्ड में रहेगी, वेबसाइट पर नहीं दिखेगी)</option>
                 </select>
               </div>
             </div>
@@ -2113,12 +2191,15 @@ function getAdminDashboardHtml() {
               <textarea id="writingContent" class="form-textarea" placeholder="यहाँ अपनी कविता या लेख लिखें... छंद और पंक्तियाँ ज्यों की त्यों सुरक्षित रहेंगी।" required oninput="updateStats()"></textarea>
             </div>
 
-            <div class="editor-actions">
+            <div class="editor-actions" style="flex-wrap: wrap; gap: 0.8rem;">
               <button type="button" class="btn btn-outline" onclick="openPreview()">
                 👁️ Preview on Website
               </button>
-              <button type="submit" class="btn btn-accent" id="saveBtn">
-                💾 Save Writing
+              <button type="button" class="btn btn-outline" onclick="saveWritingWithStatus('Draft')" id="saveDraftBtn">
+                📁 Save as Draft (ड्राफ्ट में रखें)
+              </button>
+              <button type="button" class="btn btn-accent" onclick="saveWritingWithStatus('Published')" id="savePublishBtn" style="font-weight: 600; padding: 0.6rem 1.4rem;">
+                🚀 Publish Live (वेबसाइट पर प्रकाशित करें)
               </button>
               <button type="button" class="btn btn-outline" onclick="switchTab('all-writings')">
                 Cancel
@@ -2286,7 +2367,7 @@ function getAdminDashboardHtml() {
       document.getElementById('writingSlug').value = '';
       document.getElementById('writingType').value = 'Poetry';
       document.getElementById('writingTags').value = '';
-      document.getElementById('writingStatus').value = 'Draft';
+      document.getElementById('writingStatus').value = 'Published';
       document.getElementById('writingContent').value = '';
       updateStats();
       switchTab('editor');
@@ -2355,20 +2436,20 @@ function getAdminDashboardHtml() {
           <td><span class="type-tag">\${escape(item.content_type || 'Poetry')}</span></td>
           <td>
             <span class="status-pill \${item.status === 'Published' ? 'published' : 'draft'}">
-              \${item.status}
+              \${item.status === 'Published' ? '✓ Published (लाइव)' : '📁 Draft (निजी)'}
             </span>
           </td>
           <td style="color: var(--text-muted); font-size: 0.8rem;">
             \${new Date(item.updated_at).toLocaleDateString()}
           </td>
           <td>
-            <div class="row-actions">
-              <button class="icon-btn" onclick="editWriting('\${item.id}')" title="Edit">✏️</button>
+            <div class="row-actions" style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+              <button class="icon-btn" onclick="editWriting('\${item.id}')" title="Edit Writing">✏️</button>
               \${item.status === 'Published' ? \`
-                <a href="/poetry/\${encodeURIComponent(item.slug)}" target="_blank" class="icon-btn" title="View Public Page">↗</a>
-                <button class="icon-btn" onclick="toggleStatus('\${item.id}', 'Draft')" title="Unpublish">📁</button>
+                <a href="/poems/\${encodeURIComponent(item.slug)}" target="_blank" class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: 0.78rem; text-decoration: none;" title="View Live on Website">👁️ View ↗</a>
+                <button class="icon-btn" onclick="toggleStatus('\${item.id}', 'Draft')" title="Move to Drafts">📁</button>
               \` : \`
-                <button class="icon-btn" onclick="toggleStatus('\${item.id}', 'Published')" title="Publish">🌐</button>
+                <button class="btn btn-accent" onclick="toggleStatus('\${item.id}', 'Published')" style="padding: 0.25rem 0.65rem; font-size: 0.78rem; font-weight: 600;" title="Publish Live to Website immediately">🚀 Publish Live</button>
               \`}
               <button class="icon-btn danger" onclick="deleteWriting('\${item.id}', '\${escape(item.title)}')" title="Delete">🗑️</button>
             </div>
@@ -2387,11 +2468,21 @@ function getAdminDashboardHtml() {
         <tr>
           <td><span class="table-title">\${escape(item.title)}</span></td>
           <td><span class="type-tag">\${escape(item.content_type || 'Poetry')}</span></td>
-          <td><span class="status-pill \${item.status === 'Published' ? 'published' : 'draft'}">\${item.status}</span></td>
+          <td>
+            <span class="status-pill \${item.status === 'Published' ? 'published' : 'draft'}">
+              \${item.status === 'Published' ? '✓ Published (लाइव)' : '📁 Draft'}
+            </span>
+          </td>
           <td style="color: var(--text-muted); font-size: 0.8rem;">\${new Date(item.updated_at).toLocaleDateString()}</td>
           <td>
-            <button class="icon-btn" onclick="editWriting('\${item.id}')" title="Edit">✏️</button>
-            \${item.status === 'Published' ? \`<a href="/poetry/\${encodeURIComponent(item.slug)}" target="_blank" class="icon-btn" title="View Live">↗</a>\` : ''}
+            <div style="display: flex; align-items: center; gap: 0.4rem;">
+              <button class="icon-btn" onclick="editWriting('\${item.id}')" title="Edit">✏️</button>
+              \${item.status === 'Published' ? \`
+                <a href="/poems/\${encodeURIComponent(item.slug)}" target="_blank" class="btn btn-outline" style="padding: 0.2rem 0.55rem; font-size: 0.75rem; text-decoration: none;" title="View Live">👁️ View ↗</a>
+              \` : \`
+                <button class="btn btn-accent" onclick="toggleStatus('\${item.id}', 'Published')" style="padding: 0.2rem 0.55rem; font-size: 0.75rem; font-weight: 600;" title="Publish Live to Website">🚀 Publish Live</button>
+              \`}
+            </div>
           </td>
         </tr>
       \`).join('');
@@ -2410,7 +2501,7 @@ function getAdminDashboardHtml() {
           document.getElementById('writingSlug').value = w.slug || '';
           document.getElementById('writingType').value = w.content_type || 'Poetry';
           document.getElementById('writingTags').value = w.tags || '';
-          document.getElementById('writingStatus').value = w.status || 'Draft';
+          document.getElementById('writingStatus').value = w.status || 'Published';
           document.getElementById('writingContent').value = w.content || '';
           updateStats();
           switchTab('editor');
@@ -2420,24 +2511,48 @@ function getAdminDashboardHtml() {
       }
     }
 
+    async function saveWritingWithStatus(forcedStatus) {
+      if (forcedStatus) {
+        document.getElementById('writingStatus').value = forcedStatus;
+      }
+      return handleSaveWriting();
+    }
+
     async function handleSaveWriting(e) {
-      e.preventDefault();
+      if (e && e.preventDefault) e.preventDefault();
+
+      const title = document.getElementById('writingTitle').value.trim();
+      const content = document.getElementById('writingContent').value.trim();
+      const status = document.getElementById('writingStatus').value;
+
+      if (!title) {
+        alert('कृपया शीर्षक (Title) दर्ज करें।');
+        document.getElementById('writingTitle').focus();
+        return;
+      }
+      if (!content) {
+        alert('कृपया रचना पाठ (Content) दर्ज करें।');
+        document.getElementById('writingContent').focus();
+        return;
+      }
+
       const id = document.getElementById('editWritingId').value;
       const isNew = !id;
 
       const payload = {
-        title: document.getElementById('writingTitle').value.trim(),
+        title,
         subtitle: document.getElementById('writingSubtitle').value.trim(),
         slug: document.getElementById('writingSlug').value.trim(),
         content_type: document.getElementById('writingType').value,
         tags: document.getElementById('writingTags').value.trim(),
-        status: document.getElementById('writingStatus').value,
-        content: document.getElementById('writingContent').value
+        status,
+        content
       };
 
-      const btn = document.getElementById('saveBtn');
-      btn.disabled = true;
-      btn.innerText = 'सुरक्षित हो रहा है...';
+      const savePublishBtn = document.getElementById('savePublishBtn');
+      const saveDraftBtn = document.getElementById('saveDraftBtn');
+      if (savePublishBtn) savePublishBtn.disabled = true;
+      if (saveDraftBtn) saveDraftBtn.disabled = true;
 
       try {
         const url = isNew ? '/api/writings' : '/api/writings/' + id;
@@ -2449,17 +2564,22 @@ function getAdminDashboardHtml() {
         });
         const data = await res.json();
         if (res.ok && data.success) {
-          alert('रचना सुरक्षित कर दी गई (Writing saved successfully!)');
-          loadWritings();
-          switchTab('all-writings');
+          const itemSlug = data.writing?.slug || payload.slug;
+          if (status === 'Published') {
+            alert(\`🎉 सफलता! आपकी रचना वेबसाइट पर प्रकाशित (Publish) हो गई है!\\n(Published live on website!)\\n\\nवेबसाइट पर देखने के लिए:\\nhttps://ashabd.in/poems/\${encodeURIComponent(itemSlug)}\`);
+          } else {
+            alert(\`📁 रचना ड्राफ्ट (Draft) के रूप में सुरक्षित हो गई है।\\n(Saved as private draft.)\\n\\n⚠️ ध्यान दें: यह वेबसाइट पर तब तक नहीं दिखेगी जब तक आप इसे "Publish Live" नहीं करते।\`);
+          }
+          await loadWritings();
+          switchTab(status === 'Published' ? 'published' : 'drafts');
         } else {
-          alert('Error: ' + (data.error || 'Failed to save'));
+          alert('❌ सुरक्षित करने में त्रुटि: ' + (data.error || 'Failed to save'));
         }
       } catch (err) {
         alert('Save error: ' + err.message);
       } finally {
-        btn.disabled = false;
-        btn.innerText = '💾 Save Writing';
+        if (savePublishBtn) savePublishBtn.disabled = false;
+        if (saveDraftBtn) saveDraftBtn.disabled = false;
       }
     }
 
@@ -2470,8 +2590,16 @@ function getAdminDashboardHtml() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: newStatus })
         });
-        if (res.ok) {
-          loadWritings();
+        const data = await res.json();
+        if (res.ok && data.success) {
+          if (newStatus === 'Published') {
+            alert('🎉 रचना सफलतापूर्वक प्रकाशित कर दी गई है!\\nअब यह ashabd.in/poems पर लाइव दिखाई देगी।');
+          } else {
+            alert('📁 रचना ड्राफ्ट में बदल दी गई है (अब यह वेबसाइट पर छिपी रहेगी)।');
+          }
+          await loadWritings();
+        } else {
+          alert('Status update failed: ' + (data.error || 'Unknown error'));
         }
       } catch (e) {
         alert('Status update failed: ' + e.message);
