@@ -2090,13 +2090,13 @@ function getAdminDashboardHtml() {
         <div class="filter-bar">
           <input type="text" id="searchInput" class="search-input" placeholder="Search by title, tag, or subtitle..." oninput="debounceLoadWritings()">
           <select id="typeFilter" class="select-input" onchange="loadWritings()">
-            <option value="all">All Types</option>
-            <option value="Poetry">कविता (Poetry)</option>
-            <option value="Article">लेख (Article)</option>
-            <option value="Story">कहानी (Story)</option>
-            <option value="Essay">निबंध (Essay)</option>
-            <option value="Diary">डायरी (Diary)</option>
-            <option value="Other">अन्य (Other)</option>
+            <option value="all">सभी रचना प्रकार</option>
+            <option value="Poetry">कविता</option>
+            <option value="Article">लेख</option>
+            <option value="Story">कहानी</option>
+            <option value="Essay">निबंध</option>
+            <option value="Diary">डायरी</option>
+            <option value="Other">अन्य</option>
           </select>
           <select id="statusFilter" class="select-input" onchange="loadWritings()">
             <option value="all">All Status</option>
@@ -2164,14 +2164,14 @@ function getAdminDashboardHtml() {
 
             <div class="form-row">
               <div class="form-group">
-                <label class="form-label" for="writingType">Content Type (रचना प्रकार)</label>
+                <label class="form-label" for="writingType">रचना प्रकार</label>
                 <select id="writingType" class="select-input" style="width: 100%;">
-                  <option value="Poetry">कविता (Poetry)</option>
-                  <option value="Article">लेख (Article)</option>
-                  <option value="Story">कहानी (Story)</option>
-                  <option value="Essay">निबंध (Essay)</option>
-                  <option value="Diary">डायरी (Diary)</option>
-                  <option value="Other">अन्य (Other)</option>
+                  <option value="Poetry">कविता</option>
+                  <option value="Article">लेख</option>
+                  <option value="Story">कहानी</option>
+                  <option value="Essay">निबंध</option>
+                  <option value="Diary">डायरी</option>
+                  <option value="Other">अन्य</option>
                 </select>
               </div>
 
@@ -2441,7 +2441,7 @@ function getAdminDashboardHtml() {
             <span class="table-title">\${escape(item.title)}</span>
             \${item.subtitle ? \`<span class="table-subtitle">\${escape(item.subtitle)}</span>\` : ''}
           </td>
-          <td><span class="type-tag">\${escape(item.content_type || 'Poetry')}</span></td>
+          <td><span class="type-tag">\${escape(formatTypeDisplay(item.content_type))}</span></td>
           <td>
             <span class="status-pill \${item.status === 'Published' ? 'published' : 'draft'}">
               \${item.status === 'Published' ? '✓ Published (लाइव)' : '📁 Draft (निजी)'}
@@ -2475,7 +2475,7 @@ function getAdminDashboardHtml() {
       tbody.innerHTML = items.map(item => \`
         <tr>
           <td><span class="table-title">\${escape(item.title)}</span></td>
-          <td><span class="type-tag">\${escape(item.content_type || 'Poetry')}</span></td>
+          <td><span class="type-tag">\${escape(formatTypeDisplay(item.content_type))}</span></td>
           <td>
             <span class="status-pill \${item.status === 'Published' ? 'published' : 'draft'}">
               \${item.status === 'Published' ? '✓ Published (लाइव)' : '📁 Draft'}
@@ -2807,6 +2807,19 @@ function getAdminDashboardHtml() {
       } catch (e) {
         alert('Export failed: ' + e.message);
       }
+    }
+
+    const TYPE_HINDI_MAP = {
+      'Poetry': 'कविता',
+      'Article': 'लेख',
+      'Story': 'कहानी',
+      'Essay': 'निबंध',
+      'Diary': 'डायरी',
+      'Other': 'अन्य'
+    };
+
+    function formatTypeDisplay(t) {
+      return TYPE_HINDI_MAP[t] || t || 'कविता';
     }
 
     function escape(str) {
