@@ -32,6 +32,12 @@ export default {
       if (pathname === '/api/auth/login' && request.method === 'POST') {
         return handleLogin(request, env);
       }
+      if (pathname === '/api/auth/setup' && request.method === 'POST') {
+        return handleSetup(request, env);
+      }
+      if (pathname === '/api/auth/change-password' && request.method === 'POST') {
+        return handleChangePassword(request, env);
+      }
       if (pathname === '/api/auth/logout' && request.method === 'POST') {
         return handleLogout(request);
       }
@@ -239,8 +245,35 @@ function timingSafeEqual(a, b) {
 }
 
 /* ==========================================================================
-   AUTH CONTROLLER HANDLERS
+   AUTH CONTROLLER HANDLERS (CLOUDFLARE SECRETS + D1 ADMIN USERS)
    ========================================================================== */
+
+async function hashPasswordWithSalt(password, salt) {
+  const enc = new TextEncoder();
+  const data = enc.encode(password + ':' + salt);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function generateSalt() {
+  const arr = new Uint8Array(16);
+  crypto.getRandomValues(arr);
+  return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function ensureAdminUsersTable(db) {
+  if (!db) return;
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS admin_users (
+      id TEXT PRIMARY KEY,
+      username TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      salt TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `).run();
+}
 
 async function handleLogin(request, env) {
   let body;
@@ -255,16 +288,49 @@ async function handleLogin(request, env) {
     return jsonResponse({ error: 'Password is required' }, 400);
   }
 
-  const expectedPassword = env.ADMIN_PASSWORD;
-  if (!expectedPassword) {
-    return jsonResponse({
-      error: 'ADMIN_PASSWORD is not configured in Cloudflare environment secrets. Please set it in Cloudflare Dashboard > Settings > Variables and Secrets.',
-      setup_needed: true
-    }, 500);
+  let valid = false;
+
+  // 1. Check Cloudflare environment secret ADMIN_PASSWORD if present
+  if (env.ADMIN_PASSWORD) {
+    if (timingSafeEqual(password, env.ADMIN_PASSWORD)) {
+      valid = true;
+    }
   }
 
-  if (!timingSafeEqual(password, expectedPassword)) {
-    return jsonResponse({ error: 'Invalid administrator password.' }, 401);
+  // 2. If not matched, check D1 admin_users table
+  if (!valid && env.DB) {
+    try {
+      await ensureAdminUsersTable(env.DB);
+      const user = await env.DB.prepare('SELECT * FROM admin_users WHERE username = ?').bind('admin').first();
+      if (user && user.password_hash && user.salt) {
+        const inputHash = await hashPasswordWithSalt(password, user.salt);
+        if (timingSafeEqual(inputHash, user.password_hash)) {
+          valid = true;
+        }
+      }
+    } catch (e) {
+      console.error('D1 admin lookup error:', e);
+    }
+  }
+
+  if (!valid) {
+    // Check if system has no password configured at all
+    let hasAnyPassword = !!env.ADMIN_PASSWORD;
+    if (!hasAnyPassword && env.DB) {
+      try {
+        const count = await env.DB.prepare('SELECT COUNT(*) as count FROM admin_users').first('count');
+        if (count > 0) hasAnyPassword = true;
+      } catch (e) {}
+    }
+
+    if (!hasAnyPassword) {
+      return jsonResponse({
+        error: 'No administrator password has been set yet. Please complete initial setup.',
+        needs_setup: true
+      }, 400);
+    }
+
+    return jsonResponse({ error: 'Invalid administrator password (अमान्य पासवर्ड).' }, 401);
   }
 
   // Create session
@@ -276,7 +342,6 @@ async function handleLogin(request, env) {
 
   const secret = getEffectiveSecret(env);
   const token = await createSessionToken(payload, secret);
-
   const cookieStr = `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; Max-Age=${SESSION_MAX_AGE_SECONDS}; HttpOnly; Secure; SameSite=Lax`;
 
   return new Response(JSON.stringify({ success: true, message: 'Authenticated successfully.' }), {
@@ -286,6 +351,101 @@ async function handleLogin(request, env) {
       'Set-Cookie': cookieStr
     }
   });
+}
+
+async function handleSetup(request, env) {
+  if (!env.DB) {
+    return jsonResponse({
+      error: "Cloudflare D1 database binding 'DB' is required for initial setup. Please bind your D1 database in Cloudflare Settings > Bindings."
+    }, 400);
+  }
+
+  await ensureAdminUsersTable(env.DB);
+  const adminCount = await env.DB.prepare('SELECT COUNT(*) as count FROM admin_users').first('count');
+  if (adminCount > 0 || env.ADMIN_PASSWORD) {
+    return jsonResponse({ error: 'Setup has already been completed. Please log in.' }, 403);
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonResponse({ error: 'Invalid JSON payload' }, 400);
+  }
+
+  const { password } = body;
+  if (!password || password.length < 6) {
+    return jsonResponse({ error: 'Password must be at least 6 characters long.' }, 400);
+  }
+
+  const salt = generateSalt();
+  const hash = await hashPasswordWithSalt(password, salt);
+  const now = Date.now();
+
+  await env.DB.prepare(`
+    INSERT INTO admin_users (id, username, password_hash, salt, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).bind('admin_primary', 'admin', hash, salt, now, now).run();
+
+  // Create session
+  const payload = {
+    user: 'admin',
+    iat: now,
+    exp: now + SESSION_MAX_AGE_SECONDS * 1000
+  };
+
+  const secret = getEffectiveSecret(env);
+  const token = await createSessionToken(payload, secret);
+  const cookieStr = `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; Max-Age=${SESSION_MAX_AGE_SECONDS}; HttpOnly; Secure; SameSite=Lax`;
+
+  return new Response(JSON.stringify({ success: true, message: 'Administrator initialized successfully.' }), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Set-Cookie': cookieStr
+    }
+  });
+}
+
+async function handleChangePassword(request, env) {
+  const user = await getAuthenticatedUser(request, env);
+  if (!user) {
+    return jsonResponse({ error: 'Unauthorized' }, 401);
+  }
+  if (!env.DB) {
+    return jsonResponse({ error: 'D1 database binding DB is required to update password.' }, 400);
+  }
+
+  const body = await request.json();
+  const { currentPassword, newPassword } = body;
+  if (!newPassword || newPassword.length < 6) {
+    return jsonResponse({ error: 'New password must be at least 6 characters.' }, 400);
+  }
+
+  await ensureAdminUsersTable(env.DB);
+  const existing = await env.DB.prepare('SELECT * FROM admin_users WHERE username = ?').bind('admin').first();
+  if (existing) {
+    const checkHash = await hashPasswordWithSalt(currentPassword, existing.salt);
+    if (!timingSafeEqual(checkHash, existing.password_hash)) {
+      return jsonResponse({ error: 'Current password does not match.' }, 400);
+    }
+  } else if (env.ADMIN_PASSWORD) {
+    if (!timingSafeEqual(currentPassword, env.ADMIN_PASSWORD)) {
+      return jsonResponse({ error: 'Current password does not match.' }, 400);
+    }
+  }
+
+  const salt = generateSalt();
+  const hash = await hashPasswordWithSalt(newPassword, salt);
+  const now = Date.now();
+
+  await env.DB.prepare(`
+    INSERT INTO admin_users (id, username, password_hash, salt, created_at, updated_at)
+    VALUES ('admin_primary', 'admin', ?, ?, ?, ?)
+    ON CONFLICT(username) DO UPDATE SET password_hash = excluded.password_hash, salt = excluded.salt, updated_at = excluded.updated_at
+  `).bind(hash, salt, now, now).run();
+
+  return jsonResponse({ success: true, message: 'Password updated successfully.' });
 }
 
 async function handleLogout(request) {
@@ -301,12 +461,30 @@ async function handleLogout(request) {
 
 async function handleAuthCheck(request, env) {
   const user = await getAuthenticatedUser(request, env);
-  if (!user) {
-    return jsonResponse({ authenticated: false }, 401);
+  if (user) {
+    return jsonResponse({
+      authenticated: true,
+      user: user.user,
+      has_d1: !!env.DB,
+      has_secret: !!env.ADMIN_PASSWORD
+    });
   }
+
+  // Not authenticated. Check if setup is needed
+  let hasPassword = !!env.ADMIN_PASSWORD;
+  if (!hasPassword && env.DB) {
+    try {
+      await ensureAdminUsersTable(env.DB);
+      const adminCount = await env.DB.prepare('SELECT COUNT(*) as count FROM admin_users').first('count');
+      if (adminCount > 0) {
+        hasPassword = true;
+      }
+    } catch (e) {}
+  }
+
   return jsonResponse({
-    authenticated: true,
-    user: user.user,
+    authenticated: false,
+    needs_setup: !hasPassword,
     has_d1: !!env.DB,
     has_secret: !!env.ADMIN_PASSWORD
   });

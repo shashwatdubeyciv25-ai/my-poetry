@@ -533,13 +533,10 @@
 
   <!-- ==================== AUTHENTICATION SCREEN ==================== -->
   <div id="authOverlay" class="auth-overlay">
-    <div class="login-box">
+    <!-- 1. Regular Login Box -->
+    <div class="login-box" id="loginBox">
       <h1 class="login-brand">अशब्द</h1>
       <p class="login-sub">प्रबंधन कक्ष — Administrator Login</p>
-
-      <div id="setupNotice" class="notice-box" style="text-align: left;">
-        <strong>⚙️ Setup Notice:</strong> Cloudflare secret <code>ADMIN_PASSWORD</code> is not yet configured. Please set it in Cloudflare Dashboard &gt; Workers &gt; Settings &gt; Variables and Secrets.
-      </div>
 
       <form id="loginForm" onsubmit="handleLogin(event)">
         <div class="form-group" style="text-align: left;">
@@ -551,6 +548,37 @@
         </button>
       </form>
       <div id="loginError" style="color: var(--danger); font-size: 0.82rem; margin-top: 1rem; display: none;"></div>
+      <div style="margin-top: 1.25rem; font-size: 0.82rem; color: var(--text-muted); text-align: center;">
+        प्रथम बार सेटअप? <a href="javascript:void(0)" onclick="showSetup()" style="color: var(--accent); text-decoration: underline;">पासवर्ड सेटअप करें (First-time setup)</a>
+      </div>
+    </div>
+
+    <!-- 2. First-Time Setup Box (Self-initializing via D1) -->
+    <div class="login-box" id="setupBox" style="display: none; max-width: 440px;">
+      <h1 class="login-brand">अशब्द</h1>
+      <p class="login-sub">व्यवस्थापक पासवर्ड सेटअप (Initial Setup)</p>
+
+      <div class="notice-box" style="display: block; text-align: left; margin-bottom: 1.25rem;">
+        <strong>🌱 स्वागतम् (Welcome):</strong> Your dashboard is ready! Set your private administrator password below. It will be salted and saved securely in your D1 database.
+      </div>
+
+      <form id="setupForm" onsubmit="handleInitialSetup(event)">
+        <div class="form-group" style="text-align: left;">
+          <label class="form-label" for="newAdminPassword">Choose Password (नया पासवर्ड)</label>
+          <input type="password" id="newAdminPassword" class="text-input" placeholder="न्यूनतम 6 अक्षर (Min 6 chars)" minlength="6" required autocomplete="new-password">
+        </div>
+        <div class="form-group" style="text-align: left;">
+          <label class="form-label" for="confirmAdminPassword">Confirm Password (पुष्टि करें)</label>
+          <input type="password" id="confirmAdminPassword" class="text-input" placeholder="पासवर्ड दोबारा दर्ज करें" minlength="6" required autocomplete="new-password">
+        </div>
+        <button type="submit" id="setupBtn" class="btn btn-accent" style="width: 100%; justify-content: center; padding: 0.75rem;">
+          पासवर्ड सेट करें और शुरू करें (Initialize &amp; Log In)
+        </button>
+      </form>
+      <div id="setupError" style="color: var(--danger); font-size: 0.82rem; margin-top: 1rem; display: none;"></div>
+      <div style="margin-top: 1.25rem; font-size: 0.82rem; color: var(--text-muted); text-align: center;">
+        पहले से पासवर्ड है? <a href="javascript:void(0)" onclick="showLogin()" style="color: var(--accent); text-decoration: underline;">साइन इन करें (Already set up? Sign in)</a>
+      </div>
     </div>
   </div>
 
@@ -782,16 +810,42 @@
           <h2 class="section-title">Settings &amp; Database Status</h2>
         </div>
 
+        <!-- Change Password Card -->
         <div class="editor-card" style="margin-bottom: 1.5rem;">
-          <h3 style="margin-bottom: 0.8rem; font-size: 1.1rem;">Cloudflare D1 &amp; Secrets Checklist</h3>
+          <h3 style="margin-bottom: 0.8rem; font-size: 1.1rem;">🔐 Change Administrator Password (पासवर्ड बदलें)</h3>
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.2rem;">
+            Update your administrator password securely in your Cloudflare D1 database.
+          </p>
+          <form id="changePasswordForm" onsubmit="handleChangePassword(event)" style="max-width: 440px;">
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <label class="form-label" for="currentPass">Current Password (वर्तमान पासवर्ड)</label>
+              <input type="password" id="currentPass" class="text-input" placeholder="वर्तमान पासवर्ड दर्ज करें" required autocomplete="current-password">
+            </div>
+            <div class="form-row" style="margin-bottom: 1.2rem;">
+              <div class="form-group">
+                <label class="form-label" for="newPass">New Password (नया पासवर्ड)</label>
+                <input type="password" id="newPass" class="text-input" placeholder="न्यूनतम 6 अक्षर" minlength="6" required autocomplete="new-password">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="confirmPass">Confirm (पुष्टि करें)</label>
+                <input type="password" id="confirmPass" class="text-input" placeholder="दोबारा दर्ज करें" minlength="6" required autocomplete="new-password">
+              </div>
+            </div>
+            <button type="submit" id="changePassBtn" class="btn btn-accent">पासवर्ड अपडेट करें (Update Password)</button>
+            <div id="changePassMsg" style="margin-top: 0.8rem; font-size: 0.85rem; display: none;"></div>
+          </form>
+        </div>
+
+        <div class="editor-card" style="margin-bottom: 1.5rem;">
+          <h3 style="margin-bottom: 0.8rem; font-size: 1.1rem;">Cloudflare D1 &amp; Architecture Checklist</h3>
           <p style="font-size: 0.88rem; color: var(--text-muted); line-height: 1.7; margin-bottom: 1.25rem;">
-            This admin dashboard connects directly to Cloudflare D1 for persistent storage and uses Cloudflare Secrets for administrator authentication.
+            This admin dashboard connects directly to Cloudflare D1 for persistent storage and uses salted SHA-256 password hashing stored in D1 (or optionally <code>ADMIN_PASSWORD</code> secret).
           </p>
 
           <div style="background: rgba(0,0,0,0.25); padding: 1.2rem; border-radius: var(--radius); font-size: 0.85rem; line-height: 1.8;">
-            <p>1. <strong>ADMIN_PASSWORD</strong>: Set your secret in Cloudflare Dashboard &gt; Workers &gt; Settings &gt; Variables and Secrets.</p>
-            <p>2. <strong>D1 Database Binding</strong>: Ensure D1 database binding variable is named <code>DB</code>.</p>
-            <p>3. <strong>Database Migration</strong>: Apply <code>migrations/0001_initial_schema.sql</code> via Cloudflare D1 console.</p>
+            <p>1. <strong>D1 Database Binding</strong>: Ensure D1 database binding variable is named <code>DB</code> in <code>wrangler.jsonc</code>.</p>
+            <p>2. <strong>Database Migration</strong>: Apply <code>migrations/0001_initial_schema.sql</code> via Cloudflare D1 console.</p>
+            <p>3. <strong>Admin Setup</strong>: Once deployed, initialize your password directly at <code>ashabd.in/admin</code>.</p>
           </div>
         </div>
 
@@ -835,6 +889,8 @@
           if (data.authenticated) {
             document.getElementById('authOverlay').style.display = 'none';
             loadWritings();
+          } else if (data.needs_setup) {
+            showSetup();
           } else {
             showLogin();
           }
@@ -848,6 +904,18 @@
 
     function showLogin() {
       document.getElementById('authOverlay').style.display = 'flex';
+      document.getElementById('loginBox').style.display = 'block';
+      document.getElementById('setupBox').style.display = 'none';
+      const errBox = document.getElementById('loginError');
+      if (errBox) errBox.style.display = 'none';
+    }
+
+    function showSetup() {
+      document.getElementById('authOverlay').style.display = 'flex';
+      document.getElementById('loginBox').style.display = 'none';
+      document.getElementById('setupBox').style.display = 'block';
+      const errBox = document.getElementById('setupError');
+      if (errBox) errBox.style.display = 'none';
     }
 
     async function handleLogin(e) {
@@ -872,8 +940,8 @@
         } else {
           errBox.innerText = data.error || 'अमान्य पासवर्ड (Invalid password)';
           errBox.style.display = 'block';
-          if (data.setup_needed) {
-            document.getElementById('setupNotice').style.display = 'block';
+          if (data.needs_setup) {
+            setTimeout(showSetup, 1200);
           }
         }
       } catch (err) {
@@ -882,6 +950,99 @@
       } finally {
         btn.disabled = false;
         btn.innerText = 'प्रवेश करें (Sign In)';
+      }
+    }
+
+    async function handleInitialSetup(e) {
+      e.preventDefault();
+      const p1 = document.getElementById('newAdminPassword').value;
+      const p2 = document.getElementById('confirmAdminPassword').value;
+      const errBox = document.getElementById('setupError');
+      const btn = document.getElementById('setupBtn');
+
+      errBox.style.display = 'none';
+      if (p1 !== p2) {
+        errBox.innerText = 'पासवर्ड मेल नहीं खाते (Passwords do not match). Please try again.';
+        errBox.style.display = 'block';
+        return;
+      }
+      if (p1.length < 6) {
+        errBox.innerText = 'पासवर्ड कम से कम 6 अक्षरों का होना चाहिए (Password must be at least 6 characters).';
+        errBox.style.display = 'block';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerText = 'सेट हो रहा है... (Initializing...)';
+
+      try {
+        const res = await fetch('/api/auth/setup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: p1 })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          alert('🎉 व्यवस्थापक पासवर्ड सफलतापूर्वक सेट हो गया!\n(Admin password initialized successfully!)');
+          document.getElementById('authOverlay').style.display = 'none';
+          loadWritings();
+        } else {
+          errBox.innerText = data.error || 'Setup failed';
+          errBox.style.display = 'block';
+        }
+      } catch (err) {
+        errBox.innerText = 'Network error: ' + err.message;
+        errBox.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        btn.innerText = 'पासवर्ड सेट करें और शुरू करें (Initialize & Log In)';
+      }
+    }
+
+    async function handleChangePassword(e) {
+      e.preventDefault();
+      const currentPassword = document.getElementById('currentPass').value;
+      const newPassword = document.getElementById('newPass').value;
+      const confirmPassword = document.getElementById('confirmPass').value;
+      const msgBox = document.getElementById('changePassMsg');
+      const btn = document.getElementById('changePassBtn');
+
+      msgBox.style.display = 'none';
+
+      if (newPassword !== confirmPassword) {
+        msgBox.innerText = 'नया पासवर्ड मेल नहीं खाता (New passwords do not match).';
+        msgBox.style.color = 'var(--danger)';
+        msgBox.style.display = 'block';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerText = 'अपडेट हो रहा है...';
+
+      try {
+        const res = await fetch('/api/auth/change-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ currentPassword, newPassword })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          msgBox.innerText = '✅ ' + (data.message || 'Password updated successfully!');
+          msgBox.style.color = 'var(--success)';
+          msgBox.style.display = 'block';
+          document.getElementById('changePasswordForm').reset();
+        } else {
+          msgBox.innerText = '❌ ' + (data.error || 'Failed to update password');
+          msgBox.style.color = 'var(--danger)';
+          msgBox.style.display = 'block';
+        }
+      } catch (err) {
+        msgBox.innerText = 'Network error: ' + err.message;
+        msgBox.style.color = 'var(--danger)';
+        msgBox.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        btn.innerText = 'पासवर्ड अपडेट करें (Update Password)';
       }
     }
 

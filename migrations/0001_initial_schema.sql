@@ -22,3 +22,13 @@ CREATE INDEX IF NOT EXISTS idx_writings_slug ON writings(slug);
 CREATE INDEX IF NOT EXISTS idx_writings_content_type ON writings(content_type);
 CREATE INDEX IF NOT EXISTS idx_writings_published_at ON writings(published_at DESC);
 CREATE INDEX IF NOT EXISTS idx_writings_updated_at ON writings(updated_at DESC);
+
+-- Administrator authentication credentials table (salted hash storage)
+CREATE TABLE IF NOT EXISTS admin_users (
+  id TEXT PRIMARY KEY,
+  username TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  salt TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
