@@ -1121,6 +1121,7 @@ function renderPoemHtml(poem) {
       letter-spacing: 0.02em;
       margin: 2.5rem 0 4rem;
       padding: 0 0.5rem;
+      text-align: center;
     }
 
     /* Tags */
@@ -2449,7 +2450,7 @@ function getAdminDashboardHtml() {
         <p id="prevSubtitle" style="font-style: italic; color: #5a3219; font-size: 1.05rem;"></p>
         <span style="font-size: 0.8rem; color: #704022; opacity: 0.7;">Preview Mode</span>
       </div>
-      <div id="prevContent" style="font-size: 1.25rem; line-height: 2.1; white-space: pre-wrap; color: #20130a; margin: 2rem 0;"></div>
+      <div id="prevContent" style="font-size: 1.25rem; line-height: 2.1; white-space: pre-wrap; color: #20130a; margin: 2rem 0; text-align: center;"></div>
       <div style="text-align: center; margin-top: 2rem; border-top: 1px dashed rgba(78, 42, 20, 0.25); padding-top: 1.5rem;">
         <button class="btn btn-accent" onclick="publishFromPreview()">Publish This Now</button>
         <button class="btn btn-outline" style="color: #24160c; border-color: rgba(36,22,12,0.3);" onclick="closePreview()">Close Preview</button>
