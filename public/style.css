@@ -306,21 +306,19 @@ html, body {
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: clamp(0.25rem, 0.6vh, 0.45rem);
   z-index: 12;
   user-select: none;
   width: max-content;
-  max-width: 92vw;
+  max-width: 95vw;
 }
 
 .manuscript-social {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: clamp(0.5rem, 1.2vw, 1rem);
+  gap: clamp(0.35rem, 0.9vw, 0.75rem);
   color: #2b180d;
   mix-blend-mode: multiply;
   user-select: none;
@@ -339,43 +337,44 @@ html, body {
   display: block;
 }
 
-.social-icons-group {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.social-link {
+.social-link,
+.email-icon-link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.45rem 0.6rem;
+  padding: 0.45rem 0.55rem;
   color: #2b180d;
   opacity: 0.85;
   text-decoration: none;
   transition: opacity 0.3s ease, transform 0.25s ease, color 0.3s ease;
   -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
 }
 
-.social-link .social-svg {
+.social-link .social-svg,
+.email-icon-link .email-svg {
   display: block;
   transition: transform 0.25s cubic-bezier(0.2, 1, 0.3, 1);
 }
 
-.social-link:hover {
+.social-link:hover,
+.email-icon-link:hover {
   opacity: 1;
   color: #120601;
 }
 
-.social-link:hover .social-svg {
+.social-link:hover .social-svg,
+.email-icon-link:hover .email-svg {
   transform: translateY(-2px) scale(1.1);
 }
 
-.social-link:active .social-svg {
+.social-link:active .social-svg,
+.email-icon-link:active .email-svg {
   transform: scale(0.94);
 }
 
-.social-link:focus-visible {
+.social-link:focus-visible,
+.email-icon-link:focus-visible {
   outline: 1px dashed rgba(68, 34, 15, 0.5);
   outline-offset: 4px;
   border-radius: 4px;
@@ -387,46 +386,7 @@ html, body {
   height: 18px;
   background-color: currentColor;
   opacity: 0.55;
-  margin: 0 clamp(0.25rem, 0.5vw, 0.55rem);
-}
-
-/* ---------------- Elegant Envelope Icon Link Below Social Icons ---------------- */
-.email-icon-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.35rem 0.6rem;
-  color: #2b180d;
-  opacity: 0.82;
-  text-decoration: none;
-  mix-blend-mode: multiply;
-  transition: opacity 0.3s ease, transform 0.25s ease, color 0.3s ease;
-  -webkit-tap-highlight-color: transparent;
-  cursor: pointer;
-}
-
-.email-icon-link .email-svg {
-  display: block;
-  transition: transform 0.25s cubic-bezier(0.2, 1, 0.3, 1);
-}
-
-.email-icon-link:hover {
-  opacity: 1;
-  color: #120601;
-}
-
-.email-icon-link:hover .email-svg {
-  transform: translateY(-2px) scale(1.1);
-}
-
-.email-icon-link:active .email-svg {
-  transform: scale(0.94);
-}
-
-.email-icon-link:focus-visible {
-  outline: 1px dashed rgba(68, 34, 15, 0.5);
-  outline-offset: 4px;
-  border-radius: 4px;
+  margin: 0 clamp(0.2rem, 0.4vw, 0.45rem);
 }
 
 
@@ -456,23 +416,24 @@ html, body {
 
   .manuscript-footer {
     bottom: clamp(1rem, 3.8vh, 1.9rem);
-    gap: 0.15rem;
   }
 
   .manuscript-social {
-    gap: 0.35rem;
+    gap: 0.25rem;
   }
 
   .social-flourish svg {
-    width: 30px;
+    width: 26px;
   }
 
-  .social-link {
-    padding: 0.55rem 0.5rem; /* Large touch target for fingers */
-  }
-
+  .social-link,
   .email-icon-link {
-    padding: 0.45rem 0.5rem;
+    padding: 0.45rem 0.38rem; /* Comfortable touch target */
+  }
+
+  .social-divider {
+    height: 16px;
+    margin: 0 0.15rem;
   }
 
   .email-icon-link .email-svg {
