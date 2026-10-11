@@ -29,6 +29,14 @@ export default {
       if (pathname === '/admin.html') {
         return Response.redirect(new URL('/admin', request.url), 302);
       }
+      if (pathname === '/reset-password' || pathname === '/reset-password/') {
+        const token = url.searchParams.get('token') || url.searchParams.get('reset_token');
+        const redirectUrl = new URL('/admin', request.url);
+        if (token) {
+          redirectUrl.searchParams.set('reset_token', token);
+        }
+        return Response.redirect(redirectUrl, 302);
+      }
       if (pathname === '/admin' || pathname === '/admin/' || pathname === '/admin/analytics' || pathname === '/admin/analytics/') {
         return handleAdminPage(request, env);
       }
@@ -41,6 +49,18 @@ export default {
       }
       if (pathname === '/api/auth/setup' && request.method === 'POST') {
         return handleSetup(request, env);
+      }
+      if (pathname === '/api/auth/forgot-password' && request.method === 'POST') {
+        return handleForgotPassword(request, env);
+      }
+      if (pathname === '/api/auth/verify-reset-token' && (request.method === 'POST' || request.method === 'GET')) {
+        return handleVerifyResetToken(request, env);
+      }
+      if (pathname === '/api/auth/reset-password' && request.method === 'POST') {
+        return handleResetPassword(request, env);
+      }
+      if (pathname === '/api/auth/update-email' && request.method === 'POST') {
+        return handleUpdateEmail(request, env);
       }
       if (pathname === '/api/auth/change-password' && request.method === 'POST') {
         return handleChangePassword(request, env);
@@ -299,6 +319,18 @@ function generateSalt() {
   return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+async function sha256Hex(text) {
+  const enc = new TextEncoder();
+  const hashBuffer = await crypto.subtle.digest('SHA-256', enc.encode(text));
+  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function generateRandomHexToken(bytes = 32) {
+  const arr = new Uint8Array(bytes);
+  crypto.getRandomValues(arr);
+  return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 async function ensureAdminUsersTable(db) {
   if (!db) return;
   await db.prepare(`
@@ -307,10 +339,35 @@ async function ensureAdminUsersTable(db) {
       username TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
       salt TEXT NOT NULL,
+      email TEXT,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     )
   `).run();
+
+  try {
+    await db.prepare(`ALTER TABLE admin_users ADD COLUMN email TEXT`).run();
+  } catch (_) {
+    // Column already exists or table was just created
+  }
+
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS password_resets (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      token_hash TEXT NOT NULL,
+      ip_address TEXT,
+      expires_at INTEGER NOT NULL,
+      used INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL
+    )
+  `).run();
+
+  try {
+    await db.prepare(`CREATE INDEX IF NOT EXISTS idx_password_resets_token ON password_resets(token_hash)`).run();
+    await db.prepare(`CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id)`).run();
+    await db.prepare(`CREATE INDEX IF NOT EXISTS idx_password_resets_expires ON password_resets(expires_at)`).run();
+  } catch (_) {}
 }
 
 let writingsTableEnsured = false;
@@ -1169,7 +1226,7 @@ async function handleSetup(request, env) {
     return jsonResponse({ error: 'Invalid JSON payload' }, 400);
   }
 
-  const { password } = body;
+  const { password, email } = body;
   if (!password || password.length < 6) {
     return jsonResponse({ error: 'Password must be at least 6 characters long.' }, 400);
   }
@@ -1177,11 +1234,12 @@ async function handleSetup(request, env) {
   const salt = generateSalt();
   const hash = await hashPasswordWithSalt(password, salt);
   const now = Date.now();
+  const adminEmail = (email && typeof email === 'string' && email.includes('@')) ? email.trim().toLowerCase() : (env.ADMIN_EMAIL || null);
 
   await env.DB.prepare(`
-    INSERT INTO admin_users (id, username, password_hash, salt, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).bind('admin_primary', 'admin', hash, salt, now, now).run();
+    INSERT INTO admin_users (id, username, password_hash, salt, email, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).bind('admin_primary', 'admin', hash, salt, adminEmail, now, now).run();
 
   // Create session
   const payload = {
@@ -1258,9 +1316,21 @@ async function handleLogout(request) {
 async function handleAuthCheck(request, env) {
   const user = await getAuthenticatedUser(request, env);
   if (user) {
+    let email = null;
+    if (env.DB) {
+      try {
+        await ensureAdminUsersTable(env.DB);
+        const adminRecord = await env.DB.prepare('SELECT email FROM admin_users WHERE username = ?').bind('admin').first();
+        email = adminRecord?.email || env.ADMIN_EMAIL || null;
+      } catch (_) {}
+    } else {
+      email = env.ADMIN_EMAIL || null;
+    }
+
     return jsonResponse({
       authenticated: true,
       user: user.user,
+      email,
       has_d1: !!env.DB,
       has_secret: !!env.ADMIN_PASSWORD
     });
@@ -1284,6 +1354,364 @@ async function handleAuthCheck(request, env) {
     has_d1: !!env.DB,
     has_secret: !!env.ADMIN_PASSWORD
   });
+}
+
+/* ==========================================================================
+   PASSWORD RECOVERY & RESET CONTROLLERS
+   ========================================================================== */
+
+async function handleForgotPassword(request, env) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonResponse({ error: 'Invalid JSON payload' }, 400);
+  }
+
+  const email = (body.email || '').trim().toLowerCase();
+  if (!email || !email.includes('@')) {
+    return jsonResponse({ error: 'Please enter a valid registered email address.' }, 400);
+  }
+
+  // Uniform response returned for both valid and invalid accounts to prevent user enumeration
+  const genericResponse = {
+    success: true,
+    message: 'यदि इस ईमेल से कोई खाता मौजूद है, तो पासवर्ड रीसेट लिंक भेज दिया गया है। (If an account exists for this email, a password reset link has been sent.)'
+  };
+
+  const clientIp = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || '127.0.0.1';
+  const db = env.DB || env['ashabd-db'];
+
+  if (!db) {
+    console.warn('[Ashabd Auth] Password reset requested, but D1 database is not bound.');
+    return jsonResponse(genericResponse);
+  }
+
+  await ensureAdminUsersTable(db);
+
+  // Rate limiting: check reset requests from this IP in the last 15 minutes
+  const fifteenMinutesAgo = Date.now() - 15 * 60 * 1000;
+  const recentAttempts = await db.prepare(`
+    SELECT COUNT(*) as c FROM password_resets
+    WHERE ip_address = ? AND created_at > ?
+  `).bind(clientIp, fifteenMinutesAgo).first('c') || 0;
+
+  if (recentAttempts >= 6) {
+    console.warn(`[Ashabd Auth] Password reset rate limit exceeded for IP: ${clientIp}`);
+    return jsonResponse(genericResponse);
+  }
+
+  // Look up admin by email in D1 table
+  let matchedUser = await db.prepare(`
+    SELECT id, username, email FROM admin_users
+    WHERE LOWER(email) = ?
+  `).bind(email).first();
+
+  // If not found in column, check if matching env.ADMIN_EMAIL
+  if (!matchedUser && env.ADMIN_EMAIL && env.ADMIN_EMAIL.trim().toLowerCase() === email) {
+    matchedUser = await db.prepare(`SELECT id, username, email FROM admin_users WHERE username = 'admin'`).first();
+    if (!matchedUser) {
+      matchedUser = { id: 'admin_primary', username: 'admin', email: env.ADMIN_EMAIL.trim() };
+    }
+    try {
+      await db.prepare(`UPDATE admin_users SET email = ? WHERE id = ? OR username = 'admin'`).bind(env.ADMIN_EMAIL.trim(), matchedUser.id).run();
+    } catch (_) {}
+  }
+
+  if (matchedUser) {
+    const rawToken = generateRandomHexToken(32);
+    const tokenHash = await sha256Hex(rawToken);
+    const resetId = `pr_${Date.now()}_${generateRandomHexToken(4)}`;
+    const expiresAt = Date.now() + 60 * 60 * 1000; // 60 minutes expiry
+    const now = Date.now();
+
+    // Invalidate existing unused tokens for this user
+    await db.prepare(`
+      UPDATE password_resets SET used = 1 WHERE user_id = ? AND used = 0
+    `).bind(matchedUser.id).run();
+
+    // Store new hashed token
+    await db.prepare(`
+      INSERT INTO password_resets (id, user_id, token_hash, ip_address, expires_at, used, created_at)
+      VALUES (?, ?, ?, ?, ?, 0, ?)
+    `).bind(resetId, matchedUser.id, tokenHash, clientIp, expiresAt, now).run();
+
+    // Construct reset URL
+    const reqUrl = new URL(request.url);
+    const siteUrl = env.SITE_URL ? env.SITE_URL.replace(/\/+$/, '') : `${reqUrl.protocol}//${reqUrl.host}`;
+    const resetUrl = `${siteUrl}/admin?reset_token=${rawToken}`;
+
+    // Send transactional reset email
+    try {
+      await sendPasswordResetEmail(env, {
+        to: email,
+        resetUrl,
+        expiresMinutes: 60
+      });
+    } catch (err) {
+      console.error('[Ashabd Auth] Failed to dispatch password reset email:', err);
+    }
+  }
+
+  return jsonResponse(genericResponse);
+}
+
+async function handleVerifyResetToken(request, env) {
+  let token = null;
+  if (request.method === 'POST') {
+    try {
+      const body = await request.json();
+      token = body.token;
+    } catch {}
+  } else {
+    const url = new URL(request.url);
+    token = url.searchParams.get('token') || url.searchParams.get('reset_token');
+  }
+
+  if (!token) {
+    return jsonResponse({ valid: false, error: 'Token is required' }, 400);
+  }
+
+  const db = env.DB || env['ashabd-db'];
+  if (!db) {
+    return jsonResponse({ valid: false, error: 'Database unavailable' }, 500);
+  }
+
+  await ensureAdminUsersTable(db);
+  const tokenHash = await sha256Hex(token);
+  const record = await db.prepare(`
+    SELECT id, expires_at, used FROM password_resets WHERE token_hash = ?
+  `).bind(tokenHash).first();
+
+  if (!record) {
+    return jsonResponse({ valid: false, error: 'यह रीसेट लिंक अमान्य है (Invalid reset link).' }, 400);
+  }
+  if (record.used === 1) {
+    return jsonResponse({ valid: false, error: 'यह रीसेट लिंक पहले ही उपयोग किया जा चुका है (This reset link has already been used).' }, 400);
+  }
+  if (record.expires_at < Date.now()) {
+    return jsonResponse({ valid: false, error: 'यह रीसेट लिंक समाप्त हो चुका है (This reset link has expired).' }, 400);
+  }
+
+  return jsonResponse({ valid: true });
+}
+
+async function handleResetPassword(request, env) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonResponse({ error: 'Invalid JSON payload' }, 400);
+  }
+
+  const { token, newPassword } = body;
+  if (!token) {
+    return jsonResponse({ error: 'Reset token is required.' }, 400);
+  }
+  if (!newPassword || newPassword.length < 6) {
+    return jsonResponse({ error: 'Password must be at least 6 characters.' }, 400);
+  }
+
+  const db = env.DB || env['ashabd-db'];
+  if (!db) {
+    return jsonResponse({ error: 'Database not available' }, 500);
+  }
+
+  await ensureAdminUsersTable(db);
+  const tokenHash = await sha256Hex(token);
+  const record = await db.prepare(`
+    SELECT id, user_id, expires_at, used FROM password_resets WHERE token_hash = ?
+  `).bind(tokenHash).first();
+
+  if (!record || record.used === 1 || record.expires_at < Date.now()) {
+    return jsonResponse({ error: 'यह रीसेट लिंक अमान्य या समाप्त हो चुका है (Invalid or expired reset link).' }, 400);
+  }
+
+  // Mark current token as used immediately
+  await db.prepare(`UPDATE password_resets SET used = 1 WHERE id = ?`).bind(record.id).run();
+
+  // Invalidate any other tokens for this user
+  await db.prepare(`UPDATE password_resets SET used = 1 WHERE user_id = ?`).bind(record.user_id).run();
+
+  // Hash new password using existing salted SHA-256 scheme
+  const salt = generateSalt();
+  const hash = await hashPasswordWithSalt(newPassword, salt);
+  const now = Date.now();
+
+  await db.prepare(`
+    INSERT INTO admin_users (id, username, password_hash, salt, created_at, updated_at)
+    VALUES ('admin_primary', 'admin', ?, ?, ?, ?)
+    ON CONFLICT(username) DO UPDATE SET password_hash = excluded.password_hash, salt = excluded.salt, updated_at = excluded.updated_at
+  `).bind(hash, salt, now, now).run();
+
+  return jsonResponse({
+    success: true,
+    message: 'आपका पासवर्ड सफलतापूर्वक अपडेट कर दिया गया है। अब नए पासवर्ड के साथ लॉगिन करें। (Password reset successfully. You may now sign in with your new password.)'
+  });
+}
+
+async function handleUpdateEmail(request, env) {
+  const user = await getAuthenticatedUser(request, env);
+  if (!user) {
+    return jsonResponse({ error: 'Unauthorized: Administrator session required.' }, 401);
+  }
+
+  const db = env.DB || env['ashabd-db'];
+  if (!db) {
+    return jsonResponse({ error: 'Database not available' }, 500);
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonResponse({ error: 'Invalid JSON payload' }, 400);
+  }
+
+  const email = (body.email || '').trim().toLowerCase();
+  if (!email || !email.includes('@')) {
+    return jsonResponse({ error: 'Please provide a valid email address.' }, 400);
+  }
+
+  await ensureAdminUsersTable(db);
+  const now = Date.now();
+
+  await db.prepare(`
+    UPDATE admin_users SET email = ?, updated_at = ? WHERE username = 'admin' OR id = ?
+  `).bind(email, now, user.user || 'admin_primary').run();
+
+  return jsonResponse({
+    success: true,
+    message: 'पुनर्प्राप्ति ईमेल सफलतापूर्वक अपडेट हो गया (Recovery email updated successfully).'
+  });
+}
+
+async function sendPasswordResetEmail(env, { to, resetUrl, expiresMinutes = 60 }) {
+  const emailHtml = `<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ashabd — पासवर्ड रीसेट</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0f1115; color: #f5f2eb; margin: 0; padding: 24px; }
+    .container { max-width: 540px; margin: 0 auto; background-color: #171a21; border: 1px solid rgba(212, 107, 36, 0.3); border-radius: 12px; padding: 32px 28px; }
+    .brand { font-family: Georgia, serif; font-size: 32px; color: #d46b24; text-align: center; margin: 0 0 6px 0; letter-spacing: 1.5px; }
+    .tagline { text-align: center; color: #a29d93; font-size: 13px; margin: 0 0 28px 0; text-transform: uppercase; letter-spacing: 1.5px; }
+    .greeting { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: #f5f2eb; }
+    .text { font-size: 14.5px; line-height: 1.65; color: #d1ccc2; margin-bottom: 20px; }
+    .btn-wrap { text-align: center; margin: 32px 0; }
+    .btn { display: inline-block; background-color: #d46b24; color: #ffffff !important; text-decoration: none; font-weight: 600; font-size: 15px; padding: 13px 32px; border-radius: 6px; }
+    .note { font-size: 12.5px; line-height: 1.6; color: #9c968a; background: rgba(0,0,0,0.35); padding: 14px; border-radius: 6px; border-left: 3px solid #d46b24; margin-top: 24px; }
+    .url-fallback { word-break: break-all; color: #e6853d; font-size: 12px; margin-top: 8px; }
+    .footer { text-align: center; font-size: 12px; color: #6d675e; margin-top: 28px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 16px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 class="brand">अशब्द</h1>
+    <p class="tagline">प्रबंधन कक्ष — Administrator Security</p>
+    
+    <p class="greeting">नमस्ते (Greetings),</p>
+    <p class="text">
+      आपके <strong>अशब्द (Ashabd.in)</strong> व्यवस्थापक खाते के लिए पासवर्ड रीसेट का अनुरोध प्राप्त हुआ है। 
+      नीचे दिए गए बटन पर क्लिक करके अपना नया पासवर्ड सेट करें:
+    </p>
+    
+    <div class="btn-wrap">
+      <a href="\${resetUrl}" class="btn" target="_blank">पासवर्ड रीसेट करें (Reset Password)</a>
+    </div>
+    
+    <div class="note">
+      <strong>⚠️ सुरक्षा सूचना (Security Notice):</strong><br>
+      • यह लिंक केवल <strong>\${expiresMinutes} मिनट</strong> के लिए मान्य है और इसका उपयोग केवल एक बार किया जा सकता है।<br>
+      • यदि आपने यह अनुरोध नहीं किया था, तो कृपया इस ईमेल को अनदेखा करें। आपका मौजूदा पासवर्ड पूरी तरह सुरक्षित है।
+    </div>
+
+    <p class="text" style="font-size: 12px; color: #8e887d; margin-top: 20px; margin-bottom: 4px;">
+      यदि बटन काम नहीं कर रहा है, तो इस लिंक को कॉपी करके अपने ब्राउज़र में खोलें:
+    </p>
+    <p class="url-fallback">\${resetUrl}</p>
+
+    <div class="footer">
+      © \${new Date().getFullYear()} अशब्द (Ashabd.in) • All rights reserved.
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const senderEmail = env.EMAIL_FROM || 'Ashabd <noreply@ashabd.in>';
+
+  // 1. Resend API
+  if (env.RESEND_API_KEY) {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer \${env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: senderEmail,
+        to: [to],
+        subject: 'Ashabd (अशब्द) — पासवर्ड रीसेट अनुरोध (Password Reset)',
+        html: emailHtml
+      })
+    });
+    if (!res.ok) {
+      const errTxt = await res.text();
+      throw new Error(`Resend API error (\${res.status}): \${errTxt}`);
+    }
+    return { provider: 'resend', success: true };
+  }
+
+  // 2. SendGrid API
+  if (env.SENDGRID_API_KEY) {
+    const plainFrom = senderEmail.includes('<') ? senderEmail.replace(/.*<([^>]+)>.*/, '$1') : senderEmail;
+    const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer \${env.SENDGRID_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        personalizations: [{ to: [{ email: to }] }],
+        from: { email: plainFrom, name: 'Ashabd' },
+        subject: 'Ashabd (अशब्द) — पासवर्ड रीसेट अनुरोध (Password Reset)',
+        content: [{ type: 'text/html', value: emailHtml }]
+      })
+    });
+    if (!res.ok) {
+      const errTxt = await res.text();
+      throw new Error(`SendGrid API error (\${res.status}): \${errTxt}`);
+    }
+    return { provider: 'sendgrid', success: true };
+  }
+
+  // 3. Postmark API
+  if (env.POSTMARK_SERVER_TOKEN) {
+    const res = await fetch('https://api.postmarkapp.com/email', {
+      method: 'POST',
+      headers: {
+        'X-Postmark-Server-Token': env.POSTMARK_SERVER_TOKEN,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        From: senderEmail,
+        To: to,
+        Subject: 'Ashabd (अशब्द) — पासवर्ड रीसेट अनुरोध (Password Reset)',
+        HtmlBody: emailHtml
+      })
+    });
+    if (!res.ok) {
+      const errTxt = await res.text();
+      throw new Error(`Postmark API error (\${res.status}): \${errTxt}`);
+    }
+    return { provider: 'postmark', success: true };
+  }
+
+  // Fallback: No email provider secret configured in Cloudflare secrets
+  console.warn(`[Ashabd Security] No email provider secret configured (RESEND_API_KEY, SENDGRID_API_KEY, or POSTMARK_SERVER_TOKEN). Password reset URL generated for \${to}: \${resetUrl}`);
+  return { provider: 'none', success: false, url: resetUrl };
 }
 
 /* ==========================================================================
@@ -3260,8 +3688,62 @@ function getAdminDashboardHtml() {
         </button>
       </form>
       <div id="loginError" style="color: var(--danger); font-size: 0.82rem; margin-top: 1rem; display: none;"></div>
-      <div style="margin-top: 1.25rem; font-size: 0.82rem; color: var(--text-muted); text-align: center;">
-        प्रथम बार सेटअप? <a href="javascript:void(0)" onclick="showSetup()" style="color: var(--accent); text-decoration: underline;">पासवर्ड सेटअप करें (First-time setup)</a>
+      <div style="margin-top: 1.25rem; font-size: 0.84rem; text-align: center;">
+        <a href="javascript:void(0)" onclick="showForgotPassword()" style="color: var(--accent); text-decoration: underline; font-weight: 500;">Forgot Password?</a>
+      </div>
+    </div>
+
+    <!-- 1b. Forgot Password Recovery Box -->
+    <div class="login-box" id="forgotBox" style="display: none; max-width: 440px;">
+      <h1 class="login-brand">अशब्द</h1>
+      <p class="login-sub">पासवर्ड पुनर्प्राप्ति — Forgot Password</p>
+
+      <div class="notice-box" style="display: block; text-align: left; margin-bottom: 1.25rem; font-size: 0.84rem; line-height: 1.6;">
+        अपने पंजीकृत व्यवस्थापक ईमेल को दर्ज करें। हम आपको पासवर्ड रीसेट करने के लिए एक सुरक्षित लिंक भेजेंगे।
+      </div>
+
+      <form id="forgotForm" onsubmit="handleForgotPassword(event)">
+        <div class="form-group" style="text-align: left;">
+          <label class="form-label" for="forgotEmail">Registered Email (पंजीकृत ईमेल)</label>
+          <input type="email" id="forgotEmail" class="text-input" placeholder="admin@ashabd.in" required autocomplete="email">
+        </div>
+        <button type="submit" id="forgotBtn" class="btn btn-accent" style="width: 100%; justify-content: center; padding: 0.75rem;">
+          रीसेट लिंक भेजें (Send Reset Link)
+        </button>
+      </form>
+      <div id="forgotNotice" style="margin-top: 1rem; font-size: 0.84rem; display: none; line-height: 1.6; padding: 0.75rem 1rem; border-radius: var(--radius); text-align: left;"></div>
+      <div style="margin-top: 1.25rem; font-size: 0.84rem; color: var(--text-muted); text-align: center;">
+        <a href="javascript:void(0)" onclick="showLogin()" style="color: var(--accent); text-decoration: underline;">← वापस लॉगिन पर जाएँ (Back to Login)</a>
+      </div>
+    </div>
+
+    <!-- 1c. New Password Reset Box -->
+    <div class="login-box" id="resetBox" style="display: none; max-width: 440px;">
+      <h1 class="login-brand">अशब्द</h1>
+      <p class="login-sub">नया पासवर्ड सेट करें — Reset Password</p>
+
+      <div id="resetStatusNotice" class="notice-box" style="display: block; text-align: left; margin-bottom: 1.25rem; font-size: 0.84rem; line-height: 1.6;">
+        कृपया अपना नया सुरक्षित पासवर्ड दर्ज करें (Choose a strong password with at least 6 characters).
+      </div>
+
+      <form id="resetForm" onsubmit="handleResetPassword(event)">
+        <input type="hidden" id="resetTokenInput" value="">
+        <div class="form-group" style="text-align: left;">
+          <label class="form-label" for="resetNewPassword">New Password (नया पासवर्ड)</label>
+          <input type="password" id="resetNewPassword" class="text-input" placeholder="न्यूनतम 6 अक्षर (Min 6 chars)" minlength="6" required autocomplete="new-password">
+        </div>
+        <div class="form-group" style="text-align: left;">
+          <label class="form-label" for="resetConfirmPassword">Confirm Password (पासवर्ड पुष्टि)</label>
+          <input type="password" id="resetConfirmPassword" class="text-input" placeholder="पासवर्ड दोबारा दर्ज करें" minlength="6" required autocomplete="new-password">
+        </div>
+        <button type="submit" id="resetBtn" class="btn btn-accent" style="width: 100%; justify-content: center; padding: 0.75rem;">
+          पासवर्ड अपडेट करें (Save New Password)
+        </button>
+      </form>
+      <div id="resetError" style="color: var(--danger); font-size: 0.84rem; margin-top: 1rem; display: none;"></div>
+      <div id="resetSuccess" style="color: var(--success); font-size: 0.84rem; margin-top: 1rem; display: none; line-height: 1.6;"></div>
+      <div style="margin-top: 1.25rem; font-size: 0.84rem; color: var(--text-muted); text-align: center;">
+        <a href="javascript:void(0)" onclick="showLogin()" style="color: var(--accent); text-decoration: underline;">← वापस लॉगिन पर जाएँ (Back to Login)</a>
       </div>
     </div>
 
@@ -3822,6 +4304,22 @@ function getAdminDashboardHtml() {
           <h2 class="section-title">Settings &amp; Database Status</h2>
         </div>
 
+        <!-- Recovery Email Card -->
+        <div class="editor-card" style="margin-bottom: 1.5rem;">
+          <h3 style="margin-bottom: 0.8rem; font-size: 1.1rem;">📧 Registered Recovery Email (पुनर्प्राप्ति ईमेल)</h3>
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.2rem;">
+            This email is used to receive password reset links if you ever forget your administrator password.
+          </p>
+          <form id="updateEmailForm" onsubmit="handleUpdateEmail(event)" style="max-width: 440px;">
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <label class="form-label" for="adminRecoveryEmail">Administrator Recovery Email</label>
+              <input type="email" id="adminRecoveryEmail" class="text-input" placeholder="admin@ashabd.in" required autocomplete="email">
+            </div>
+            <button type="submit" id="updateEmailBtn" class="btn btn-accent">ईमेल सहेजें (Save Recovery Email)</button>
+            <div id="updateEmailMsg" style="margin-top: 0.8rem; font-size: 0.85rem; display: none;"></div>
+          </form>
+        </div>
+
         <!-- Change Password Card -->
         <div class="editor-card" style="margin-bottom: 1.5rem;">
           <h3 style="margin-bottom: 0.8rem; font-size: 1.1rem;">🔐 Change Administrator Password (पासवर्ड बदलें)</h3>
@@ -3935,12 +4433,38 @@ function getAdminDashboardHtml() {
 
     // Check Auth on Page Load
     async function checkAuth() {
+      // Check for password reset token in URL parameters
+      const urlParams = new URLSearchParams(window.location.search);
+      const resetToken = urlParams.get('reset_token') || urlParams.get('token');
+      if (resetToken) {
+        showResetPassword(resetToken);
+        try {
+          const vRes = await fetch('/api/auth/verify-reset-token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: resetToken })
+          });
+          const vData = await vRes.json();
+          if (!vData.valid) {
+            const errBox = document.getElementById('resetError');
+            if (errBox) {
+              errBox.innerText = vData.error || 'यह रीसेट लिंक समाप्त या अमान्य हो चुका है (Invalid or expired reset token).';
+              errBox.style.display = 'block';
+            }
+          }
+        } catch (_) {}
+        return;
+      }
+
       try {
         const res = await fetch('/api/auth/me');
         if (res.ok) {
           const data = await res.json();
           if (data.authenticated) {
             document.getElementById('authOverlay').style.display = 'none';
+            if (data.email && document.getElementById('adminRecoveryEmail')) {
+              document.getElementById('adminRecoveryEmail').value = data.email;
+            }
             if (window.location.pathname === '/admin/analytics') {
               switchTab('analytics');
             } else {
@@ -3962,7 +4486,12 @@ function getAdminDashboardHtml() {
     function showLogin() {
       document.getElementById('authOverlay').style.display = 'flex';
       document.getElementById('loginBox').style.display = 'block';
-      document.getElementById('setupBox').style.display = 'none';
+      const sb = document.getElementById('setupBox');
+      if (sb) sb.style.display = 'none';
+      const fb = document.getElementById('forgotBox');
+      if (fb) fb.style.display = 'none';
+      const rb = document.getElementById('resetBox');
+      if (rb) rb.style.display = 'none';
       const errBox = document.getElementById('loginError');
       if (errBox) errBox.style.display = 'none';
     }
@@ -3970,9 +4499,150 @@ function getAdminDashboardHtml() {
     function showSetup() {
       document.getElementById('authOverlay').style.display = 'flex';
       document.getElementById('loginBox').style.display = 'none';
-      document.getElementById('setupBox').style.display = 'block';
+      const sb = document.getElementById('setupBox');
+      if (sb) sb.style.display = 'block';
+      const fb = document.getElementById('forgotBox');
+      if (fb) fb.style.display = 'none';
+      const rb = document.getElementById('resetBox');
+      if (rb) rb.style.display = 'none';
       const errBox = document.getElementById('setupError');
       if (errBox) errBox.style.display = 'none';
+    }
+
+    function showForgotPassword() {
+      document.getElementById('authOverlay').style.display = 'flex';
+      document.getElementById('loginBox').style.display = 'none';
+      const sb = document.getElementById('setupBox');
+      if (sb) sb.style.display = 'none';
+      const fb = document.getElementById('forgotBox');
+      if (fb) fb.style.display = 'block';
+      const rb = document.getElementById('resetBox');
+      if (rb) rb.style.display = 'none';
+      const notice = document.getElementById('forgotNotice');
+      if (notice) notice.style.display = 'none';
+      const emailInput = document.getElementById('forgotEmail');
+      if (emailInput) {
+        emailInput.value = '';
+        setTimeout(() => emailInput.focus(), 50);
+      }
+    }
+
+    function showResetPassword(token) {
+      document.getElementById('authOverlay').style.display = 'flex';
+      document.getElementById('loginBox').style.display = 'none';
+      const sb = document.getElementById('setupBox');
+      if (sb) sb.style.display = 'none';
+      const fb = document.getElementById('forgotBox');
+      if (fb) fb.style.display = 'none';
+      const rb = document.getElementById('resetBox');
+      if (rb) rb.style.display = 'block';
+      const tokenInput = document.getElementById('resetTokenInput');
+      if (tokenInput) tokenInput.value = token || '';
+      const errBox = document.getElementById('resetError');
+      if (errBox) errBox.style.display = 'none';
+      const succBox = document.getElementById('resetSuccess');
+      if (succBox) succBox.style.display = 'none';
+      const form = document.getElementById('resetForm');
+      if (form) form.style.display = 'block';
+    }
+
+    async function handleForgotPassword(e) {
+      e.preventDefault();
+      const email = (document.getElementById('forgotEmail').value || '').trim();
+      const btn = document.getElementById('forgotBtn');
+      const notice = document.getElementById('forgotNotice');
+
+      if (!email) return;
+
+      btn.disabled = true;
+      btn.innerText = 'जाँच हो रही है... (Sending...)';
+      notice.style.display = 'none';
+
+      try {
+        const res = await fetch('/api/auth/forgot-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        });
+        const data = await res.json();
+
+        notice.style.display = 'block';
+        notice.style.background = 'rgba(74, 222, 128, 0.12)';
+        notice.style.border = '1px solid rgba(74, 222, 128, 0.3)';
+        notice.style.color = '#4ade80';
+        notice.innerText = data.message || 'यदि इस ईमेल से कोई खाता मौजूद है, तो पासवर्ड रीसेट लिंक भेज दिया गया है। (If an account exists for this email, a password reset link has been sent.)';
+      } catch (err) {
+        notice.style.display = 'block';
+        notice.style.background = 'rgba(239, 68, 68, 0.12)';
+        notice.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+        notice.style.color = 'var(--danger)';
+        notice.innerText = 'Network error: ' + err.message;
+      } finally {
+        btn.disabled = false;
+        btn.innerText = 'रीसेट लिंक भेजें (Send Reset Link)';
+      }
+    }
+
+    async function handleResetPassword(e) {
+      e.preventDefault();
+      const token = document.getElementById('resetTokenInput').value;
+      const p1 = document.getElementById('resetNewPassword').value;
+      const p2 = document.getElementById('resetConfirmPassword').value;
+      const errBox = document.getElementById('resetError');
+      const succBox = document.getElementById('resetSuccess');
+      const btn = document.getElementById('resetBtn');
+      const form = document.getElementById('resetForm');
+
+      errBox.style.display = 'none';
+      succBox.style.display = 'none';
+
+      if (!token) {
+        errBox.innerText = 'अमान्य या अनुपस्थित रीसेट टोकन (Missing or invalid reset token).';
+        errBox.style.display = 'block';
+        return;
+      }
+
+      if (p1 !== p2) {
+        errBox.innerText = 'पासवर्ड मेल नहीं खाते (Passwords do not match).';
+        errBox.style.display = 'block';
+        return;
+      }
+
+      if (p1.length < 6) {
+        errBox.innerText = 'पासवर्ड कम से कम 6 अक्षरों का होना चाहिए (Password must be at least 6 characters).';
+        errBox.style.display = 'block';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerText = 'अपडेट हो रहा है... (Updating...)';
+
+      try {
+        const res = await fetch('/api/auth/reset-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token, newPassword: p1 })
+        });
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+          form.style.display = 'none';
+          succBox.innerHTML = '<strong>✅ सफलता (Success)!</strong><br>' +
+            (data.message || 'पासवर्ड सफलतापूर्वक बदल दिया गया है (Password reset successfully).') +
+            '<br><br><button class="btn btn-accent btn-sm" onclick="showLogin()" style="width: 100%; justify-content: center;">अब लॉगिन करें (Sign In Now)</button>';
+          succBox.style.display = 'block';
+          window.history.replaceState({}, document.title, window.location.pathname);
+        } else {
+          errBox.innerText = data.error || 'पासवर्ड रीसेट करने में विफल (Failed to reset password).';
+          errBox.style.display = 'block';
+        }
+      } catch (err) {
+        errBox.innerText = 'Network error: ' + err.message;
+        errBox.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        btn.innerText = 'पासवर्ड अपडेट करें (Save New Password)';
+      }
     }
 
     async function handleLogin(e) {
@@ -4104,6 +4774,36 @@ function getAdminDashboardHtml() {
       } finally {
         btn.disabled = false;
         btn.innerText = 'पासवर्ड अपडेट करें (Update Password)';
+      }
+    }
+
+    async function handleUpdateEmail(e) {
+      e.preventDefault();
+      const email = (document.getElementById('adminRecoveryEmail').value || '').trim();
+      const msg = document.getElementById('updateEmailMsg');
+      const btn = document.getElementById('updateEmailBtn');
+      msg.style.display = 'none';
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/auth/update-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          msg.style.color = 'var(--success)';
+          msg.innerText = '✅ ' + (data.message || 'Recovery email saved successfully.');
+        } else {
+          msg.style.color = 'var(--danger)';
+          msg.innerText = '❌ ' + (data.error || 'Failed to update email.');
+        }
+      } catch (err) {
+        msg.style.color = 'var(--danger)';
+        msg.innerText = '❌ Network error: ' + err.message;
+      } finally {
+        msg.style.display = 'block';
+        btn.disabled = false;
       }
     }
 
