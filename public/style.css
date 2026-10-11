@@ -309,14 +309,15 @@ html, body {
 /* ---------------- Layer 5: Bottom Centerpiece Social Links & Contact Footer ---------------- */
 .manuscript-footer {
   position: absolute;
-  bottom: clamp(1.2rem, 4.5vh, 2.8rem);
-  bottom: calc(clamp(1.1rem, 4.2dvh, 2.6rem) + env(safe-area-inset-bottom, 0px));
+  bottom: clamp(1.0rem, 3.8vh, 2.4rem);
+  bottom: calc(clamp(0.9rem, 3.5dvh, 2.2rem) + env(safe-area-inset-bottom, 0px));
   left: 50%;
   transform: translateX(-50%);
   display: flex !important;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: nowrap !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: clamp(4px, 0.7vh, 8px) !important;
   white-space: nowrap !important;
   z-index: 12;
   user-select: none;
@@ -438,6 +439,43 @@ html, body {
   visibility: visible !important;
 }
 
+/* Contact Email Address Link below Social Icons */
+.manuscript-email-wrapper {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center;
+  line-height: 1;
+  visibility: visible !important;
+}
+
+.manuscript-email-address {
+  display: inline-block !important;
+  font-family: 'Georgia', 'Noto Serif Devanagari', 'Times New Roman', serif;
+  font-size: clamp(0.70rem, 0.88vw, 0.82rem);
+  letter-spacing: 0.035em;
+  color: #2b180d !important;
+  text-decoration: none;
+  opacity: 0.85;
+  transition: opacity 0.25s ease, color 0.25s ease;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+  visibility: visible !important;
+}
+
+.manuscript-email-address:hover {
+  opacity: 1 !important;
+  color: #120601 !important;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.manuscript-email-address:focus-visible {
+  outline: 1px dashed rgba(68, 34, 15, 0.5);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
 
 /* ---------------- Responsive Fine-Tuning: Mobile Phones (<= 480px) ---------------- */
 @media (max-width: 480px) {
@@ -464,9 +502,14 @@ html, body {
   }
 
   .manuscript-footer {
-    bottom: max(1.1rem, calc(1rem + env(safe-area-inset-bottom, 0px)));
-    bottom: calc(clamp(1rem, 3.6dvh, 1.7rem) + env(safe-area-inset-bottom, 0px));
+    bottom: max(0.85rem, calc(0.8rem + env(safe-area-inset-bottom, 0px)));
+    bottom: calc(clamp(0.85rem, 3.0dvh, 1.5rem) + env(safe-area-inset-bottom, 0px));
     max-width: calc(100dvw - 0.75rem);
+    gap: 4px !important;
+  }
+
+  .manuscript-email-address {
+    font-size: clamp(0.68rem, 3.2vw, 0.76rem);
   }
 
   .manuscript-contact-row,
@@ -525,7 +568,12 @@ html, body {
   }
 
   .manuscript-footer {
-    bottom: calc(clamp(1.2rem, 4.2dvh, 2.5rem) + env(safe-area-inset-bottom, 0px));
+    bottom: calc(clamp(0.95rem, 3.6dvh, 2.2rem) + env(safe-area-inset-bottom, 0px));
+    gap: clamp(4px, 0.7vh, 7px) !important;
+  }
+
+  .manuscript-email-address {
+    font-size: clamp(0.72rem, 1.3vw, 0.80rem);
   }
 
   .manuscript-contact-row,
@@ -582,7 +630,12 @@ html, body {
   }
 
   .manuscript-footer {
-    bottom: max(0.55rem, env(safe-area-inset-bottom, 0.5rem));
+    bottom: max(0.45rem, env(safe-area-inset-bottom, 0.45rem));
+    gap: 3px !important;
+  }
+
+  .manuscript-email-address {
+    font-size: 0.68rem;
   }
 }
 
