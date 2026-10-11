@@ -6980,7 +6980,7 @@ function getAdminDashboardHtml() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `ashabd-analytics-${period}-${dateStr}.csv`;
+        a.download = \`ashabd-analytics-\${period}-\${dateStr}.csv\`;
         a.click();
         URL.revokeObjectURL(url);
       }
@@ -7013,7 +7013,7 @@ function getAdminDashboardHtml() {
         renderSubscribersTable(allSubscribers);
         renderNotificationLogs(data.recent_notifications || []);
       } catch (err) {
-        if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--danger);">Error loading subscribers: \${escape(err.message)}</td></tr>`;
+        if (tbody) tbody.innerHTML = \`<tr><td colspan="5" style="text-align: center; color: var(--danger);">Error loading subscribers: \${escape(err.message)}</td></tr>\`;
       }
     }
 
@@ -7039,7 +7039,7 @@ function getAdminDashboardHtml() {
         const createdDate = sub.created_at ? new Date(sub.created_at).toLocaleDateString('hi-IN', { year: 'numeric', month: 'short', day: 'numeric' }) : '--';
         const verifiedDate = sub.verified_at ? new Date(sub.verified_at).toLocaleDateString('hi-IN', { year: 'numeric', month: 'short', day: 'numeric' }) : (sub.status === 'active' ? '✓ Verified' : '--');
 
-        return `
+        return \`
           <tr>
             <td style="font-weight: 500; color: var(--text-main); font-family: monospace; font-size: 0.88rem;">\${escape(sub.email)}</td>
             <td>\${statusBadge}</td>
@@ -7051,7 +7051,7 @@ function getAdminDashboardHtml() {
               </button>
             </td>
           </tr>
-        `;
+        \`;
       }).join('');
     }
 
@@ -7068,16 +7068,16 @@ function getAdminDashboardHtml() {
         const sentDate = log.sent_at ? new Date(log.sent_at).toLocaleString('hi-IN', { dateStyle: 'short', timeStyle: 'short' }) : '--';
         const statusBadge = log.status === 'sent'
           ? '<span style="color: #3fb950; font-weight: 600; font-size: 0.8rem;">✓ Sent</span>'
-          : `<span style="color: var(--danger); font-weight: 600; font-size: 0.8rem;">✕ Failed (\${escape(log.error_message || '')})</span>`;
+          : \`<span style="color: var(--danger); font-weight: 600; font-size: 0.8rem;">✕ Failed (\${escape(log.error_message || '')})</span>\`;
 
-        return `
+        return \`
           <tr>
             <td style="font-weight: 500; color: var(--text-main);">\${escape(log.poem_title || log.writing_id)}</td>
             <td style="color: var(--text-muted); font-family: monospace; font-size: 0.82rem;">\${escape(log.recipient_email)}</td>
             <td>\${statusBadge}</td>
             <td style="color: var(--text-muted); font-size: 0.82rem;">\${sentDate}</td>
           </tr>
-        `;
+        \`;
       }).join('');
     }
 
