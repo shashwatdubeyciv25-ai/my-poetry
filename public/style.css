@@ -636,9 +636,11 @@ html, body {
 
 .notice-board-wrapper {
   position: fixed;
-  top: clamp(18px, 4vh, 42px);
-  right: clamp(18px, 3.5vw, 52px);
-  width: clamp(170px, 15vw, 220px);
+  top: clamp(16px, 3.5vh, 36px);
+  right: clamp(18px, 3.5vw, 48px);
+  width: clamp(205px, 17.5vw, 260px);
+  max-width: calc(100vw - 24px);
+  max-width: calc(100dvw - 24px);
   z-index: 15;
   pointer-events: auto;
   perspective: 1000px;
@@ -649,14 +651,19 @@ html, body {
   position: relative;
   width: 100%;
   transform-style: preserve-3d;
-  transform: rotateY(-6deg) rotateX(3deg) rotateZ(1deg);
-  filter: drop-shadow(0 14px 28px rgba(20, 9, 3, 0.45)) drop-shadow(0 4px 8px rgba(20, 9, 3, 0.3));
+  transform: rotateY(-5deg) rotateX(2.5deg) rotateZ(0.6deg);
+  filter: drop-shadow(0 16px 32px rgba(18, 8, 2, 0.48)) drop-shadow(0 4px 10px rgba(18, 8, 2, 0.32));
   transition: transform 0.45s cubic-bezier(0.25, 1, 0.5, 1), filter 0.45s ease;
 }
 
 .notice-board-wrapper:hover .notice-board-3d {
-  transform: rotateY(-2.5deg) rotateX(1.5deg) rotateZ(0deg) scale(1.02);
-  filter: drop-shadow(0 18px 34px rgba(20, 9, 3, 0.52)) drop-shadow(0 6px 12px rgba(20, 9, 3, 0.35));
+  transform: rotateY(-2deg) rotateX(1deg) rotateZ(0deg) scale(1.02);
+  filter: drop-shadow(0 20px 38px rgba(18, 8, 2, 0.55)) drop-shadow(0 6px 14px rgba(18, 8, 2, 0.38));
+}
+
+.notice-board-3d picture {
+  display: block;
+  width: 100%;
 }
 
 .wooden-board-img {
@@ -672,10 +679,10 @@ html, body {
 /* Paper Pinned Zone on Board Planks */
 .paper-pin-zone {
   position: absolute;
-  top: 13.5%;
-  left: 27%;
-  width: 46%;
-  aspect-ratio: 400 / 536;
+  top: 12.5%;
+  left: 23.5%;
+  width: 53%;
+  aspect-ratio: 400 / 535;
   z-index: 2;
   perspective: 600px;
 }
@@ -696,7 +703,7 @@ html, body {
 }
 
 .pinned-paper-sheet:hover {
-  transform: rotate(-1.6deg) translate3d(0, -3px, 6px);
+  transform: rotate(-1.5deg) translate3d(0, -3px, 6px);
   filter: drop-shadow(0 6px 12px rgba(28, 14, 7, 0.48));
 }
 
@@ -721,56 +728,60 @@ html, body {
   z-index: 2;
   width: 100%;
   height: 100%;
-  padding: 24% 8% 10% 8%;
+  padding: 25% 7% 5% 7%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   text-align: center;
   color: var(--ink-primary, #221309);
+  box-sizing: border-box;
 }
 
 /* Paper State 1: Prompt ("Click to Subscribe") */
 .paper-ornament {
-  font-size: 0.72rem;
-  color: #743e1e;
-  opacity: 0.85;
+  font-size: clamp(0.72rem, 0.9vw, 0.85rem);
+  color: #6a3012;
+  opacity: 0.9;
+  margin-top: 1px;
   margin-bottom: 2px;
   line-height: 1;
 }
 
 .paper-prompt-title {
-  font-family: 'Rozha One', 'Tiro Devanagari Hindi', 'Georgia', serif;
-  font-size: clamp(0.72rem, 1.1vw, 0.96rem);
-  font-weight: 600;
+  font-family: 'Cinzel', 'Georgia', 'Rozha One', serif;
+  font-size: clamp(0.82rem, 1.05vw, 1.02rem);
+  font-weight: 700;
   line-height: 1.15;
-  color: #1a0c05;
-  margin-bottom: 4px;
-  letter-spacing: -0.01em;
-  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.4);
+  color: #1e0d04;
+  margin-bottom: clamp(4px, 0.5vh, 6px);
+  letter-spacing: 0.02em;
+  word-spacing: 0.12em;
+  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.6);
 }
 
 .paper-prompt-sub {
   font-family: 'Noto Serif Devanagari', 'Georgia', serif;
-  font-size: clamp(0.52rem, 0.7vw, 0.64rem);
-  color: #562e17;
+  font-size: clamp(0.56rem, 0.72vw, 0.66rem);
+  color: #4e220a;
   opacity: 0.95;
-  margin-bottom: 6px;
-  line-height: 1.2;
+  margin-bottom: clamp(8px, 1vh, 12px);
+  line-height: 1.25;
 }
 
 .paper-prompt-hint {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: clamp(0.5rem, 0.65vw, 0.6rem);
-  font-weight: 500;
-  color: #824b26;
-  background: rgba(86, 46, 23, 0.08);
-  padding: 2px 7px;
+  gap: 5px;
+  font-size: clamp(0.52rem, 0.66vw, 0.60rem);
+  font-weight: 600;
+  color: #662c0e;
+  background: rgba(80, 36, 13, 0.08);
+  padding: 3px 9px;
   border-radius: 12px;
-  border: 1px solid rgba(86, 46, 23, 0.16);
+  border: 1px solid rgba(80, 36, 13, 0.22);
   pointer-events: none;
+  box-shadow: 0 1px 2px rgba(40, 20, 8, 0.08);
 }
 
 .paper-prompt-hint svg {
@@ -829,39 +840,50 @@ html, body {
 
 .paper-close-btn {
   position: absolute;
-  top: 14%;
-  right: 7%;
+  top: 9%;
+  right: 6%;
   background: transparent;
   border: none;
-  font-size: 1rem;
+  font-size: 1.15rem;
   line-height: 1;
-  color: #743e1e;
+  color: #5a2710;
   cursor: pointer;
   padding: 3px;
-  opacity: 0.7;
-  transition: opacity 0.2s, color 0.2s;
+  opacity: 0.75;
+  transition: opacity 0.2s, color 0.2s, transform 0.15s;
+  z-index: 5;
 }
 
 .paper-close-btn:hover {
   opacity: 1;
-  color: #1a0c05;
+  color: #1a0802;
+  transform: scale(1.1);
 }
 
 .paper-form-title {
-  font-family: 'Rozha One', 'Tiro Devanagari Hindi', 'Georgia', serif;
-  font-size: clamp(0.72rem, 1.1vw, 0.92rem);
-  font-weight: 600;
+  font-family: 'Georgia', 'Tiro Devanagari Hindi', 'Cinzel', serif;
+  font-size: clamp(0.78rem, 0.98vw, 0.92rem);
+  font-weight: 700;
   line-height: 1.15;
-  color: #1a0c05;
-  margin-bottom: 2px;
-  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.4);
+  color: #220d03;
+  margin-top: 1px;
+  margin-bottom: clamp(3px, 0.4vh, 5px);
+  letter-spacing: 0.02em;
+  word-spacing: 0.25em;
+  white-space: nowrap;
+  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.7);
 }
 
 .paper-form-desc {
-  font-size: clamp(0.48rem, 0.66vw, 0.58rem);
-  color: #562e17;
-  margin-bottom: 5px;
-  line-height: 1.25;
+  font-family: 'Georgia', 'Noto Serif Devanagari', serif;
+  font-size: clamp(0.55rem, 0.70vw, 0.62rem);
+  color: #381806;
+  margin-top: 0;
+  margin-bottom: clamp(5px, 0.7vh, 8px);
+  line-height: 1.32;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+  font-weight: 500;
+  max-width: 96%;
 }
 
 .paper-subscription-form {
@@ -873,48 +895,61 @@ html, body {
 
 .paper-input-group {
   width: 100%;
-  margin-bottom: 4px;
+  margin-bottom: clamp(4px, 0.6vh, 6px);
 }
 
 .paper-input {
   width: 100%;
-  padding: 4px 6px;
-  font-size: clamp(0.52rem, 0.7vw, 0.64rem);
-  font-family: 'Inter', sans-serif;
-  background: rgba(255, 253, 248, 0.88);
-  color: #1a0c05;
-  border: 1px solid rgba(86, 46, 23, 0.35);
+  padding: clamp(5px, 0.6vh, 7px) clamp(6px, 0.8vw, 10px);
+  font-size: clamp(0.58rem, 0.74vw, 0.66rem);
+  font-family: 'Inter', -apple-system, sans-serif;
+  background: rgba(255, 253, 246, 0.96);
+  color: #1a0802;
+  border: 1.2px solid rgba(76, 34, 12, 0.45);
   border-radius: 3px;
-  box-shadow: inset 0 1px 2px rgba(40, 20, 8, 0.12);
+  box-shadow: inset 0 1px 2px rgba(35, 16, 5, 0.12), 0 1px 1px rgba(255, 255, 255, 0.6);
   text-align: center;
   user-select: text;
   -webkit-user-select: text;
+  box-sizing: border-box;
+  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+}
+
+.paper-input::placeholder {
+  color: rgba(92, 45, 18, 0.65);
+  font-style: italic;
+  font-size: 0.94em;
+  opacity: 1;
 }
 
 .paper-input:focus {
   outline: none;
-  border-color: #d46b24;
-  box-shadow: 0 0 0 2px rgba(212, 107, 36, 0.22);
+  border-color: #9c4c1a;
+  box-shadow: 0 0 0 2px rgba(156, 76, 26, 0.22), inset 0 1px 2px rgba(0, 0, 0, 0.05);
   background: #ffffff;
 }
 
 .paper-submit-btn {
   width: 100%;
-  padding: 4px 8px;
-  font-size: clamp(0.54rem, 0.72vw, 0.66rem);
+  padding: clamp(6px, 0.75vh, 8px) clamp(10px, 1.2vw, 14px);
+  font-size: clamp(0.64rem, 0.82vw, 0.74rem);
   font-weight: 600;
-  font-family: 'Inter', sans-serif;
-  background: #2a1409;
-  color: #fbf5e8;
-  border: 1px solid #160a04;
+  font-family: 'Georgia', 'Cinzel', serif;
+  letter-spacing: 0.04em;
+  background: linear-gradient(180deg, #3c1c0c 0%, #200d04 100%);
+  color: #fcf6ea;
+  border: 1px solid #160802;
   border-radius: 3px;
   cursor: pointer;
-  transition: background 0.2s, transform 0.1s;
-  box-shadow: 0 2px 5px rgba(20, 9, 3, 0.3);
+  transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+  box-shadow: 0 2px 5px rgba(22, 10, 4, 0.4), inset 0 1px 0 rgba(255, 235, 205, 0.18);
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.7);
+  box-sizing: border-box;
 }
 
 .paper-submit-btn:hover {
-  background: #44200e;
+  background: linear-gradient(180deg, #4d2410 0%, #2d1306 100%);
+  box-shadow: 0 3px 7px rgba(22, 10, 4, 0.48), inset 0 1px 0 rgba(255, 235, 205, 0.22);
 }
 
 .paper-submit-btn:active {
@@ -926,21 +961,15 @@ html, body {
   cursor: not-allowed;
 }
 
-.paper-privacy-note {
-  font-size: clamp(0.44rem, 0.58vw, 0.52rem);
-  color: #743e1e;
-  margin-top: 3px;
-  opacity: 0.85;
-}
-
 .paper-feedback-msg {
   width: 100%;
-  font-size: clamp(0.5rem, 0.68vw, 0.62rem);
-  line-height: 1.3;
-  padding: 4px 6px;
+  font-size: clamp(0.52rem, 0.70vw, 0.64rem);
+  line-height: 1.32;
+  padding: 4px 7px;
   border-radius: 3px;
-  margin-top: 4px;
+  margin-top: 5px;
   text-align: center;
+  box-sizing: border-box;
 }
 
 .paper-feedback-msg.feedback-success {
@@ -958,7 +987,7 @@ html, body {
 /* ---------------- Responsive Placement for Mobile & Tablets ---------------- */
 @media (max-width: 900px) {
   .notice-board-wrapper {
-    width: clamp(150px, 20vw, 185px);
+    width: clamp(175px, 22vw, 215px);
     top: 16px;
     right: 16px;
   }
@@ -966,31 +995,59 @@ html, body {
 
 @media (max-width: 600px) {
   .notice-board-wrapper {
-    width: clamp(135px, 34vw, 155px);
+    width: clamp(145px, 36vw, 175px);
     top: max(10px, env(safe-area-inset-top, 10px));
     right: max(10px, env(safe-area-inset-right, 10px));
   }
 
   .paper-inner-content {
-    padding: 23% 6% 8% 6%;
+    padding: 20% 7% 5% 7%;
   }
 
   .paper-prompt-title {
-    font-size: 0.72rem;
+    font-size: 0.80rem;
+    margin-bottom: 4px;
   }
 
   .paper-form-title {
-    font-size: 0.7rem;
+    font-size: 0.76rem;
+    margin-bottom: 2px;
   }
 
   .paper-prompt-sub,
   .paper-form-desc {
-    font-size: 0.5rem;
+    font-size: 0.54rem;
+    line-height: 1.25;
   }
 
   .paper-input,
   .paper-submit-btn {
-    font-size: 0.54rem;
+    font-size: 0.58rem;
+    padding: 4px 6px;
+  }
+}
+
+@media (max-width: 380px) {
+  .notice-board-wrapper {
+    width: clamp(135px, 38vw, 150px);
+  }
+
+  .paper-prompt-title {
+    font-size: 0.74rem;
+  }
+
+  .paper-form-title {
+    font-size: 0.70rem;
+  }
+
+  .paper-prompt-sub,
+  .paper-form-desc {
+    font-size: 0.50rem;
+  }
+
+  .paper-input,
+  .paper-submit-btn {
+    font-size: 0.52rem;
     padding: 3px 5px;
   }
 }
