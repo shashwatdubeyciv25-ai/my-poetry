@@ -305,74 +305,103 @@ html, body {
   bottom: clamp(1.4rem, 5.2vh, 3.2rem);
   left: 50%;
   transform: translateX(-50%);
-  display: flex;
+  display: flex !important;
   align-items: center;
   justify-content: center;
+  flex-wrap: nowrap !important;
+  white-space: nowrap !important;
   z-index: 12;
   user-select: none;
   width: max-content;
   max-width: 95vw;
+  pointer-events: auto;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
-.manuscript-social {
-  display: flex;
+.manuscript-social,
+.manuscript-contact-row {
+  display: flex !important;
   align-items: center;
   justify-content: center;
-  gap: clamp(0.35rem, 0.9vw, 0.75rem);
-  color: #2b180d;
-  mix-blend-mode: multiply;
+  flex-wrap: nowrap !important;
+  white-space: nowrap !important;
+  gap: clamp(0.25rem, 0.75vw, 0.55rem);
+  color: #2b180d !important;
   user-select: none;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
+.manuscript-flourish,
 .social-flourish {
-  display: flex;
+  display: flex !important;
   align-items: center;
-  color: #2b180d;
+  color: #2b180d !important;
   opacity: 0.82;
+  flex-shrink: 0;
 }
 
+.manuscript-flourish svg,
 .social-flourish svg {
-  width: clamp(34px, 4.2vw, 54px);
-  height: auto;
+  width: clamp(32px, 3.8vw, 48px);
+  height: 10px;
   display: block;
+  color: #2b180d !important;
+  fill: #2b180d;
+  flex-shrink: 0;
 }
 
+.manuscript-icon-link,
 .social-link,
 .email-icon-link {
-  display: inline-flex;
+  display: inline-flex !important;
   align-items: center;
   justify-content: center;
-  padding: 0.45rem 0.55rem;
-  color: #2b180d;
+  padding: 0.45rem 0.5rem;
+  color: #2b180d !important;
   opacity: 0.85;
   text-decoration: none;
   transition: opacity 0.3s ease, transform 0.25s ease, color 0.3s ease;
   -webkit-tap-highlight-color: transparent;
   cursor: pointer;
+  flex-shrink: 0;
+  visibility: visible !important;
 }
 
+.manuscript-icon-link .manuscript-icon-svg,
 .social-link .social-svg,
 .email-icon-link .email-svg {
   display: block;
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  min-height: 18px;
+  flex-shrink: 0;
+  color: #2b180d !important;
   transition: transform 0.25s cubic-bezier(0.2, 1, 0.3, 1);
 }
 
+.manuscript-icon-link:hover,
 .social-link:hover,
 .email-icon-link:hover {
   opacity: 1;
-  color: #120601;
+  color: #120601 !important;
 }
 
+.manuscript-icon-link:hover .manuscript-icon-svg,
 .social-link:hover .social-svg,
 .email-icon-link:hover .email-svg {
   transform: translateY(-2px) scale(1.1);
 }
 
+.manuscript-icon-link:active .manuscript-icon-svg,
 .social-link:active .social-svg,
 .email-icon-link:active .email-svg {
   transform: scale(0.94);
 }
 
+.manuscript-icon-link:focus-visible,
 .social-link:focus-visible,
 .email-icon-link:focus-visible {
   outline: 1px dashed rgba(68, 34, 15, 0.5);
@@ -380,13 +409,16 @@ html, body {
   border-radius: 4px;
 }
 
+.manuscript-divider,
 .social-divider {
-  display: inline-block;
+  display: inline-block !important;
   width: 1px;
-  height: 18px;
-  background-color: currentColor;
-  opacity: 0.55;
-  margin: 0 clamp(0.2rem, 0.4vw, 0.45rem);
+  height: 16px;
+  background-color: #2b180d !important;
+  opacity: 0.5;
+  margin: 0 clamp(0.12rem, 0.3vw, 0.3rem);
+  flex-shrink: 0;
+  align-self: center;
 }
 
 
@@ -418,27 +450,35 @@ html, body {
     bottom: clamp(1rem, 3.8vh, 1.9rem);
   }
 
-  .manuscript-social {
-    gap: 0.25rem;
+  .manuscript-social,
+  .manuscript-contact-row {
+    gap: 0.2rem;
+    flex-wrap: nowrap !important;
   }
 
+  .manuscript-flourish svg,
   .social-flourish svg {
-    width: 26px;
+    width: 24px;
   }
 
+  .manuscript-icon-link,
   .social-link,
   .email-icon-link {
-    padding: 0.45rem 0.38rem; /* Comfortable touch target */
+    padding: 0.4rem 0.32rem; /* Comfortable touch target */
   }
 
+  .manuscript-divider,
   .social-divider {
-    height: 16px;
-    margin: 0 0.15rem;
+    height: 15px;
+    margin: 0 0.12rem;
   }
 
+  .manuscript-icon-link .manuscript-icon-svg,
   .email-icon-link .email-svg {
     width: 17px;
     height: 17px;
+    min-width: 17px;
+    min-height: 17px;
   }
 }
 
@@ -451,13 +491,15 @@ html, body {
     width: 270px;
   }
 
+  .manuscript-flourish svg,
   .social-flourish svg {
-    width: 60px;
+    width: 54px;
   }
 
+  .manuscript-icon-link .manuscript-icon-svg,
   .social-link .social-svg {
-    width: 22px;
-    height: 22px;
+    width: 21px;
+    height: 21px;
   }
 
   .email-icon-link .email-svg {
