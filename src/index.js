@@ -89,7 +89,7 @@ export default {
 
         // Create writing
         if (pathname === '/api/writings' && request.method === 'POST') {
-          return handleCreateWriting(request, env);
+          return handleCreateWriting(request, env, ctx);
         }
 
         // Single writing operations: /api/writings/:id
@@ -100,7 +100,7 @@ export default {
             return handleGetWritingAdmin(id, env);
           }
           if (request.method === 'PUT') {
-            return handleUpdateWriting(id, request, env);
+            return handleUpdateWriting(id, request, env, ctx);
           }
           if (request.method === 'DELETE') {
             return handleDeleteWriting(id, env);
@@ -110,7 +110,7 @@ export default {
         // Toggle publication status: /api/writings/:id/status
         const statusMatch = pathname.match(/^\/api\/writings\/([a-zA-Z0-9_\-]+)\/status$/);
         if (statusMatch && (request.method === 'PATCH' || request.method === 'POST')) {
-          return handleToggleStatus(statusMatch[1], request, env);
+          return handleToggleStatus(statusMatch[1], request, env, ctx);
         }
 
         return jsonResponse({ error: 'Endpoint not found' }, 404);
@@ -127,6 +127,37 @@ export default {
       }
       if (pathname === '/api/analytics/test-ping' && request.method === 'POST') {
         return handleAnalyticsTestPing(request, env);
+      }
+
+      // ------------------------------------------------------------------------
+      // 3c. ROUTE GROUP: Subscriber & Poem Notification System
+      // ------------------------------------------------------------------------
+      if (pathname === '/api/subscribers/subscribe' && request.method === 'POST') {
+        return handleSubscribe(request, env);
+      }
+      if (pathname === '/verify-subscription' && request.method === 'GET') {
+        return handleVerifySubscriptionPage(request, env);
+      }
+      if (pathname === '/unsubscribe' && request.method === 'GET') {
+        return handleUnsubscribePage(request, env);
+      }
+
+      if (pathname.startsWith('/api/subscribers')) {
+        const user = await getAuthenticatedUser(request, env);
+        if (!user) {
+          return jsonResponse({ error: 'Unauthorized: Administrator session required.' }, 401);
+        }
+        if (pathname === '/api/subscribers' && request.method === 'GET') {
+          return handleListSubscribersAdmin(request, env);
+        }
+        if (pathname === '/api/subscribers/send-test-notification' && request.method === 'POST') {
+          return handleSendTestPoemNotification(request, env);
+        }
+        const subIdMatch = pathname.match(/^\/api\/subscribers\/([a-zA-Z0-9_\-]+)$/);
+        if (subIdMatch && request.method === 'DELETE') {
+          return handleDeleteSubscriberAdmin(subIdMatch[1], env);
+        }
+        return jsonResponse({ error: 'Endpoint not found' }, 404);
       }
 
       // ------------------------------------------------------------------------
@@ -399,6 +430,57 @@ async function ensureWritingsTable(db) {
     writingsTableEnsured = true;
   } catch (e) {
     console.warn('ensureWritingsTable notice:', e?.message || e);
+  }
+}
+
+let subscribersTableEnsured = false;
+async function ensureSubscribersTable(db) {
+  if (!db || subscribersTableEnsured) return;
+  try {
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS subscribers (
+        id TEXT PRIMARY KEY,
+        email TEXT NOT NULL UNIQUE,
+        status TEXT NOT NULL DEFAULT 'active',
+        verification_token_hash TEXT,
+        unsubscribe_token TEXT NOT NULL UNIQUE,
+        ip_address TEXT,
+        referrer TEXT,
+        user_agent TEXT,
+        created_at INTEGER NOT NULL,
+        verified_at INTEGER,
+        unsubscribed_at INTEGER
+      )
+    `).run();
+
+    try {
+      await db.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_subscribers_email ON subscribers(email)`).run();
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_subscribers_status ON subscribers(status)`).run();
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_subscribers_verification_token ON subscribers(verification_token_hash)`).run();
+      await db.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_subscribers_unsubscribe_token ON subscribers(unsubscribe_token)`).run();
+    } catch (_) {}
+
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS poem_notifications (
+        id TEXT PRIMARY KEY,
+        writing_id TEXT NOT NULL,
+        subscriber_id TEXT NOT NULL,
+        recipient_email TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'sent',
+        error_message TEXT,
+        sent_at INTEGER NOT NULL
+      )
+    `).run();
+
+    try {
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_poem_notifications_writing ON poem_notifications(writing_id)`).run();
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_poem_notifications_subscriber ON poem_notifications(subscriber_id)`).run();
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_poem_notifications_sent_at ON poem_notifications(sent_at DESC)`).run();
+    } catch (_) {}
+
+    subscribersTableEnsured = true;
+  } catch (e) {
+    console.warn('ensureSubscribersTable notice:', e?.message || e);
   }
 }
 
@@ -1586,6 +1668,87 @@ async function handleUpdateEmail(request, env) {
   });
 }
 
+/**
+ * Unified Transactional Email Engine
+ * Dispatches via Resend, SendGrid, or Postmark depending on configured Cloudflare secrets.
+ */
+async function sendTransactionalEmail(env, { to, subject, html, text }) {
+  const senderEmail = env.EMAIL_FROM || 'Ashabd <noreply@ashabd.in>';
+
+  // 1. Resend API
+  if (env.RESEND_API_KEY) {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: senderEmail,
+        to: [to],
+        subject,
+        html,
+        text: text || undefined
+      })
+    });
+    if (!res.ok) {
+      const errTxt = await res.text();
+      throw new Error(`Resend API error (${res.status}): ${errTxt}`);
+    }
+    return { provider: 'resend', success: true };
+  }
+
+  // 2. SendGrid API
+  if (env.SENDGRID_API_KEY) {
+    const plainFrom = senderEmail.includes('<') ? senderEmail.replace(/.*<([^>]+)>.*/, '$1') : senderEmail;
+    const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${env.SENDGRID_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        personalizations: [{ to: [{ email: to }] }],
+        from: { email: plainFrom, name: 'Ashabd' },
+        subject,
+        content: [{ type: 'text/html', value: html }]
+      })
+    });
+    if (!res.ok) {
+      const errTxt = await res.text();
+      throw new Error(`SendGrid API error (${res.status}): ${errTxt}`);
+    }
+    return { provider: 'sendgrid', success: true };
+  }
+
+  // 3. Postmark API
+  if (env.POSTMARK_SERVER_TOKEN) {
+    const res = await fetch('https://api.postmarkapp.com/email', {
+      method: 'POST',
+      headers: {
+        'X-Postmark-Server-Token': env.POSTMARK_SERVER_TOKEN,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        From: senderEmail,
+        To: to,
+        Subject: subject,
+        HtmlBody: html,
+        TextBody: text || undefined
+      })
+    });
+    if (!res.ok) {
+      const errTxt = await res.text();
+      throw new Error(`Postmark API error (${res.status}): ${errTxt}`);
+    }
+    return { provider: 'postmark', success: true };
+  }
+
+  // Fallback: No email provider secret configured in Cloudflare environment secrets
+  console.warn(`[Ashabd Email Simulation] No provider secret configured (RESEND_API_KEY, SENDGRID_API_KEY, or POSTMARK_SERVER_TOKEN). Simulated dispatch to ${to} for subject "${subject}".`);
+  return { provider: 'none', success: true, simulated: true };
+}
+
 async function sendPasswordResetEmail(env, { to, resetUrl, expiresMinutes = 60 }) {
   const emailHtml = `<!DOCTYPE html>
 <html lang="hi">
@@ -1619,99 +1782,672 @@ async function sendPasswordResetEmail(env, { to, resetUrl, expiresMinutes = 60 }
     </p>
     
     <div class="btn-wrap">
-      <a href="\${resetUrl}" class="btn" target="_blank">पासवर्ड रीसेट करें (Reset Password)</a>
+      <a href="${resetUrl}" class="btn" target="_blank">पासवर्ड रीसेट करें (Reset Password)</a>
     </div>
     
     <div class="note">
       <strong>⚠️ सुरक्षा सूचना (Security Notice):</strong><br>
-      • यह लिंक केवल <strong>\${expiresMinutes} मिनट</strong> के लिए मान्य है और इसका उपयोग केवल एक बार किया जा सकता है।<br>
+      • यह लिंक केवल <strong>${expiresMinutes} मिनट</strong> के लिए मान्य है और इसका उपयोग केवल एक बार किया जा सकता है।<br>
       • यदि आपने यह अनुरोध नहीं किया था, तो कृपया इस ईमेल को अनदेखा करें। आपका मौजूदा पासवर्ड पूरी तरह सुरक्षित है।
     </div>
 
     <p class="text" style="font-size: 12px; color: #8e887d; margin-top: 20px; margin-bottom: 4px;">
       यदि बटन काम नहीं कर रहा है, तो इस लिंक को कॉपी करके अपने ब्राउज़र में खोलें:
     </p>
-    <p class="url-fallback">\${resetUrl}</p>
+    <p class="url-fallback">${resetUrl}</p>
 
     <div class="footer">
-      © \${new Date().getFullYear()} अशब्द (Ashabd.in) • All rights reserved.
+      © ${new Date().getFullYear()} अशब्द (Ashabd.in) • All rights reserved.
     </div>
   </div>
 </body>
 </html>`;
 
-  const senderEmail = env.EMAIL_FROM || 'Ashabd <noreply@ashabd.in>';
+  return await sendTransactionalEmail(env, {
+    to,
+    subject: 'Ashabd (अशब्द) — पासवर्ड रीसेट अनुरोध (Password Reset)',
+    html: emailHtml
+  });
+}
 
-  // 1. Resend API
-  if (env.RESEND_API_KEY) {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer \${env.RESEND_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        from: senderEmail,
-        to: [to],
-        subject: 'Ashabd (अशब्द) — पासवर्ड रीसेट अनुरोध (Password Reset)',
-        html: emailHtml
-      })
-    });
-    if (!res.ok) {
-      const errTxt = await res.text();
-      throw new Error(`Resend API error (\${res.status}): \${errTxt}`);
+function renderSubscriptionVerificationEmailHtml({ verifyUrl }) {
+  return `<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ashabd — सदस्यता पुष्टि</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0f1115; color: #f5f2eb; margin: 0; padding: 24px; }
+    .container { max-width: 540px; margin: 0 auto; background-color: #171a21; border: 1px solid rgba(212, 107, 36, 0.35); border-radius: 12px; padding: 34px 28px; }
+    .brand { font-family: Georgia, serif; font-size: 34px; color: #d46b24; text-align: center; margin: 0 0 6px 0; letter-spacing: 2px; }
+    .tagline { text-align: center; color: #a29d93; font-size: 13px; margin: 0 0 28px 0; letter-spacing: 1.5px; }
+    .greeting { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: #f5f2eb; }
+    .text { font-size: 14.5px; line-height: 1.7; color: #d1ccc2; margin-bottom: 20px; }
+    .btn-wrap { text-align: center; margin: 32px 0; }
+    .btn { display: inline-block; background-color: #d46b24; color: #ffffff !important; text-decoration: none; font-weight: 600; font-size: 15px; padding: 13px 34px; border-radius: 6px; box-shadow: 0 4px 12px rgba(212, 107, 36, 0.3); }
+    .note { font-size: 12.5px; line-height: 1.6; color: #9c968a; background: rgba(0,0,0,0.35); padding: 14px; border-radius: 6px; border-left: 3px solid #d46b24; margin-top: 24px; }
+    .url-fallback { word-break: break-all; color: #e6853d; font-size: 12px; margin-top: 8px; }
+    .footer { text-align: center; font-size: 12px; color: #6d675e; margin-top: 28px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 16px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 class="brand">अशब्द</h1>
+    <p class="tagline">काव्य-यात्रा • Poetry Subscription</p>
+    
+    <p class="greeting">नमस्ते (Greetings),</p>
+    <p class="text">
+      आपने <strong>अशब्द (Ashabd.in)</strong> पर नई कविताओं की सूचना प्राप्त करने के लिए सदस्यता का अनुरोध किया है।
+      अपनी सदस्यता की पुष्टि करने के लिए नीचे दिए गए बटन पर क्लिक करें:
+    </p>
+    
+    <div class="btn-wrap">
+      <a href="${verifyUrl}" class="btn" target="_blank">सदस्यता की पुष्टि करें (Confirm Subscription)</a>
+    </div>
+    
+    <div class="note">
+      <strong>📜 सूचना (Notice):</strong><br>
+      • यह सदस्यता पूरी तरह निःशुल्क है। आपको केवल तभी ईमेल प्राप्त होगा जब कोई नई कविता प्रकाशित होगी।<br>
+      • कोई स्पैम नहीं। आप किसी भी समय एक क्लिक से सदस्यता समाप्त कर सकते हैं।<br>
+      • यदि आपने यह अनुरोध नहीं किया था, तो कृपया इस ईमेल को अनदेखा करें।
+    </div>
+
+    <p class="text" style="font-size: 12px; color: #8e887d; margin-top: 20px; margin-bottom: 4px;">
+      यदि बटन काम नहीं कर रहा है, तो इस लिंक को कॉपी करके अपने ब्राउज़र में खोलें:
+    </p>
+    <p class="url-fallback">${verifyUrl}</p>
+
+    <div class="footer">
+      © ${new Date().getFullYear()} अशब्द (Ashabd.in) • All rights reserved.
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+async function sendSubscriptionVerificationEmail(env, { to, verifyUrl }) {
+  const html = renderSubscriptionVerificationEmailHtml({ verifyUrl });
+  return await sendTransactionalEmail(env, {
+    to,
+    subject: 'Ashabd (अशब्द) — कविता सदस्यता पुष्टि (Confirm Subscription)',
+    html
+  });
+}
+
+function renderPoemNotificationEmailHtml({ poemTitle, subtitle, excerptHtml, readUrl, unsubscribeUrl }) {
+  return `<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ashabd — नवीन कविता: ${escapeHtml(poemTitle)}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0f1115; color: #f5f2eb; margin: 0; padding: 24px; }
+    .container { max-width: 540px; margin: 0 auto; background-color: #171a21; border: 1px solid rgba(212, 107, 36, 0.35); border-radius: 12px; padding: 34px 28px; }
+    .brand { font-family: Georgia, serif; font-size: 34px; color: #d46b24; text-align: center; margin: 0 0 6px 0; letter-spacing: 2px; }
+    .tagline { text-align: center; color: #a29d93; font-size: 13px; margin: 0 0 24px 0; letter-spacing: 1.5px; }
+    .poem-box { background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(212, 107, 36, 0.25); border-radius: 8px; padding: 24px; text-align: center; margin-bottom: 24px; }
+    .poem-title { font-family: Georgia, serif; font-size: 24px; color: #fbf5e8; margin: 0 0 6px 0; }
+    .poem-subtitle { font-size: 14px; color: #d46b24; margin: 0 0 18px 0; font-style: italic; }
+    .poem-excerpt { font-size: 16px; line-height: 2.1; color: #ebdcb7; margin: 0 auto; white-space: pre-wrap; letter-spacing: 0.02em; font-family: 'Tiro Devanagari Hindi', Georgia, serif; }
+    .btn-wrap { text-align: center; margin: 28px 0; }
+    .btn { display: inline-block; background-color: #d46b24; color: #ffffff !important; text-decoration: none; font-weight: 600; font-size: 15px; padding: 13px 34px; border-radius: 6px; box-shadow: 0 4px 12px rgba(212, 107, 36, 0.3); }
+    .footer { text-align: center; font-size: 12px; color: #6d675e; margin-top: 28px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 16px; line-height: 1.6; }
+    .unsub-link { color: #8e887d; text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 class="brand">अशब्द</h1>
+    <p class="tagline">नवीन कविता • New Poem</p>
+
+    <div class="poem-box">
+      <h2 class="poem-title">${escapeHtml(poemTitle)}</h2>
+      ${subtitle ? `<p class="poem-subtitle">${escapeHtml(subtitle)}</p>` : ''}
+      <div class="poem-excerpt">${excerptHtml}</div>
+    </div>
+
+    <div class="btn-wrap">
+      <a href="${readUrl}" class="btn" target="_blank">सम्पूर्ण कविता पढ़ें (Read Full Poem) ↗</a>
+    </div>
+
+    <div class="footer">
+      आप यह संदेश प्राप्त कर रहे हैं क्योंकि आपने <strong>ashabd.in</strong> पर नई कविताओं की सूचना के लिए सदस्यता ली है।<br>
+      <a href="${unsubscribeUrl}" class="unsub-link">सदस्यता समाप्त करें (Unsubscribe)</a> • © ${new Date().getFullYear()} अशब्द
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+function renderSubscriptionPageHtml({ title, heading, message, subtext, buttonText, buttonUrl }) {
+  return `<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>अशब्द — ${escapeHtml(title)}</title>
+  <link rel="icon" type="image/x-icon" href="/ashabd_website_logo_pack/favicons_and_icons/favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Rozha+One&family=Tiro+Devanagari+Hindi:ital@0;1&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-parchment: #ebdcb7;
+      --bg-parchment-light: #fbf5e8;
+      --bg-parchment-warm: #f5ebd3;
+      --ink-primary: #221309;
+      --ink-secondary: #562e17;
+      --ink-muted: #743e1e;
+      --accent: #d46b24;
     }
-    return { provider: 'resend', success: true };
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: var(--bg-parchment);
+      color: var(--ink-primary);
+      font-family: 'Tiro Devanagari Hindi', Georgia, serif;
+      text-align: center;
+      padding: 2rem 1rem;
+      position: relative;
+    }
+    .parchment-bg {
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse 75% 65% at 50% 35%, var(--bg-parchment-light) 0%, var(--bg-parchment-warm) 50%, var(--bg-parchment) 100%);
+      z-index: 0;
+    }
+    .grain {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 1;
+      opacity: 0.22;
+      mix-blend-mode: multiply;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 240 240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.055' numOctaves='5'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+    .card {
+      position: relative;
+      z-index: 10;
+      max-width: 520px;
+      width: 100%;
+      background: rgba(253, 248, 237, 0.9);
+      border: 1px solid rgba(86, 46, 23, 0.25);
+      border-radius: 8px;
+      padding: 3rem 2rem;
+      box-shadow: 0 10px 30px rgba(34, 19, 9, 0.15);
+    }
+    .brand {
+      font-family: 'Rozha One', serif;
+      font-size: 2.8rem;
+      color: var(--ink-primary);
+      text-decoration: none;
+      display: inline-block;
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: 'Rozha One', 'Tiro Devanagari Hindi', serif;
+      font-size: 1.8rem;
+      margin-bottom: 1.2rem;
+      color: var(--ink-secondary);
+      font-weight: normal;
+    }
+    .message {
+      font-size: 1.15rem;
+      line-height: 1.7;
+      color: var(--ink-primary);
+      margin-bottom: 0.8rem;
+    }
+    .subtext {
+      font-size: 0.95rem;
+      color: var(--ink-muted);
+      margin-bottom: 2rem;
+      line-height: 1.5;
+    }
+    .btn {
+      display: inline-block;
+      background: #2a1409;
+      color: #fbf5e8;
+      text-decoration: none;
+      padding: 0.75rem 1.8rem;
+      font-size: 0.95rem;
+      border-radius: 4px;
+      transition: background 0.2s;
+    }
+    .btn:hover {
+      background: #44200e;
+    }
+    .extra-link {
+      display: block;
+      margin-top: 1.2rem;
+      font-size: 0.85rem;
+      color: var(--ink-muted);
+      text-decoration: underline;
+    }
+    .extra-link:hover {
+      color: var(--ink-primary);
+    }
+  </style>
+</head>
+<body>
+  <div class="parchment-bg"></div>
+  <div class="grain"></div>
+  <main class="card">
+    <a href="/" class="brand">अशब्द</a>
+    <h1>${escapeHtml(heading)}</h1>
+    <p class="message">${escapeHtml(message)}</p>
+    ${subtext ? `<p class="subtext">${escapeHtml(subtext)}</p>` : ''}
+    <a href="${buttonUrl || '/'}" class="btn">${escapeHtml(buttonText || '← मुख्य पृष्ठ पर वापस लौटें')}</a>
+    <a href="/poems" class="extra-link">रचना संग्रह देखें (Explore Poems Archive) ↗</a>
+  </main>
+  <script src="/analytics.js" defer></script>
+</body>
+</html>`;
+}
+
+function getSiteUrl(request, env) {
+  if (env.SITE_URL) {
+    return env.SITE_URL.replace(/\/+$/, '');
+  }
+  try {
+    const reqUrl = new URL(request.url);
+    return `${reqUrl.protocol}//${reqUrl.host}`;
+  } catch (_) {
+    return 'https://ashabd.in';
+  }
+}
+
+async function handleSubscribe(request, env) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonResponse({ error: 'Invalid JSON request payload' }, 400);
   }
 
-  // 2. SendGrid API
-  if (env.SENDGRID_API_KEY) {
-    const plainFrom = senderEmail.includes('<') ? senderEmail.replace(/.*<([^>]+)>.*/, '$1') : senderEmail;
-    const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer \${env.SENDGRID_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        personalizations: [{ to: [{ email: to }] }],
-        from: { email: plainFrom, name: 'Ashabd' },
-        subject: 'Ashabd (अशब्द) — पासवर्ड रीसेट अनुरोध (Password Reset)',
-        content: [{ type: 'text/html', value: emailHtml }]
-      })
-    });
-    if (!res.ok) {
-      const errTxt = await res.text();
-      throw new Error(`SendGrid API error (\${res.status}): \${errTxt}`);
-    }
-    return { provider: 'sendgrid', success: true };
+  const email = (body.email || '').trim().toLowerCase();
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!email || !emailRegex.test(email)) {
+    return jsonResponse({ error: 'Please provide a valid email address.' }, 400);
   }
 
-  // 3. Postmark API
-  if (env.POSTMARK_SERVER_TOKEN) {
-    const res = await fetch('https://api.postmarkapp.com/email', {
-      method: 'POST',
-      headers: {
-        'X-Postmark-Server-Token': env.POSTMARK_SERVER_TOKEN,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        From: senderEmail,
-        To: to,
-        Subject: 'Ashabd (अशब्द) — पासवर्ड रीसेट अनुरोध (Password Reset)',
-        HtmlBody: emailHtml
-      })
-    });
-    if (!res.ok) {
-      const errTxt = await res.text();
-      throw new Error(`Postmark API error (\${res.status}): \${errTxt}`);
-    }
-    return { provider: 'postmark', success: true };
+  const db = env.DB || env['ashabd-db'];
+  if (!db) {
+    return jsonResponse({ error: 'Database service is currently unavailable.' }, 503);
   }
 
-  // Fallback: No email provider secret configured in Cloudflare secrets
-  console.warn(`[Ashabd Security] No email provider secret configured (RESEND_API_KEY, SENDGRID_API_KEY, or POSTMARK_SERVER_TOKEN). Password reset URL generated for \${to}: \${resetUrl}`);
-  return { provider: 'none', success: false, url: resetUrl };
+  await ensureSubscribersTable(db);
+
+  const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || '127.0.0.1';
+  const fifteenMinutesAgo = Date.now() - 15 * 60 * 1000;
+
+  // Rate limiting by IP
+  const recentCount = await db.prepare(`
+    SELECT COUNT(*) as c FROM subscribers WHERE ip_address = ? AND created_at > ?
+  `).bind(ip, fifteenMinutesAgo).first('c') || 0;
+
+  if (recentCount >= 6) {
+    return jsonResponse({ error: 'Too many subscription attempts from this network. Please try again later.' }, 429);
+  }
+
+  const existing = await db.prepare('SELECT * FROM subscribers WHERE email = ?').bind(email).first();
+  const siteUrl = getSiteUrl(request, env);
+
+  if (existing) {
+    if (existing.status === 'active') {
+      return jsonResponse({
+        success: true,
+        already_active: true,
+        message: 'You are already subscribed to Ashabd (आप पहले से ही अशब्द से जुड़े हैं)।'
+      });
+    }
+
+    // Pending or Unsubscribed - re-issue verification token
+    const rawVerifyToken = generateRandomHexToken(32);
+    const tokenHash = await sha256Hex(rawVerifyToken);
+    const now = Date.now();
+
+    await db.prepare(`
+      UPDATE subscribers
+      SET status = 'pending', verification_token_hash = ?, ip_address = ?, created_at = ?
+      WHERE id = ?
+    `).bind(tokenHash, ip, now, existing.id).run();
+
+    const verifyUrl = `${siteUrl}/verify-subscription?token=${rawVerifyToken}`;
+    try {
+      await sendSubscriptionVerificationEmail(env, { to: email, verifyUrl });
+    } catch (err) {
+      console.error('[Ashabd Subscribe] Failed to dispatch verification email:', err);
+    }
+
+    return jsonResponse({
+      success: true,
+      pending: true,
+      message: 'Please check your email to confirm your subscription (पुष्टि हेतु ईमेल चेक करें)।'
+    });
+  }
+
+  // New subscriber
+  const id = 'sub_' + Date.now().toString(36) + '_' + generateRandomHexToken(4);
+  const rawVerifyToken = generateRandomHexToken(32);
+  const tokenHash = await sha256Hex(rawVerifyToken);
+  const unsubscribeToken = generateRandomHexToken(32);
+  const now = Date.now();
+  const referrer = request.headers.get('referer') || '';
+  const userAgent = (request.headers.get('user-agent') || '').slice(0, 255);
+
+  await db.prepare(`
+    INSERT INTO subscribers (id, email, status, verification_token_hash, unsubscribe_token, ip_address, referrer, user_agent, created_at)
+    VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?)
+  `).bind(id, email, tokenHash, unsubscribeToken, ip, referrer, userAgent, now).run();
+
+  const verifyUrl = `${siteUrl}/verify-subscription?token=${rawVerifyToken}`;
+  try {
+    await sendSubscriptionVerificationEmail(env, { to: email, verifyUrl });
+  } catch (err) {
+    console.error('[Ashabd Subscribe] Failed to dispatch verification email:', err);
+  }
+
+  return jsonResponse({
+    success: true,
+    pending: true,
+    message: 'Please check your inbox to confirm your subscription (पुष्टि हेतु ईमेल चेक करें)।'
+  });
+}
+
+async function handleVerifySubscriptionPage(request, env) {
+  const url = new URL(request.url);
+  const token = url.searchParams.get('token');
+
+  if (!token) {
+    return new Response(renderSubscriptionPageHtml({
+      title: 'अमान्य लिंक',
+      heading: 'अमान्य पुष्टि लिंक',
+      message: 'कोई सत्यापन टोकन प्रदान नहीं किया गया है।',
+      subtext: 'No verification token was provided in the link.'
+    }), { status: 400, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+  }
+
+  const db = env.DB || env['ashabd-db'];
+  if (!db) {
+    return new Response(renderSubscriptionPageHtml({
+      title: 'त्रुटि',
+      heading: 'सेवा अनुपलब्ध',
+      message: 'डेटाबेस सेवा वर्तमान में उपलब्ध नहीं है। कृपया कुछ समय बाद पुनः प्रयास करें।',
+      subtext: 'Database service is currently unavailable. Please try again in a few moments.'
+    }), { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+  }
+
+  await ensureSubscribersTable(db);
+  const tokenHash = await sha256Hex(token);
+
+  const subscriber = await db.prepare(`
+    SELECT * FROM subscribers WHERE verification_token_hash = ?
+  `).bind(tokenHash).first();
+
+  if (!subscriber) {
+    return new Response(renderSubscriptionPageHtml({
+      title: 'अमान्य या समाप्त लिंक',
+      heading: 'यह पुष्टि लिंक समाप्त या उपयोग हो चुका है',
+      message: 'यदि आप पहले ही पुष्टि कर चुके हैं, तो आपकी सदस्यता सक्रिय है। अन्यथा आप मुख्य पृष्ठ पर जाकर पुनः जुड़ सकते हैं।',
+      subtext: 'This confirmation link has expired or has already been used. You can always re-subscribe on the Ashabd homepage.'
+    }), { status: 400, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+  }
+
+  const now = Date.now();
+  await db.prepare(`
+    UPDATE subscribers
+    SET status = 'active', verified_at = ?, verification_token_hash = NULL
+    WHERE id = ?
+  `).bind(now, subscriber.id).run();
+
+  return new Response(renderSubscriptionPageHtml({
+    title: 'सदस्यता पुष्टीकृत',
+    heading: 'सदस्यता सफलतापूर्वक पुष्टीकृत!',
+    message: 'अशब्द की काव्य-यात्रा में आपका स्वागत है। जब भी कोई नई कविता रची और प्रकाशित की जाएगी, आपको एक सुंदर संदेश प्राप्त होगा।',
+    subtext: 'Subscription confirmed! You will receive a quiet note whenever a new poem arrives.',
+    buttonText: '← मुख्य पृष्ठ पर जाएँ (Return to Home)',
+    buttonUrl: '/'
+  }), { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+}
+
+async function handleUnsubscribePage(request, env) {
+  const url = new URL(request.url);
+  const token = url.searchParams.get('token');
+
+  if (!token) {
+    return new Response(renderSubscriptionPageHtml({
+      title: 'अमान्य लिंक',
+      heading: 'अमान्य सदस्यता समाप्ति लिंक',
+      message: 'कोई अनसब्सक्राइब टोकन प्रदान नहीं किया गया है।',
+      subtext: 'No unsubscribe token was provided in the link.'
+    }), { status: 400, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+  }
+
+  const db = env.DB || env['ashabd-db'];
+  if (!db) {
+    return new Response(renderSubscriptionPageHtml({
+      title: 'त्रुटि',
+      heading: 'सेवा अनुपलब्ध',
+      message: 'डेटाबेस सेवा वर्तमान में उपलब्ध नहीं है।',
+      subtext: 'Database service is currently unavailable.'
+    }), { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+  }
+
+  await ensureSubscribersTable(db);
+
+  const subscriber = await db.prepare(`
+    SELECT * FROM subscribers WHERE unsubscribe_token = ?
+  `).bind(token).first();
+
+  if (!subscriber) {
+    return new Response(renderSubscriptionPageHtml({
+      title: 'अमान्य लिंक',
+      heading: 'अमान्य सदस्यता समाप्ति लिंक',
+      message: 'यह लिंक मान्य नहीं है या सदस्यता पहले ही समाप्त की जा चुकी है।',
+      subtext: 'This unsubscribe link is invalid or the subscription was already removed.'
+    }), { status: 404, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+  }
+
+  const now = Date.now();
+  await db.prepare(`
+    UPDATE subscribers
+    SET status = 'unsubscribed', unsubscribed_at = ?
+    WHERE id = ?
+  `).bind(now, subscriber.id).run();
+
+  return new Response(renderSubscriptionPageHtml({
+    title: 'सदस्यता समाप्त',
+    heading: 'आपकी सदस्यता समाप्त कर दी गई है',
+    message: 'आपको अब अशब्द की नई कविताओं की सूचना नहीं भेजी जाएगी। भविष्य में कभी भी आप मुख्य पृष्ठ के नोटिस बोर्ड से पुनः जुड़ सकते हैं।',
+    subtext: 'You have been successfully unsubscribed from Ashabd poem notifications. You can rejoin anytime on the homepage notice board.',
+    buttonText: '← मुख्य पृष्ठ पर लौटें',
+    buttonUrl: '/'
+  }), { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+}
+
+async function handleListSubscribersAdmin(request, env) {
+  const db = await checkDatabase(env);
+  await ensureSubscribersTable(db);
+
+  const totalCount = await db.prepare('SELECT COUNT(*) as count FROM subscribers').first('count') || 0;
+  const activeCount = await db.prepare("SELECT COUNT(*) as count FROM subscribers WHERE status = 'active'").first('count') || 0;
+  const pendingCount = await db.prepare("SELECT COUNT(*) as count FROM subscribers WHERE status = 'pending'").first('count') || 0;
+  const unsubscribedCount = await db.prepare("SELECT COUNT(*) as count FROM subscribers WHERE status = 'unsubscribed'").first('count') || 0;
+  const notifCount = await db.prepare("SELECT COUNT(*) as count FROM poem_notifications WHERE status = 'sent'").first('count') || 0;
+
+  const { results: subscribers } = await db.prepare(`
+    SELECT id, email, status, ip_address, created_at, verified_at, unsubscribed_at
+    FROM subscribers
+    ORDER BY created_at DESC
+    LIMIT 300
+  `).all();
+
+  const { results: recentNotifications } = await db.prepare(`
+    SELECT pn.id, pn.writing_id, pn.recipient_email, pn.status, pn.error_message, pn.sent_at, w.title as poem_title
+    FROM poem_notifications pn
+    LEFT JOIN writings w ON pn.writing_id = w.id
+    ORDER BY pn.sent_at DESC
+    LIMIT 30
+  `).all();
+
+  return jsonResponse({
+    stats: {
+      total: totalCount,
+      active: activeCount,
+      pending: pendingCount,
+      unsubscribed: unsubscribedCount,
+      notifications_sent: notifCount
+    },
+    subscribers: subscribers || [],
+    recent_notifications: recentNotifications || []
+  });
+}
+
+async function handleDeleteSubscriberAdmin(id, env) {
+  const db = await checkDatabase(env);
+  await ensureSubscribersTable(db);
+  await db.prepare('DELETE FROM subscribers WHERE id = ?').bind(id).run();
+  return jsonResponse({ success: true, message: 'Subscriber deleted successfully.' });
+}
+
+async function handleSendTestPoemNotification(request, env) {
+  const db = await checkDatabase(env);
+  await ensureSubscribersTable(db);
+
+  let body = {};
+  try {
+    body = await request.json();
+  } catch {}
+
+  let targetEmail = (body.email || '').trim().toLowerCase();
+  if (!targetEmail || !targetEmail.includes('@')) {
+    const adminRecord = await db.prepare('SELECT email FROM admin_users WHERE username = ?').bind('admin').first();
+    targetEmail = adminRecord?.email || env.ADMIN_EMAIL;
+  }
+
+  if (!targetEmail) {
+    return jsonResponse({ error: 'Please specify a target email address or configure your administrator email in Settings.' }, 400);
+  }
+
+  const poem = await db.prepare(`
+    SELECT id, title, slug, subtitle, content, content_type
+    FROM writings
+    WHERE status = 'Published' AND content_type = 'Poetry'
+    ORDER BY COALESCE(published_at, created_at) DESC
+    LIMIT 1
+  `).first() || {
+    id: 'sample_poem',
+    title: 'मौन के पदचाप',
+    slug: 'maun-ke-padchaap',
+    subtitle: 'एक अप्रकाशित विचार',
+    content: 'शब्द जब मौन से संवाद करते हैं,\nतब कविता जन्म लेती है।\nअनकही बातें, अनसुलझे रहस्य,\nपन्नों पर स्याही बन बहते हैं।'
+  };
+
+  const siteUrl = getSiteUrl(request, env);
+  const readUrl = `${siteUrl}/poems/${encodeURIComponent(poem.slug)}`;
+  const unsubUrl = `${siteUrl}/unsubscribe?token=test_preview_token`;
+
+  const lines = (poem.content || '').split('\n').map(l => l.trim()).filter(Boolean);
+  const excerptLines = lines.slice(0, 6).join('<br>');
+
+  const emailHtml = renderPoemNotificationEmailHtml({
+    poemTitle: poem.title,
+    subtitle: poem.subtitle,
+    excerptHtml: excerptLines,
+    readUrl,
+    unsubscribeUrl: unsubUrl
+  });
+
+  try {
+    const res = await sendTransactionalEmail(env, {
+      to: targetEmail,
+      subject: `[TEST PREVIEW] Ashabd (अशब्द) — नवीन कविता: ${poem.title}`,
+      html: emailHtml
+    });
+
+    return jsonResponse({
+      success: true,
+      provider: res.provider,
+      simulated: res.simulated,
+      message: `परीक्षण सूचना ${targetEmail} पर भेज दी गई (${res.simulated ? 'सिम्युलेटेड - Provider secret not yet added' : 'सफलतापूर्वक प्रेषित'})!`
+    });
+  } catch (err) {
+    return jsonResponse({ error: `Failed to send test email: ${err.message}` }, 500);
+  }
+}
+
+async function triggerPoemNotifications(env, poem, siteUrl) {
+  const db = env.DB || env['ashabd-db'];
+  if (!db || !poem) return;
+
+  // Only trigger automatic notifications for poetry
+  if (poem.content_type && poem.content_type !== 'Poetry') {
+    return;
+  }
+
+  try {
+    await ensureSubscribersTable(db);
+    const { results: activeSubscribers } = await db.prepare(`
+      SELECT id, email, unsubscribe_token FROM subscribers WHERE status = 'active'
+    `).all();
+
+    if (!activeSubscribers || activeSubscribers.length === 0) {
+      return;
+    }
+
+    const poemTitle = poem.title || 'नवीन कविता';
+    const poemSlug = poem.slug || '';
+    const readUrl = `${siteUrl}/poems/${encodeURIComponent(poemSlug)}`;
+
+    const lines = (poem.content || '').split('\n').map(l => l.trim()).filter(Boolean);
+    const excerptLines = lines.slice(0, 6).join('<br>');
+
+    for (const sub of activeSubscribers) {
+      const alreadySent = await db.prepare(`
+        SELECT id FROM poem_notifications WHERE writing_id = ? AND subscriber_id = ? AND status = 'sent'
+      `).bind(poem.id, sub.id).first();
+
+      if (alreadySent) continue;
+
+      const unsubUrl = `${siteUrl}/unsubscribe?token=${encodeURIComponent(sub.unsubscribe_token)}`;
+      const emailHtml = renderPoemNotificationEmailHtml({
+        poemTitle,
+        subtitle: poem.subtitle,
+        excerptHtml: excerptLines,
+        readUrl,
+        unsubscribeUrl: unsubUrl
+      });
+
+      const notifId = 'notif_' + Date.now().toString(36) + '_' + generateRandomHexToken(4);
+      const now = Date.now();
+
+      try {
+        await sendTransactionalEmail(env, {
+          to: sub.email,
+          subject: `Ashabd (अशब्द) — नवीन कविता: ${poemTitle}`,
+          html: emailHtml
+        });
+
+        await db.prepare(`
+          INSERT INTO poem_notifications (id, writing_id, subscriber_id, recipient_email, status, error_message, sent_at)
+          VALUES (?, ?, ?, ?, 'sent', NULL, ?)
+        `).bind(notifId, poem.id, sub.id, sub.email, now).run();
+      } catch (err) {
+        console.error(`Failed to send poem notification to ${sub.email}:`, err);
+        await db.prepare(`
+          INSERT INTO poem_notifications (id, writing_id, subscriber_id, recipient_email, status, error_message, sent_at)
+          VALUES (?, ?, ?, ?, 'failed', ?, ?)
+        `).bind(notifId, poem.id, sub.id, sub.email, String(err.message || err).slice(0, 255), now).run();
+      }
+    }
+  } catch (err) {
+    console.error('triggerPoemNotifications error:', err);
+  }
 }
 
 /* ==========================================================================
@@ -1820,7 +2556,7 @@ async function handleGetWritingAdmin(id, env) {
   return jsonResponse({ writing });
 }
 
-async function handleCreateWriting(request, env) {
+async function handleCreateWriting(request, env, ctx) {
   const db = await checkDatabase(env);
   const body = await request.json();
 
@@ -1855,6 +2591,18 @@ async function handleCreateWriting(request, env) {
     id, title, uniqueSlug, subtitle, content, contentType, tags, status, coverImageKey, now, now, publishedAt
   ).run();
 
+  // Automatic poem publication notification for active subscribers
+  if (status === 'Published') {
+    const siteUrl = getSiteUrl(request, env);
+    const writingObj = { id, title, slug: uniqueSlug, subtitle, content, content_type: contentType };
+    const task = triggerPoemNotifications(env, writingObj, siteUrl);
+    if (ctx && ctx.waitUntil) {
+      ctx.waitUntil(task);
+    } else {
+      task.catch(err => console.error('Notification dispatch error:', err));
+    }
+  }
+
   return jsonResponse({
     success: true,
     writing: {
@@ -1867,7 +2615,7 @@ async function handleCreateWriting(request, env) {
   }, 201);
 }
 
-async function handleUpdateWriting(id, request, env) {
+async function handleUpdateWriting(id, request, env, ctx) {
   const db = await checkDatabase(env);
   const body = await request.json();
 
@@ -1911,18 +2659,30 @@ async function handleUpdateWriting(id, request, env) {
     title, slug, subtitle, content, contentType, tags, status, coverImageKey, now, publishedAt, id
   ).run();
 
+  // Automatic poem publication notification when transitioning to Published
+  if (status === 'Published' && existing.status !== 'Published') {
+    const siteUrl = getSiteUrl(request, env);
+    const writingObj = { id, title, slug, subtitle, content, content_type: contentType };
+    const task = triggerPoemNotifications(env, writingObj, siteUrl);
+    if (ctx && ctx.waitUntil) {
+      ctx.waitUntil(task);
+    } else {
+      task.catch(err => console.error('Notification dispatch error:', err));
+    }
+  }
+
   return jsonResponse({
     success: true,
     writing: { id, title, slug, status, updated_at: now, published_at: publishedAt }
   });
 }
 
-async function handleToggleStatus(id, request, env) {
+async function handleToggleStatus(id, request, env, ctx) {
   const db = await checkDatabase(env);
   const body = await request.json();
   const nextStatus = body.status === 'Published' ? 'Published' : 'Draft';
 
-  const existing = await db.prepare('SELECT id, published_at FROM writings WHERE id = ?').bind(id).first();
+  const existing = await db.prepare('SELECT id, status, published_at FROM writings WHERE id = ?').bind(id).first();
   if (!existing) {
     return jsonResponse({ error: 'Writing not found' }, 404);
   }
@@ -1935,6 +2695,20 @@ async function handleToggleStatus(id, request, env) {
     SET status = ?, published_at = ?, updated_at = ?
     WHERE id = ?
   `).bind(nextStatus, publishedAt, now, id).run();
+
+  // Automatic poem publication notification when transitioning to Published
+  if (nextStatus === 'Published' && existing.status !== 'Published') {
+    const writingObj = await db.prepare('SELECT id, title, slug, subtitle, content, content_type FROM writings WHERE id = ?').bind(id).first();
+    if (writingObj) {
+      const siteUrl = getSiteUrl(request, env);
+      const task = triggerPoemNotifications(env, writingObj, siteUrl);
+      if (ctx && ctx.waitUntil) {
+        ctx.waitUntil(task);
+      } else {
+        task.catch(err => console.error('Notification dispatch error:', err));
+      }
+    }
+  }
 
   return jsonResponse({ success: true, status: nextStatus, published_at: publishedAt });
 }
@@ -3815,6 +4589,10 @@ function getAdminDashboardHtml() {
         <span>📁 Drafts</span>
         <span class="nav-count" id="countDraft">0</span>
       </button>
+      <button class="nav-btn" id="btn-subscribers" onclick="switchTab('subscribers')">
+        <span>📬 Subscribers</span>
+        <span class="nav-count" id="countSubscribers">0</span>
+      </button>
       <button class="nav-btn" id="btn-settings" onclick="switchTab('settings')">
         <span>⚙️ Settings &amp; D1</span>
       </button>
@@ -4365,6 +5143,89 @@ function getAdminDashboardHtml() {
           <button class="btn btn-outline" onclick="exportBackup()">📥 Download Backup (JSON)</button>
         </div>
       </section>
+
+      <!-- VIEW 5: SUBSCRIBERS & POEM NOTIFICATIONS -->
+      <section id="view-subscribers" class="view-section">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Poem Subscribers &amp; Notifications</h2>
+            <p style="color: var(--text-muted); font-size: 0.84rem; margin-top: 0.25rem;">3D Notice Board Audience &amp; Automated Delivery Log</p>
+          </div>
+          <div style="display: flex; gap: 0.65rem; align-items: center; flex-wrap: wrap;">
+            <button class="btn btn-outline" onclick="openTestPoemModal()" title="Send test poem notification">
+              <span>✉️ Send Test Notification</span>
+            </button>
+            <button class="btn btn-outline" onclick="loadSubscribers()" title="Refresh subscribers">
+              <span>↻ Refresh</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Active Verified (सक्रिय)</div>
+            <div class="stat-value" id="statActiveSubscribers" style="color: var(--success);">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Pending Verification (प्रतीक्षारत)</div>
+            <div class="stat-value" id="statPendingSubscribers" style="color: var(--warning);">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Unsubscribed (समाप्त)</div>
+            <div class="stat-value" id="statUnsubscribed" style="color: var(--text-muted);">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Total Delivered (कुल प्रेषित)</div>
+            <div class="stat-value" id="statTotalNotifications" style="color: var(--accent);">0</div>
+          </div>
+        </div>
+
+        <div class="filter-bar">
+          <input type="text" id="subscriberSearchInput" class="search-input" placeholder="Search by email..." oninput="filterSubscribers()">
+          <select id="subscriberStatusFilter" class="select-input" onchange="filterSubscribers()">
+            <option value="all">All Statuses (सभी स्थितियाँ)</option>
+            <option value="active">Active Verified (सक्रिय)</option>
+            <option value="pending">Pending Verification (प्रतीक्षारत)</option>
+            <option value="unsubscribed">Unsubscribed (समाप्त)</option>
+          </select>
+        </div>
+
+        <div class="table-card">
+          <table class="writings-table">
+            <thead>
+              <tr>
+                <th>Email Address</th>
+                <th>Status</th>
+                <th>Subscribed On</th>
+                <th>Verified On</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="subscribersTableBody">
+              <tr><td colspan="5" style="text-align: center; color: var(--text-muted);">लोड हो रहा है (Loading subscribers)...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="section-header" style="margin-top: 2.5rem;">
+          <h3 style="font-size: 1.15rem;">Recent Notification Dispatches (हालिया प्रेषण लॉग)</h3>
+        </div>
+        <div class="table-card">
+          <table class="writings-table">
+            <thead>
+              <tr>
+                <th>Poem Title</th>
+                <th>Recipient</th>
+                <th>Status</th>
+                <th>Sent At</th>
+              </tr>
+            </thead>
+            <tbody id="notificationsLogTableBody">
+              <tr><td colspan="4" style="text-align: center; color: var(--text-muted);">कोई प्रेषण रिकॉर्ड नहीं (No notifications recorded yet)</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
     </main>
   </div>
 
@@ -4424,6 +5285,29 @@ function getAdminDashboardHtml() {
         <button class="btn btn-outline btn-sm" onclick="closePoemDetailModal()">Close</button>
         <a id="pdmLiveBtn" href="#" target="_blank" class="btn btn-accent btn-sm" style="text-decoration: none;">View Live on Website ↗</a>
       </div>
+    </div>
+  </div>
+
+  <!-- ==================== TEST POEM NOTIFICATION MODAL ==================== -->
+  <div id="testNotificationModal" class="modal-overlay">
+    <div class="preview-modal-content" style="background: var(--surface); color: var(--text-main); border: 1px solid var(--surface-border); max-width: 500px; padding: 2rem;">
+      <button class="preview-close-btn" style="color: var(--text-main); background: rgba(255,255,255,0.08);" onclick="closeTestPoemModal()">&times;</button>
+      <h3 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.4rem; color: var(--text-main);">Send Test Poem Notification</h3>
+      <p style="font-size: 0.84rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 1.25rem;">
+        Dispatches a sample antique notification email to verify visual rendering and transactional email delivery.
+      </p>
+
+      <form id="testNotificationForm" onsubmit="submitTestPoemNotification(event)">
+        <div class="form-group" style="text-align: left; margin-bottom: 1rem;">
+          <label class="form-label" for="testNotificationEmail">Recipient Email Address (प्राप्तकर्ता ईमेल)</label>
+          <input type="email" id="testNotificationEmail" class="text-input" placeholder="admin@ashabd.in" required autocomplete="email">
+        </div>
+        <div id="testNotificationFeedback" style="display: none; font-size: 0.84rem; line-height: 1.5; padding: 0.65rem 0.85rem; border-radius: var(--radius); margin-bottom: 1rem;"></div>
+        <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+          <button type="button" class="btn btn-outline" onclick="closeTestPoemModal()">Cancel</button>
+          <button type="submit" id="sendTestPoemBtn" class="btn btn-accent">Send Test Email</button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -4845,6 +5729,10 @@ function getAdminDashboardHtml() {
       } else if (tab === 'editor') {
         document.getElementById('view-editor')?.classList.add('active');
         document.getElementById('btn-new')?.classList.add('active');
+      } else if (tab === 'subscribers') {
+        document.getElementById('view-subscribers')?.classList.add('active');
+        document.getElementById('btn-subscribers')?.classList.add('active');
+        loadSubscribers();
       } else if (tab === 'settings') {
         document.getElementById('view-settings')?.classList.add('active');
         document.getElementById('btn-settings')?.classList.add('active');
@@ -6092,9 +6980,199 @@ function getAdminDashboardHtml() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = \`ashabd-analytics-\${period}-\${dateStr}.csv\`;
+        a.download = `ashabd-analytics-${period}-${dateStr}.csv`;
         a.click();
         URL.revokeObjectURL(url);
+      }
+    }
+
+    // ==================== SUBSCRIBER MANAGEMENT ====================
+    let allSubscribers = [];
+
+    async function loadSubscribers() {
+      const tbody = document.getElementById('subscribersTableBody');
+      const logBody = document.getElementById('notificationsLogTableBody');
+      if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">लोड हो रहा है (Loading subscribers)...</td></tr>';
+
+      try {
+        const res = await fetch('/api/subscribers');
+        if (!res.ok) throw new Error('Failed to fetch subscribers');
+        const data = await res.json();
+
+        // Update stats
+        if (data.stats) {
+          document.getElementById('statActiveSubscribers').innerText = data.stats.active || 0;
+          document.getElementById('statPendingSubscribers').innerText = data.stats.pending || 0;
+          document.getElementById('statUnsubscribed').innerText = data.stats.unsubscribed || 0;
+          document.getElementById('statTotalNotifications').innerText = data.stats.notifications_sent || 0;
+          const countBadge = document.getElementById('countSubscribers');
+          if (countBadge) countBadge.innerText = data.stats.active || 0;
+        }
+
+        allSubscribers = data.subscribers || [];
+        renderSubscribersTable(allSubscribers);
+        renderNotificationLogs(data.recent_notifications || []);
+      } catch (err) {
+        if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--danger);">Error loading subscribers: \${escape(err.message)}</td></tr>`;
+      }
+    }
+
+    function renderSubscribersTable(list) {
+      const tbody = document.getElementById('subscribersTableBody');
+      if (!tbody) return;
+
+      if (!list || list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">अभी कोई सदस्य नहीं है (No subscribers found)</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = list.map(sub => {
+        let statusBadge = '';
+        if (sub.status === 'active') {
+          statusBadge = '<span class="status-tag status-published">Active (सक्रिय)</span>';
+        } else if (sub.status === 'pending') {
+          statusBadge = '<span class="status-tag status-draft">Pending (प्रतीक्षारत)</span>';
+        } else {
+          statusBadge = '<span class="status-tag" style="background: rgba(138,138,138,0.15); color: #888; border-color: rgba(138,138,138,0.3);">Unsubscribed</span>';
+        }
+
+        const createdDate = sub.created_at ? new Date(sub.created_at).toLocaleDateString('hi-IN', { year: 'numeric', month: 'short', day: 'numeric' }) : '--';
+        const verifiedDate = sub.verified_at ? new Date(sub.verified_at).toLocaleDateString('hi-IN', { year: 'numeric', month: 'short', day: 'numeric' }) : (sub.status === 'active' ? '✓ Verified' : '--');
+
+        return `
+          <tr>
+            <td style="font-weight: 500; color: var(--text-main); font-family: monospace; font-size: 0.88rem;">\${escape(sub.email)}</td>
+            <td>\${statusBadge}</td>
+            <td style="color: var(--text-muted); font-size: 0.82rem;">\${createdDate}</td>
+            <td style="color: var(--text-muted); font-size: 0.82rem;">\${verifiedDate}</td>
+            <td>
+              <button class="action-btn" onclick="deleteSubscriber('\${escape(sub.id)}', '\${escape(sub.email)}')" title="Remove subscriber" style="color: var(--danger);">
+                🗑️
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderNotificationLogs(logs) {
+      const logBody = document.getElementById('notificationsLogTableBody');
+      if (!logBody) return;
+
+      if (!logs || logs.length === 0) {
+        logBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">कोई प्रेषण रिकॉर्ड नहीं (No notifications recorded yet)</td></tr>';
+        return;
+      }
+
+      logBody.innerHTML = logs.map(log => {
+        const sentDate = log.sent_at ? new Date(log.sent_at).toLocaleString('hi-IN', { dateStyle: 'short', timeStyle: 'short' }) : '--';
+        const statusBadge = log.status === 'sent'
+          ? '<span style="color: #3fb950; font-weight: 600; font-size: 0.8rem;">✓ Sent</span>'
+          : `<span style="color: var(--danger); font-weight: 600; font-size: 0.8rem;">✕ Failed (\${escape(log.error_message || '')})</span>`;
+
+        return `
+          <tr>
+            <td style="font-weight: 500; color: var(--text-main);">\${escape(log.poem_title || log.writing_id)}</td>
+            <td style="color: var(--text-muted); font-family: monospace; font-size: 0.82rem;">\${escape(log.recipient_email)}</td>
+            <td>\${statusBadge}</td>
+            <td style="color: var(--text-muted); font-size: 0.82rem;">\${sentDate}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function filterSubscribers() {
+      const search = (document.getElementById('subscriberSearchInput')?.value || '').trim().toLowerCase();
+      const status = document.getElementById('subscriberStatusFilter')?.value || 'all';
+
+      const filtered = allSubscribers.filter(sub => {
+        const matchSearch = !search || sub.email.toLowerCase().includes(search);
+        const matchStatus = status === 'all' || sub.status === status;
+        return matchSearch && matchStatus;
+      });
+
+      renderSubscribersTable(filtered);
+    }
+
+    async function deleteSubscriber(id, email) {
+      if (!confirm(\`Are you sure you want to remove subscriber \${email}?\`)) {
+        return;
+      }
+      try {
+        const res = await fetch(\`/api/subscribers/\${id}\`, { method: 'DELETE' });
+        if (res.ok) {
+          loadSubscribers();
+        } else {
+          const data = await res.json();
+          alert('Failed to delete subscriber: ' + (data.error || 'Server error'));
+        }
+      } catch (err) {
+        alert('Network error: ' + err.message);
+      }
+    }
+
+    function openTestPoemModal() {
+      const modal = document.getElementById('testNotificationModal');
+      const emailInput = document.getElementById('testNotificationEmail');
+      const feedback = document.getElementById('testNotificationFeedback');
+      if (feedback) feedback.style.display = 'none';
+      if (modal) modal.classList.add('active');
+      if (emailInput) {
+        const recoveryEmail = document.getElementById('adminRecoveryEmail')?.value;
+        if (recoveryEmail) emailInput.value = recoveryEmail;
+        setTimeout(() => emailInput.focus(), 60);
+      }
+    }
+
+    function closeTestPoemModal() {
+      const modal = document.getElementById('testNotificationModal');
+      if (modal) modal.classList.remove('active');
+    }
+
+    async function submitTestPoemNotification(e) {
+      if (e && e.preventDefault) e.preventDefault();
+      const emailInput = document.getElementById('testNotificationEmail');
+      const feedback = document.getElementById('testNotificationFeedback');
+      const btn = document.getElementById('sendTestPoemBtn');
+
+      if (!emailInput || !feedback || !btn) return;
+
+      const email = emailInput.value.trim();
+      if (!email) return;
+
+      btn.disabled = true;
+      btn.innerText = 'Sending...';
+      feedback.style.display = 'none';
+
+      try {
+        const res = await fetch('/api/subscribers/send-test-notification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        });
+        const data = await res.json();
+
+        feedback.style.display = 'block';
+        if (res.ok && data.success) {
+          feedback.style.background = 'rgba(63, 185, 80, 0.14)';
+          feedback.style.border = '1px solid rgba(63, 185, 80, 0.3)';
+          feedback.style.color = '#3fb950';
+          feedback.innerText = '✅ ' + (data.message || 'Test notification dispatched successfully!');
+        } else {
+          feedback.style.background = 'rgba(248, 81, 73, 0.14)';
+          feedback.style.border = '1px solid rgba(248, 81, 73, 0.3)';
+          feedback.style.color = 'var(--danger)';
+          feedback.innerText = '❌ ' + (data.error || 'Failed to dispatch test notification.');
+        }
+      } catch (err) {
+        feedback.style.display = 'block';
+        feedback.style.background = 'rgba(248, 81, 73, 0.14)';
+        feedback.style.border = '1px solid rgba(248, 81, 73, 0.3)';
+        feedback.style.color = 'var(--danger)';
+        feedback.innerText = '❌ Network error: ' + err.message;
+      } finally {
+        btn.disabled = false;
+        btn.innerText = 'Send Test Email';
       }
     }
 

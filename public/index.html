@@ -101,6 +101,64 @@
       </a>
     </div>
 
+    <!-- 3D Ancient Wooden Notice Board & Poem Subscription System -->
+    <aside class="notice-board-wrapper" id="noticeBoardWrapper" aria-label="Subscription Notice Board">
+      <div class="notice-board-3d" id="noticeBoard3D">
+        <picture>
+          <source srcset="wooden_notice_board.webp" type="image/webp">
+          <img src="wooden_notice_board.png" alt="Ancient wooden notice board" class="wooden-board-img" draggable="false" width="640" height="857">
+        </picture>
+
+        <!-- Paper Pinned Zone on Board -->
+        <div class="paper-pin-zone" id="paperPinZone">
+          <!-- Initial Prompt Paper ("Click to Subscribe") -->
+          <div class="pinned-paper-sheet" id="paperPromptSheet" role="button" tabindex="0" aria-label="Click to subscribe to new poems" title="Click to subscribe">
+            <picture class="paper-bg-picture">
+              <source srcset="pinned_paper.webp" type="image/webp">
+              <img src="pinned_paper.png" alt="" class="paper-bg-img" draggable="false" aria-hidden="true">
+            </picture>
+            <div class="paper-inner-content">
+              <span class="paper-ornament" aria-hidden="true">✦</span>
+              <h2 class="paper-prompt-title">Click to<br>Subscribe</h2>
+              <p class="paper-prompt-sub">नई कविताएँ • New Poems</p>
+              <div class="paper-prompt-hint">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                  <polyline points="22,6 12,13 2,6"></polyline>
+                </svg>
+                <span>स्पर्श करें</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Active Form Paper ("Stay Connected") - Revealed after first paper falls -->
+          <div class="pinned-paper-sheet paper-form-sheet" id="paperFormSheet" style="display: none;" aria-hidden="true">
+            <picture class="paper-bg-picture">
+              <source srcset="pinned_paper.webp" type="image/webp">
+              <img src="pinned_paper.png" alt="" class="paper-bg-img" draggable="false" aria-hidden="true">
+            </picture>
+            <div class="paper-inner-content">
+              <button type="button" class="paper-close-btn" id="paperCloseBtn" aria-label="Close subscription form" title="Close form">&times;</button>
+              <h3 class="paper-form-title">Stay Connected</h3>
+              <p class="paper-form-desc">Receive a note when a new poem arrives.</p>
+
+              <form id="subscribeForm" class="paper-subscription-form" onsubmit="handleSubscriptionSubmit(event)">
+                <div class="paper-input-group">
+                  <input type="email" id="subscriberEmail" class="paper-input" placeholder="Your email address" required autocomplete="email" aria-label="Your email address" spellcheck="false">
+                </div>
+                <button type="submit" id="subscribeSubmitBtn" class="paper-submit-btn">
+                  <span>Subscribe</span>
+                </button>
+                <p class="paper-privacy-note">Only new poems. No spam.</p>
+              </form>
+
+              <div id="subscribeFeedback" class="paper-feedback-msg" style="display: none;" role="status"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
     <!-- Subtle Antique Social Links & Email Contact at Bottom Center -->
     <footer class="manuscript-footer" aria-label="Social media and contact">
       <nav class="manuscript-contact-row" aria-label="Social media and contact links">

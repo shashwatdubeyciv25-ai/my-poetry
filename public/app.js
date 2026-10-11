@@ -242,3 +242,167 @@
     resize();
   }
 })();
+
+/**
+ * ==========================================================================
+ * Ashabd (अशब्द) — 3D Ancient Notice Board & Subscription Interactive Engine
+ * ==========================================================================
+ */
+(function initNoticeBoard() {
+  'use strict';
+
+  function setup() {
+    const promptSheet = document.getElementById('paperPromptSheet');
+    const formSheet = document.getElementById('paperFormSheet');
+    const closeBtn = document.getElementById('paperCloseBtn');
+    const emailInput = document.getElementById('subscriberEmail');
+    const submitBtn = document.getElementById('subscribeSubmitBtn');
+    const feedback = document.getElementById('subscribeFeedback');
+    const form = document.getElementById('subscribeForm');
+
+    if (!promptSheet || !formSheet) return;
+
+    let isAnimating = false;
+
+    // Trigger the paper-falling tumble animation and reveal subscription form
+    function triggerPaperFall() {
+      if (isAnimating) return;
+      isAnimating = true;
+
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      if (prefersReducedMotion) {
+        promptSheet.style.display = 'none';
+        formSheet.style.display = 'block';
+        formSheet.setAttribute('aria-hidden', 'false');
+        formSheet.classList.add('paper-revealed');
+        isAnimating = false;
+        if (emailInput) setTimeout(() => emailInput.focus(), 60);
+        return;
+      }
+
+      promptSheet.classList.add('paper-falling');
+
+      // Tumble animation duration is 0.75s; transition to revealed form at 0.55s
+      setTimeout(() => {
+        promptSheet.style.display = 'none';
+        promptSheet.classList.remove('paper-falling');
+
+        formSheet.style.display = 'block';
+        formSheet.setAttribute('aria-hidden', 'false');
+        formSheet.classList.remove('paper-revealed');
+        void formSheet.offsetWidth; // Force DOM reflow
+        formSheet.classList.add('paper-revealed');
+
+        isAnimating = false;
+        if (emailInput) setTimeout(() => emailInput.focus(), 80);
+      }, 550);
+    }
+
+    // Dismiss subscription form and pin prompt paper back in place
+    function closeFormSheet() {
+      formSheet.classList.remove('paper-revealed');
+      formSheet.style.display = 'none';
+      formSheet.setAttribute('aria-hidden', 'true');
+
+      promptSheet.style.display = 'block';
+      promptSheet.classList.remove('paper-falling');
+
+      if (feedback) {
+        feedback.style.display = 'none';
+        feedback.className = 'paper-feedback-msg';
+        feedback.textContent = '';
+      }
+      if (emailInput) emailInput.value = '';
+    }
+
+    // Prompt paper click and keyboard events
+    promptSheet.addEventListener('click', triggerPaperFall);
+    promptSheet.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+        e.preventDefault();
+        triggerPaperFall();
+      }
+    });
+
+    // Close button
+    if (closeBtn) {
+      closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeFormSheet();
+      });
+    }
+
+    // Global form submission handler
+    window.handleSubscriptionSubmit = async function (event) {
+      if (event && event.preventDefault) event.preventDefault();
+
+      if (!emailInput || !submitBtn || !feedback) return;
+
+      const email = (emailInput.value || '').trim();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+      if (!email || !emailRegex.test(email)) {
+        feedback.className = 'paper-feedback-msg feedback-error';
+        feedback.textContent = 'Please enter a valid email address.';
+        feedback.style.display = 'block';
+        emailInput.focus();
+        return;
+      }
+
+      submitBtn.disabled = true;
+      const originalBtnText = submitBtn.innerHTML;
+      submitBtn.innerHTML = '<span>Subscribing...</span>';
+      feedback.style.display = 'none';
+
+      try {
+        const response = await fetch('/api/subscribers/subscribe', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({ email })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          feedback.className = 'paper-feedback-msg feedback-success';
+          feedback.innerHTML = `<strong>✦ ${data.already_active ? 'Already Subscribed' : 'धन्यवाद (Thank you)'}</strong><br>${escapeHtml(data.message || 'Please check your inbox to confirm your subscription.')}`;
+          feedback.style.display = 'block';
+          if (!data.already_active) {
+            emailInput.value = '';
+          }
+        } else {
+          feedback.className = 'paper-feedback-msg feedback-error';
+          feedback.textContent = data.error || 'Something went wrong. Please try again.';
+          feedback.style.display = 'block';
+        }
+      } catch (err) {
+        feedback.className = 'paper-feedback-msg feedback-error';
+        feedback.textContent = 'Network error. Please check your connection.';
+        feedback.style.display = 'block';
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalBtnText;
+      }
+    };
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setup);
+  } else {
+    setup();
+  }
+})();

@@ -985,6 +985,10 @@
         <span>📁 Drafts</span>
         <span class="nav-count" id="countDraft">0</span>
       </button>
+      <button class="nav-btn" id="btn-subscribers" onclick="switchTab('subscribers')">
+        <span>📬 Subscribers</span>
+        <span class="nav-count" id="countSubscribers">0</span>
+      </button>
       <button class="nav-btn" id="btn-settings" onclick="switchTab('settings')">
         <span>⚙️ Settings &amp; D1</span>
       </button>
@@ -1535,6 +1539,89 @@
           <button class="btn btn-outline" onclick="exportBackup()">📥 Download Backup (JSON)</button>
         </div>
       </section>
+
+      <!-- VIEW 5: SUBSCRIBERS & POEM NOTIFICATIONS -->
+      <section id="view-subscribers" class="view-section">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Poem Subscribers &amp; Notifications</h2>
+            <p style="color: var(--text-muted); font-size: 0.84rem; margin-top: 0.25rem;">3D Notice Board Audience &amp; Automated Delivery Log</p>
+          </div>
+          <div style="display: flex; gap: 0.65rem; align-items: center; flex-wrap: wrap;">
+            <button class="btn btn-outline" onclick="openTestPoemModal()" title="Send test poem notification">
+              <span>✉️ Send Test Notification</span>
+            </button>
+            <button class="btn btn-outline" onclick="loadSubscribers()" title="Refresh subscribers">
+              <span>↻ Refresh</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Active Verified (सक्रिय)</div>
+            <div class="stat-value" id="statActiveSubscribers" style="color: var(--success);">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Pending Verification (प्रतीक्षारत)</div>
+            <div class="stat-value" id="statPendingSubscribers" style="color: var(--warning);">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Unsubscribed (समाप्त)</div>
+            <div class="stat-value" id="statUnsubscribed" style="color: var(--text-muted);">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Total Delivered (कुल प्रेषित)</div>
+            <div class="stat-value" id="statTotalNotifications" style="color: var(--accent);">0</div>
+          </div>
+        </div>
+
+        <div class="filter-bar">
+          <input type="text" id="subscriberSearchInput" class="search-input" placeholder="Search by email..." oninput="filterSubscribers()">
+          <select id="subscriberStatusFilter" class="select-input" onchange="filterSubscribers()">
+            <option value="all">All Statuses (सभी स्थितियाँ)</option>
+            <option value="active">Active Verified (सक्रिय)</option>
+            <option value="pending">Pending Verification (प्रतीक्षारत)</option>
+            <option value="unsubscribed">Unsubscribed (समाप्त)</option>
+          </select>
+        </div>
+
+        <div class="table-card">
+          <table class="writings-table">
+            <thead>
+              <tr>
+                <th>Email Address</th>
+                <th>Status</th>
+                <th>Subscribed On</th>
+                <th>Verified On</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="subscribersTableBody">
+              <tr><td colspan="5" style="text-align: center; color: var(--text-muted);">लोड हो रहा है (Loading subscribers)...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="section-header" style="margin-top: 2.5rem;">
+          <h3 style="font-size: 1.15rem;">Recent Notification Dispatches (हालिया प्रेषण लॉग)</h3>
+        </div>
+        <div class="table-card">
+          <table class="writings-table">
+            <thead>
+              <tr>
+                <th>Poem Title</th>
+                <th>Recipient</th>
+                <th>Status</th>
+                <th>Sent At</th>
+              </tr>
+            </thead>
+            <tbody id="notificationsLogTableBody">
+              <tr><td colspan="4" style="text-align: center; color: var(--text-muted);">कोई प्रेषण रिकॉर्ड नहीं (No notifications recorded yet)</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
     </main>
   </div>
 
@@ -1594,6 +1681,29 @@
         <button class="btn btn-outline btn-sm" onclick="closePoemDetailModal()">Close</button>
         <a id="pdmLiveBtn" href="#" target="_blank" class="btn btn-accent btn-sm" style="text-decoration: none;">View Live on Website ↗</a>
       </div>
+    </div>
+  </div>
+
+  <!-- ==================== TEST POEM NOTIFICATION MODAL ==================== -->
+  <div id="testNotificationModal" class="modal-overlay">
+    <div class="preview-modal-content" style="background: var(--surface); color: var(--text-main); border: 1px solid var(--surface-border); max-width: 500px; padding: 2rem;">
+      <button class="preview-close-btn" style="color: var(--text-main); background: rgba(255,255,255,0.08);" onclick="closeTestPoemModal()">&times;</button>
+      <h3 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.4rem; color: var(--text-main);">Send Test Poem Notification</h3>
+      <p style="font-size: 0.84rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 1.25rem;">
+        Dispatches a sample antique notification email to verify visual rendering and transactional email delivery.
+      </p>
+
+      <form id="testNotificationForm" onsubmit="submitTestPoemNotification(event)">
+        <div class="form-group" style="text-align: left; margin-bottom: 1rem;">
+          <label class="form-label" for="testNotificationEmail">Recipient Email Address (प्राप्तकर्ता ईमेल)</label>
+          <input type="email" id="testNotificationEmail" class="text-input" placeholder="admin@ashabd.in" required autocomplete="email">
+        </div>
+        <div id="testNotificationFeedback" style="display: none; font-size: 0.84rem; line-height: 1.5; padding: 0.65rem 0.85rem; border-radius: var(--radius); margin-bottom: 1rem;"></div>
+        <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+          <button type="button" class="btn btn-outline" onclick="closeTestPoemModal()">Cancel</button>
+          <button type="submit" id="sendTestPoemBtn" class="btn btn-accent">Send Test Email</button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -2015,6 +2125,10 @@
       } else if (tab === 'editor') {
         document.getElementById('view-editor')?.classList.add('active');
         document.getElementById('btn-new')?.classList.add('active');
+      } else if (tab === 'subscribers') {
+        document.getElementById('view-subscribers')?.classList.add('active');
+        document.getElementById('btn-subscribers')?.classList.add('active');
+        loadSubscribers();
       } else if (tab === 'settings') {
         document.getElementById('view-settings')?.classList.add('active');
         document.getElementById('btn-settings')?.classList.add('active');
@@ -3265,6 +3379,196 @@
         a.download = `ashabd-analytics-${period}-${dateStr}.csv`;
         a.click();
         URL.revokeObjectURL(url);
+      }
+    }
+
+    // ==================== SUBSCRIBER MANAGEMENT ====================
+    let allSubscribers = [];
+
+    async function loadSubscribers() {
+      const tbody = document.getElementById('subscribersTableBody');
+      const logBody = document.getElementById('notificationsLogTableBody');
+      if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">लोड हो रहा है (Loading subscribers)...</td></tr>';
+
+      try {
+        const res = await fetch('/api/subscribers');
+        if (!res.ok) throw new Error('Failed to fetch subscribers');
+        const data = await res.json();
+
+        // Update stats
+        if (data.stats) {
+          document.getElementById('statActiveSubscribers').innerText = data.stats.active || 0;
+          document.getElementById('statPendingSubscribers').innerText = data.stats.pending || 0;
+          document.getElementById('statUnsubscribed').innerText = data.stats.unsubscribed || 0;
+          document.getElementById('statTotalNotifications').innerText = data.stats.notifications_sent || 0;
+          const countBadge = document.getElementById('countSubscribers');
+          if (countBadge) countBadge.innerText = data.stats.active || 0;
+        }
+
+        allSubscribers = data.subscribers || [];
+        renderSubscribersTable(allSubscribers);
+        renderNotificationLogs(data.recent_notifications || []);
+      } catch (err) {
+        if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--danger);">Error loading subscribers: ${escape(err.message)}</td></tr>`;
+      }
+    }
+
+    function renderSubscribersTable(list) {
+      const tbody = document.getElementById('subscribersTableBody');
+      if (!tbody) return;
+
+      if (!list || list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">अभी कोई सदस्य नहीं है (No subscribers found)</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = list.map(sub => {
+        let statusBadge = '';
+        if (sub.status === 'active') {
+          statusBadge = '<span class="status-tag status-published">Active (सक्रिय)</span>';
+        } else if (sub.status === 'pending') {
+          statusBadge = '<span class="status-tag status-draft">Pending (प्रतीक्षारत)</span>';
+        } else {
+          statusBadge = '<span class="status-tag" style="background: rgba(138,138,138,0.15); color: #888; border-color: rgba(138,138,138,0.3);">Unsubscribed</span>';
+        }
+
+        const createdDate = sub.created_at ? new Date(sub.created_at).toLocaleDateString('hi-IN', { year: 'numeric', month: 'short', day: 'numeric' }) : '--';
+        const verifiedDate = sub.verified_at ? new Date(sub.verified_at).toLocaleDateString('hi-IN', { year: 'numeric', month: 'short', day: 'numeric' }) : (sub.status === 'active' ? '✓ Verified' : '--');
+
+        return `
+          <tr>
+            <td style="font-weight: 500; color: var(--text-main); font-family: monospace; font-size: 0.88rem;">${escape(sub.email)}</td>
+            <td>${statusBadge}</td>
+            <td style="color: var(--text-muted); font-size: 0.82rem;">${createdDate}</td>
+            <td style="color: var(--text-muted); font-size: 0.82rem;">${verifiedDate}</td>
+            <td>
+              <button class="action-btn" onclick="deleteSubscriber('${escape(sub.id)}', '${escape(sub.email)}')" title="Remove subscriber" style="color: var(--danger);">
+                🗑️
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderNotificationLogs(logs) {
+      const logBody = document.getElementById('notificationsLogTableBody');
+      if (!logBody) return;
+
+      if (!logs || logs.length === 0) {
+        logBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">कोई प्रेषण रिकॉर्ड नहीं (No notifications recorded yet)</td></tr>';
+        return;
+      }
+
+      logBody.innerHTML = logs.map(log => {
+        const sentDate = log.sent_at ? new Date(log.sent_at).toLocaleString('hi-IN', { dateStyle: 'short', timeStyle: 'short' }) : '--';
+        const statusBadge = log.status === 'sent'
+          ? '<span style="color: #3fb950; font-weight: 600; font-size: 0.8rem;">✓ Sent</span>'
+          : `<span style="color: var(--danger); font-weight: 600; font-size: 0.8rem;">✕ Failed (${escape(log.error_message || '')})</span>`;
+
+        return `
+          <tr>
+            <td style="font-weight: 500; color: var(--text-main);">${escape(log.poem_title || log.writing_id)}</td>
+            <td style="color: var(--text-muted); font-family: monospace; font-size: 0.82rem;">${escape(log.recipient_email)}</td>
+            <td>${statusBadge}</td>
+            <td style="color: var(--text-muted); font-size: 0.82rem;">${sentDate}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function filterSubscribers() {
+      const search = (document.getElementById('subscriberSearchInput')?.value || '').trim().toLowerCase();
+      const status = document.getElementById('subscriberStatusFilter')?.value || 'all';
+
+      const filtered = allSubscribers.filter(sub => {
+        const matchSearch = !search || sub.email.toLowerCase().includes(search);
+        const matchStatus = status === 'all' || sub.status === status;
+        return matchSearch && matchStatus;
+      });
+
+      renderSubscribersTable(filtered);
+    }
+
+    async function deleteSubscriber(id, email) {
+      if (!confirm(`Are you sure you want to remove subscriber ${email}?`)) {
+        return;
+      }
+      try {
+        const res = await fetch(`/api/subscribers/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          loadSubscribers();
+        } else {
+          const data = await res.json();
+          alert('Failed to delete subscriber: ' + (data.error || 'Server error'));
+        }
+      } catch (err) {
+        alert('Network error: ' + err.message);
+      }
+    }
+
+    function openTestPoemModal() {
+      const modal = document.getElementById('testNotificationModal');
+      const emailInput = document.getElementById('testNotificationEmail');
+      const feedback = document.getElementById('testNotificationFeedback');
+      if (feedback) feedback.style.display = 'none';
+      if (modal) modal.classList.add('active');
+      if (emailInput) {
+        const recoveryEmail = document.getElementById('adminRecoveryEmail')?.value;
+        if (recoveryEmail) emailInput.value = recoveryEmail;
+        setTimeout(() => emailInput.focus(), 60);
+      }
+    }
+
+    function closeTestPoemModal() {
+      const modal = document.getElementById('testNotificationModal');
+      if (modal) modal.classList.remove('active');
+    }
+
+    async function submitTestPoemNotification(e) {
+      if (e && e.preventDefault) e.preventDefault();
+      const emailInput = document.getElementById('testNotificationEmail');
+      const feedback = document.getElementById('testNotificationFeedback');
+      const btn = document.getElementById('sendTestPoemBtn');
+
+      if (!emailInput || !feedback || !btn) return;
+
+      const email = emailInput.value.trim();
+      if (!email) return;
+
+      btn.disabled = true;
+      btn.innerText = 'Sending...';
+      feedback.style.display = 'none';
+
+      try {
+        const res = await fetch('/api/subscribers/send-test-notification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        });
+        const data = await res.json();
+
+        feedback.style.display = 'block';
+        if (res.ok && data.success) {
+          feedback.style.background = 'rgba(63, 185, 80, 0.14)';
+          feedback.style.border = '1px solid rgba(63, 185, 80, 0.3)';
+          feedback.style.color = '#3fb950';
+          feedback.innerText = '✅ ' + (data.message || 'Test notification dispatched successfully!');
+        } else {
+          feedback.style.background = 'rgba(248, 81, 73, 0.14)';
+          feedback.style.border = '1px solid rgba(248, 81, 73, 0.3)';
+          feedback.style.color = 'var(--danger)';
+          feedback.innerText = '❌ ' + (data.error || 'Failed to dispatch test notification.');
+        }
+      } catch (err) {
+        feedback.style.display = 'block';
+        feedback.style.background = 'rgba(248, 81, 73, 0.14)';
+        feedback.style.border = '1px solid rgba(248, 81, 73, 0.3)';
+        feedback.style.color = 'var(--danger)';
+        feedback.innerText = '❌ Network error: ' + err.message;
+      } finally {
+        btn.disabled = false;
+        btn.innerText = 'Send Test Email';
       }
     }
 
