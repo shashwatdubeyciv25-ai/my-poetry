@@ -148,20 +148,7 @@
     </footer>
   </main>
 
-  <!-- SVG Filter for Antique Ink Bleed on Fibrous Parchment -->
-  <svg class="svg-filters" aria-hidden="true" focusable="false">
-    <defs>
-      <filter id="ink-bleed" x="-10%" y="-10%" width="120%" height="120%">
-        <feTurbulence type="fractalNoise" baseFrequency="0.065" numOctaves="4" result="noise" />
-        <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.0" xChannelSelector="R" yChannelSelector="G" result="displaced" />
-        <feGaussianBlur in="displaced" stdDeviation="0.35" result="blurred" />
-        <feMerge>
-          <feMergeNode in="blurred" />
-          <feMergeNode in="displaced" />
-        </feMerge>
-      </filter>
-    </defs>
-  </svg>
+
 
   <script src="app.js"></script>
   <script src="/analytics.js" defer></script>

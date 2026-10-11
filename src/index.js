@@ -1760,6 +1760,8 @@ function renderPoemHtml(poem) {
       background-position: center center;
       background-size: cover;
       background-repeat: no-repeat;
+      image-rendering: -webkit-optimize-contrast;
+      image-rendering: high-quality;
       z-index: 0;
       pointer-events: none;
     }
@@ -2057,6 +2059,8 @@ function renderArchiveHtml(writings) {
       background-position: center center;
       background-size: cover;
       background-repeat: no-repeat;
+      image-rendering: -webkit-optimize-contrast;
+      image-rendering: high-quality;
       z-index: 0;
       pointer-events: none;
     }
@@ -2283,6 +2287,8 @@ function renderNotFoundHtml(customMessage = null) {
       background-position: center center;
       background-size: cover;
       background-repeat: no-repeat;
+      image-rendering: -webkit-optimize-contrast;
+      image-rendering: high-quality;
       z-index: 0;
       pointer-events: none;
     }
