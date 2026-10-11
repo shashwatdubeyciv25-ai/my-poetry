@@ -308,6 +308,11 @@
       promptSheet.style.display = 'block';
       promptSheet.classList.remove('paper-falling');
 
+      const formView = document.getElementById('paperFormView');
+      const successView = document.getElementById('paperSuccessView');
+      if (formView) formView.style.display = 'block';
+      if (successView) successView.style.display = 'none';
+
       if (feedback) {
         feedback.style.display = 'none';
         feedback.className = 'paper-feedback-msg';
@@ -333,10 +338,13 @@
       });
     }
 
+    let isSubmitting = false;
+
     // Global form submission handler
     window.handleSubscriptionSubmit = async function (event) {
       if (event && event.preventDefault) event.preventDefault();
 
+      if (isSubmitting) return;
       if (!emailInput || !submitBtn || !feedback) return;
 
       const email = (emailInput.value || '').trim();
@@ -350,6 +358,7 @@
         return;
       }
 
+      isSubmitting = true;
       submitBtn.disabled = true;
       const originalBtnText = submitBtn.innerHTML;
       submitBtn.innerHTML = '<span>Subscribing...</span>';
@@ -368,12 +377,30 @@
         const data = await response.json();
 
         if (response.ok && data.success) {
-          feedback.className = 'paper-feedback-msg feedback-success';
-          feedback.innerHTML = `<strong>✦ ${data.already_active ? 'Already Subscribed' : 'धन्यवाद (Thank you)'}</strong><br>${escapeHtml(data.message || 'Please check your inbox to confirm your subscription.')}`;
-          feedback.style.display = 'block';
-          if (!data.already_active) {
-            emailInput.value = '';
+          const formView = document.getElementById('paperFormView');
+          const successView = document.getElementById('paperSuccessView');
+          const successHeading = document.getElementById('paperSuccessHeading');
+          const successBody = document.getElementById('paperSuccessBody');
+
+          if (successHeading && successBody) {
+            if (data.already_active) {
+              successHeading.innerHTML = '<span>धन्यवाद!</span><span class="paper-success-subheading">(Thank You!)</span>';
+              successBody.textContent = 'You are already subscribed to Ashabd (आप पहले से ही जुड़े हैं)।';
+            } else {
+              successHeading.innerHTML = '<span>धन्यवाद!</span><span class="paper-success-subheading">(Thank You!)</span>';
+              successBody.textContent = 'Please check your email to confirm your subscription.';
+            }
           }
+
+          if (formView) formView.style.display = 'none';
+          if (successView) {
+            successView.style.display = 'block';
+            successView.classList.remove('paper-fade-in');
+            void successView.offsetWidth;
+            successView.classList.add('paper-fade-in');
+          }
+
+          emailInput.value = '';
         } else {
           feedback.className = 'paper-feedback-msg feedback-error';
           feedback.textContent = data.error || 'Something went wrong. Please try again.';
@@ -384,6 +411,7 @@
         feedback.textContent = 'Network error. Please check your connection.';
         feedback.style.display = 'block';
       } finally {
+        isSubmitting = false;
         submitBtn.disabled = false;
         submitBtn.innerHTML = originalBtnText;
       }

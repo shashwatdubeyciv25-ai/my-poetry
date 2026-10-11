@@ -139,19 +139,36 @@
             </picture>
             <div class="paper-inner-content">
               <button type="button" class="paper-close-btn" id="paperCloseBtn" aria-label="Close subscription form" title="Close form">&times;</button>
-              <h3 class="paper-form-title">Stay Connected</h3>
-              <p class="paper-form-desc">Receive a note when a new poem arrives.</p>
 
-              <form id="subscribeForm" class="paper-subscription-form" onsubmit="handleSubscriptionSubmit(event)">
-                <div class="paper-input-group">
-                  <input type="email" id="subscriberEmail" class="paper-input" placeholder="Your email address" required autocomplete="email" aria-label="Your email address" spellcheck="false">
+              <!-- State A: Subscription Form View -->
+              <div id="paperFormView" class="paper-view-container paper-form-view">
+                <h3 class="paper-form-title">Stay Connected</h3>
+                <p class="paper-form-desc">Receive a note when a new poem arrives.</p>
+
+                <form id="subscribeForm" class="paper-subscription-form" onsubmit="handleSubscriptionSubmit(event)">
+                  <div class="paper-input-group">
+                    <input type="email" id="subscriberEmail" class="paper-input" placeholder="Your email address" required autocomplete="email" aria-label="Your email address" spellcheck="false">
+                  </div>
+                  <button type="submit" id="subscribeSubmitBtn" class="paper-submit-btn">
+                    <span>Subscribe</span>
+                  </button>
+                </form>
+
+                <div id="subscribeFeedback" class="paper-feedback-msg" style="display: none;" role="alert"></div>
+              </div>
+
+              <!-- State B: Opaque Aged-Paper Thank-You Panel View -->
+              <div id="paperSuccessView" class="paper-view-container paper-success-view" style="display: none;" role="status">
+                <div class="paper-success-card">
+                  <span class="paper-success-flourish" aria-hidden="true">❦</span>
+                  <h3 class="paper-success-heading" id="paperSuccessHeading">
+                    <span>धन्यवाद!</span>
+                    <span class="paper-success-subheading">(Thank You!)</span>
+                  </h3>
+                  <div class="paper-success-rule" aria-hidden="true"></div>
+                  <p class="paper-success-body" id="paperSuccessBody">Please check your email to confirm your subscription.</p>
                 </div>
-                <button type="submit" id="subscribeSubmitBtn" class="paper-submit-btn">
-                  <span>Subscribe</span>
-                </button>
-              </form>
-
-              <div id="subscribeFeedback" class="paper-feedback-msg" style="display: none;" role="status"></div>
+              </div>
             </div>
           </div>
         </div>

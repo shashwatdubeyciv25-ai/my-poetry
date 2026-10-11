@@ -636,9 +636,9 @@ html, body {
 
 .notice-board-wrapper {
   position: fixed;
-  top: clamp(16px, 3.5vh, 36px);
-  right: clamp(18px, 3.5vw, 48px);
-  width: clamp(205px, 17.5vw, 260px);
+  top: clamp(18px, 3vh, 32px);
+  right: clamp(22px, 3vw, 42px);
+  width: clamp(270px, 23vw, 345px);
   max-width: calc(100vw - 24px);
   max-width: calc(100dvw - 24px);
   z-index: 15;
@@ -679,9 +679,9 @@ html, body {
 /* Paper Pinned Zone on Board Planks */
 .paper-pin-zone {
   position: absolute;
-  top: 12.5%;
-  left: 23.5%;
-  width: 53%;
+  top: 12%;
+  left: 22.5%;
+  width: 55%;
   aspect-ratio: 400 / 535;
   z-index: 2;
   perspective: 600px;
@@ -728,7 +728,7 @@ html, body {
   z-index: 2;
   width: 100%;
   height: 100%;
-  padding: 25% 7% 5% 7%;
+  padding: 23% 7% 5% 7%;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -740,7 +740,7 @@ html, body {
 
 /* Paper State 1: Prompt ("Click to Subscribe") */
 .paper-ornament {
-  font-size: clamp(0.72rem, 0.9vw, 0.85rem);
+  font-size: clamp(0.78rem, 1vw, 0.92rem);
   color: #6a3012;
   opacity: 0.9;
   margin-top: 1px;
@@ -750,11 +750,11 @@ html, body {
 
 .paper-prompt-title {
   font-family: 'Cinzel', 'Georgia', 'Rozha One', serif;
-  font-size: clamp(0.82rem, 1.05vw, 1.02rem);
+  font-size: clamp(0.92rem, 1.15vw, 1.15rem);
   font-weight: 700;
   line-height: 1.15;
   color: #1e0d04;
-  margin-bottom: clamp(4px, 0.5vh, 6px);
+  margin-bottom: clamp(5px, 0.6vh, 7px);
   letter-spacing: 0.02em;
   word-spacing: 0.12em;
   text-shadow: 0 1px 1px rgba(255, 255, 255, 0.6);
@@ -762,10 +762,10 @@ html, body {
 
 .paper-prompt-sub {
   font-family: 'Noto Serif Devanagari', 'Georgia', serif;
-  font-size: clamp(0.56rem, 0.72vw, 0.66rem);
+  font-size: clamp(0.60rem, 0.78vw, 0.72rem);
   color: #4e220a;
   opacity: 0.95;
-  margin-bottom: clamp(8px, 1vh, 12px);
+  margin-bottom: clamp(10px, 1.2vh, 14px);
   line-height: 1.25;
 }
 
@@ -773,11 +773,11 @@ html, body {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: clamp(0.52rem, 0.66vw, 0.60rem);
+  font-size: clamp(0.56rem, 0.72vw, 0.66rem);
   font-weight: 600;
   color: #662c0e;
   background: rgba(80, 36, 13, 0.08);
-  padding: 3px 9px;
+  padding: 3px 10px;
   border-radius: 12px;
   border: 1px solid rgba(80, 36, 13, 0.22);
   pointer-events: none;
@@ -860,9 +860,20 @@ html, body {
   transform: scale(1.1);
 }
 
+/* Paper View Containers */
+.paper-view-container {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  box-sizing: border-box;
+}
+
+/* Paper State 2: Subscription Form */
 .paper-form-title {
   font-family: 'Georgia', 'Tiro Devanagari Hindi', 'Cinzel', serif;
-  font-size: clamp(0.78rem, 0.98vw, 0.92rem);
+  font-size: clamp(0.86rem, 1.08vw, 1.04rem);
   font-weight: 700;
   line-height: 1.15;
   color: #220d03;
@@ -876,10 +887,10 @@ html, body {
 
 .paper-form-desc {
   font-family: 'Georgia', 'Noto Serif Devanagari', serif;
-  font-size: clamp(0.55rem, 0.70vw, 0.62rem);
+  font-size: clamp(0.60rem, 0.76vw, 0.68rem);
   color: #381806;
   margin-top: 0;
-  margin-bottom: clamp(5px, 0.7vh, 8px);
+  margin-bottom: clamp(6px, 0.8vh, 9px);
   line-height: 1.32;
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
   font-weight: 500;
@@ -900,13 +911,13 @@ html, body {
 
 .paper-input {
   width: 100%;
-  padding: clamp(5px, 0.6vh, 7px) clamp(6px, 0.8vw, 10px);
-  font-size: clamp(0.58rem, 0.74vw, 0.66rem);
+  padding: clamp(6px, 0.7vh, 8px) clamp(8px, 1vw, 12px);
+  font-size: clamp(0.62rem, 0.78vw, 0.70rem);
   font-family: 'Inter', -apple-system, sans-serif;
   background: rgba(255, 253, 246, 0.96);
   color: #1a0802;
-  border: 1.2px solid rgba(76, 34, 12, 0.45);
-  border-radius: 3px;
+  border: 1.3px solid rgba(76, 34, 12, 0.45);
+  border-radius: 4px;
   box-shadow: inset 0 1px 2px rgba(35, 16, 5, 0.12), 0 1px 1px rgba(255, 255, 255, 0.6);
   text-align: center;
   user-select: text;
@@ -931,15 +942,15 @@ html, body {
 
 .paper-submit-btn {
   width: 100%;
-  padding: clamp(6px, 0.75vh, 8px) clamp(10px, 1.2vw, 14px);
-  font-size: clamp(0.64rem, 0.82vw, 0.74rem);
+  padding: clamp(7px, 0.85vh, 9px) clamp(12px, 1.4vw, 16px);
+  font-size: clamp(0.68rem, 0.86vw, 0.78rem);
   font-weight: 600;
   font-family: 'Georgia', 'Cinzel', serif;
   letter-spacing: 0.04em;
   background: linear-gradient(180deg, #3c1c0c 0%, #200d04 100%);
   color: #fcf6ea;
   border: 1px solid #160802;
-  border-radius: 3px;
+  border-radius: 4px;
   cursor: pointer;
   transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
   box-shadow: 0 2px 5px rgba(22, 10, 4, 0.4), inset 0 1px 0 rgba(255, 235, 205, 0.18);
@@ -961,94 +972,201 @@ html, body {
   cursor: not-allowed;
 }
 
+/* Paper State 3: Opaque Aged-Paper Thank-You Panel */
+.paper-success-view {
+  width: 100%;
+}
+
+.paper-success-card {
+  width: 84%;
+  box-sizing: border-box;
+  background: linear-gradient(180deg, rgba(254, 250, 240, 0.98) 0%, rgba(248, 241, 226, 0.97) 100%);
+  border: 1.2px solid rgba(98, 44, 14, 0.44);
+  border-radius: 4px;
+  padding: clamp(8px, 1.1vh, 11px) clamp(6px, 0.8vw, 9px);
+  box-shadow: 0 3px 8px rgba(28, 11, 4, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  text-align: center;
+  margin-top: clamp(2px, 0.5vh, 5px);
+}
+
+.paper-success-flourish {
+  display: block;
+  font-size: clamp(0.78rem, 0.95vw, 0.88rem);
+  color: #6a3012;
+  line-height: 1;
+  margin-bottom: 2px;
+  opacity: 0.9;
+}
+
+.paper-success-heading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  font-family: 'Georgia', 'Tiro Devanagari Hindi', 'Cinzel', serif;
+  font-size: clamp(0.90rem, 1.12vw, 1.02rem);
+  font-weight: 700;
+  color: #1a0802;
+  line-height: 1.2;
+  margin: 0 0 2px 0;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.paper-success-subheading {
+  font-size: 0.86em;
+  font-weight: 600;
+  color: #381806;
+}
+
+.paper-success-rule {
+  width: 30px;
+  height: 1px;
+  background: rgba(98, 44, 14, 0.35);
+  margin: 3px auto 5px auto;
+}
+
+.paper-success-body {
+  font-family: 'Georgia', 'Noto Serif Devanagari', serif;
+  font-size: clamp(0.58rem, 0.72vw, 0.66rem);
+  font-weight: 500;
+  line-height: 1.34;
+  color: #361706;
+  margin: 0;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.paper-fade-in {
+  animation: paperFadeIn 0.35s ease-out forwards;
+}
+
+@keyframes paperFadeIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Inline Feedback / Errors */
 .paper-feedback-msg {
   width: 100%;
-  font-size: clamp(0.52rem, 0.70vw, 0.64rem);
-  line-height: 1.32;
-  padding: 4px 7px;
+  font-size: clamp(0.52rem, 0.68vw, 0.60rem);
+  line-height: 1.25;
+  padding: 4px 6px;
   border-radius: 3px;
   margin-top: 5px;
   text-align: center;
   box-sizing: border-box;
 }
 
-.paper-feedback-msg.feedback-success {
-  background: rgba(46, 125, 50, 0.14);
-  color: #1b5e20;
-  border: 1px solid rgba(46, 125, 50, 0.28);
+.paper-feedback-msg.feedback-error {
+  background: rgba(255, 240, 238, 0.96);
+  color: #841818;
+  border: 1.2px solid rgba(180, 40, 40, 0.45);
+  box-shadow: 0 1px 3px rgba(30, 10, 5, 0.1);
 }
 
-.paper-feedback-msg.feedback-error {
-  background: rgba(198, 40, 40, 0.14);
-  color: #b71c1c;
-  border: 1px solid rgba(198, 40, 40, 0.28);
+.paper-feedback-msg.feedback-success {
+  background: rgba(254, 250, 240, 0.96);
+  color: #220d03;
+  border: 1.2px solid rgba(98, 44, 14, 0.44);
 }
 
 /* ---------------- Responsive Placement for Mobile & Tablets ---------------- */
 @media (max-width: 900px) {
   .notice-board-wrapper {
-    width: clamp(175px, 22vw, 215px);
+    width: clamp(225px, 28.5vw, 280px);
     top: 16px;
-    right: 16px;
+    right: 18px;
   }
 }
 
 @media (max-width: 600px) {
   .notice-board-wrapper {
-    width: clamp(145px, 36vw, 175px);
+    width: clamp(180px, 44vw, 220px);
     top: max(10px, env(safe-area-inset-top, 10px));
     right: max(10px, env(safe-area-inset-right, 10px));
   }
 
   .paper-inner-content {
-    padding: 20% 7% 5% 7%;
+    padding: 21% 7% 5% 7%;
   }
 
   .paper-prompt-title {
-    font-size: 0.80rem;
+    font-size: 0.90rem;
     margin-bottom: 4px;
   }
 
   .paper-form-title {
-    font-size: 0.76rem;
+    font-size: 0.82rem;
     margin-bottom: 2px;
   }
 
   .paper-prompt-sub,
   .paper-form-desc {
-    font-size: 0.54rem;
+    font-size: 0.58rem;
     line-height: 1.25;
   }
 
   .paper-input,
   .paper-submit-btn {
-    font-size: 0.58rem;
+    font-size: 0.60rem;
     padding: 4px 6px;
+  }
+
+  .paper-success-card {
+    width: 88%;
+    padding: 6px 5px 7px 5px;
+    margin-top: 3px;
+  }
+
+  .paper-success-heading {
+    font-size: 0.84rem;
+  }
+
+  .paper-success-body {
+    font-size: 0.54rem;
   }
 }
 
 @media (max-width: 380px) {
   .notice-board-wrapper {
-    width: clamp(135px, 38vw, 150px);
+    width: clamp(155px, 46vw, 175px);
   }
 
   .paper-prompt-title {
-    font-size: 0.74rem;
+    font-size: 0.80rem;
   }
 
   .paper-form-title {
-    font-size: 0.70rem;
+    font-size: 0.74rem;
   }
 
   .paper-prompt-sub,
   .paper-form-desc {
-    font-size: 0.50rem;
+    font-size: 0.52rem;
   }
 
   .paper-input,
   .paper-submit-btn {
-    font-size: 0.52rem;
+    font-size: 0.54rem;
     padding: 3px 5px;
+  }
+
+  .paper-success-card {
+    width: 90%;
+    padding: 7px 5px;
+  }
+
+  .paper-success-heading {
+    font-size: 0.80rem;
+  }
+
+  .paper-success-body {
+    font-size: 0.50rem;
   }
 }
 
