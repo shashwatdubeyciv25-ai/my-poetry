@@ -379,15 +379,16 @@
         if (response.ok && data.success) {
           const formView = document.getElementById('paperFormView');
           const successView = document.getElementById('paperSuccessView');
-          const successHeading = document.getElementById('paperSuccessHeading');
+          const successHi = document.getElementById('paperSuccessHi');
+          const successEn = document.getElementById('paperSuccessEn');
           const successBody = document.getElementById('paperSuccessBody');
 
-          if (successHeading && successBody) {
+          if (successHi && successEn && successBody) {
+            successHi.textContent = 'धन्यवाद!';
+            successEn.textContent = '(Thank You!)';
             if (data.already_active) {
-              successHeading.innerHTML = '<span>धन्यवाद!</span><span class="paper-success-subheading">(Thank You!)</span>';
               successBody.textContent = 'You are already subscribed to Ashabd (आप पहले से ही जुड़े हैं)।';
             } else {
-              successHeading.innerHTML = '<span>धन्यवाद!</span><span class="paper-success-subheading">(Thank You!)</span>';
               successBody.textContent = 'Please check your email to confirm your subscription.';
             }
           }
