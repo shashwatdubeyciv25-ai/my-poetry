@@ -461,6 +461,7 @@ html, body {
   -webkit-tap-highlight-color: transparent;
   cursor: pointer;
   visibility: visible !important;
+  white-space: nowrap !important;
 }
 
 .manuscript-email-address:hover {
@@ -509,7 +510,8 @@ html, body {
   }
 
   .manuscript-email-address {
-    font-size: clamp(0.68rem, 3.2vw, 0.76rem);
+    font-size: clamp(0.66rem, 2.9vw, 0.75rem);
+    white-space: nowrap !important;
   }
 
   .manuscript-contact-row,
