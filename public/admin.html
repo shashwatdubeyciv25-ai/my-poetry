@@ -1576,6 +1576,10 @@
             <div class="stat-label">Accepted / Delivered (स्वीकृत/वितरित)</div>
             <div class="stat-value" id="statTotalNotifications" style="color: var(--accent);">0</div>
           </div>
+          <div class="stat-card">
+            <div class="stat-label">Delivery Failed (विफल)</div>
+            <div class="stat-value" id="statFailedNotifications" style="color: var(--danger);">0</div>
+          </div>
         </div>
 
         <div class="filter-bar">
@@ -3420,6 +3424,8 @@
           document.getElementById('statPendingSubscribers').innerText = data.stats.pending || 0;
           document.getElementById('statUnsubscribed').innerText = data.stats.unsubscribed || 0;
           document.getElementById('statTotalNotifications').innerText = data.stats.notifications_sent || 0;
+          const failedEl = document.getElementById('statFailedNotifications');
+          if (failedEl) failedEl.innerText = data.stats.notifications_failed || 0;
           const countBadge = document.getElementById('countSubscribers');
           if (countBadge) countBadge.innerText = data.stats.active || 0;
         }
@@ -3440,11 +3446,11 @@
                     <span>⚠️ Missing Configuration:</span> No Email Provider Configured
                   </div>
                   <div style="font-size: 0.85rem; line-height: 1.5; color: #fed7d7;">
-                    Cloudflare Worker secret <code>RESEND_API_KEY</code> is not configured.
-                    Welcome emails and new-poem alerts cannot reach inboxes until your Resend API key is connected.
+                    Gmail App Password (<code>APP_PASSWORD</code>) is not configured in Cloudflare Workers.
+                    Welcome emails and new-poem alerts cannot reach inboxes until your Gmail App Password secret is added.
                   </div>
                   <div style="font-size: 0.8rem; margin-top: 6px; color: #fbd38d;">
-                    💡 Set secret in terminal: <code>npx wrangler secret put RESEND_API_KEY</code> or via Cloudflare Dashboard &rarr; Workers &amp; Pages &rarr; my-poetry &rarr; Settings &rarr; Variables and Secrets.
+                    💡 Set secret in Cloudflare: <code>npx wrangler secret put APP_PASSWORD</code> or via Cloudflare Dashboard &rarr; Workers &amp; Pages &rarr; <strong>my-poetry</strong> &rarr; Settings &rarr; Variables and Secrets.
                   </div>
                 </div>
                 <div>
@@ -3543,6 +3549,48 @@
                 <div>
                   <button type="button" onclick="openTestPoemModal()" class="action-btn" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.25); color: #fff; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 0.82rem;">
                     🧪 Test Dispatch
+                  </button>
+                </div>
+              </div>
+            `;
+          } else if (es.provider === 'gmail_smtp') {
+            banner.style.background = 'rgba(34, 197, 94, 0.08)';
+            banner.style.border = '1px solid rgba(34, 197, 94, 0.25)';
+            banner.style.color = '#86efac';
+            banner.innerHTML = `
+              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+                <div>
+                  <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 3px;">
+                    🟢 Connected Email Provider: Gmail SMTP (smtp.gmail.com:465)
+                  </div>
+                  <div style="font-size: 0.83rem; color: #bbf7d0;">
+                    <strong>Sender:</strong> <code>${escape(es.sender)}</code> &nbsp;|&nbsp; <strong>Auth:</strong> Gmail App Password (<code>APP_PASSWORD</code>) &nbsp;|&nbsp; <strong>Reply-To:</strong> <code>${escape(es.replyTo)}</code>
+                  </div>
+                </div>
+                <div>
+                  <button type="button" onclick="openTestPoemModal()" class="action-btn" style="background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.4); color: #86efac; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 0.82rem; font-weight: 600;">
+                    🧪 Send Test Email
+                  </button>
+                </div>
+              </div>
+            `;
+          } else if (es.provider === 'gmail_relay') {
+            banner.style.background = 'rgba(34, 197, 94, 0.08)';
+            banner.style.border = '1px solid rgba(34, 197, 94, 0.25)';
+            banner.style.color = '#86efac';
+            banner.innerHTML = `
+              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+                <div>
+                  <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 3px;">
+                    🟢 Connected Email Provider: Gmail SMTP Relay Service
+                  </div>
+                  <div style="font-size: 0.83rem; color: #bbf7d0;">
+                    <strong>Sender:</strong> <code>${escape(es.sender)}</code> &nbsp;|&nbsp; <strong>Relay:</strong> <code>${escape(es.senderDetails)}</code>
+                  </div>
+                </div>
+                <div>
+                  <button type="button" onclick="openTestPoemModal()" class="action-btn" style="background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.4); color: #86efac; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 0.82rem; font-weight: 600;">
+                    🧪 Send Test Email
                   </button>
                 </div>
               </div>

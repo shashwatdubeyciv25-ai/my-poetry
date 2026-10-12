@@ -1695,18 +1695,196 @@ async function handleUpdateEmail(request, env) {
 }
 
 /**
+ * Direct RFC 5321 / RFC 4954 SMTPS client over Cloudflare Workers TCP sockets (port 465 SSL/TLS).
+ * Connects directly to smtp.gmail.com with implicit TLS using connect() from cloudflare:sockets.
+ */
+async function sendGmailDirectSmtps({ connectFn, user, pass, to, from, replyTo, subject, html, text }) {
+  const socket = connectFn({ hostname: 'smtp.gmail.com', port: 465 }, { secureTransport: 'on' });
+  const writer = socket.writable.getWriter();
+  const reader = socket.readable.getReader();
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+
+  let buffer = '';
+
+  async function readLine() {
+    while (true) {
+      const idx = buffer.indexOf('\n');
+      if (idx !== -1) {
+        const line = buffer.slice(0, idx + 1);
+        buffer = buffer.slice(idx + 1);
+        return line.trimEnd();
+      }
+      const { value, done } = await reader.read();
+      if (done) {
+        if (buffer.length > 0) {
+          const l = buffer;
+          buffer = '';
+          return l.trimEnd();
+        }
+        throw new Error('SMTP connection closed unexpectedly by smtp.gmail.com');
+      }
+      buffer += decoder.decode(value, { stream: true });
+    }
+  }
+
+  async function readReply() {
+    let lastCode = 0;
+    let fullMsg = '';
+    while (true) {
+      const line = await readLine();
+      fullMsg += (fullMsg ? '\n' : '') + line;
+      const match = line.match(/^(\d{3})([ \-])(.*)$/);
+      if (match) {
+        lastCode = parseInt(match[1], 10);
+        if (match[2] === ' ') {
+          return { code: lastCode, message: fullMsg };
+        }
+      }
+    }
+  }
+
+  async function sendCmd(cmd) {
+    await writer.write(encoder.encode(cmd + '\r\n'));
+    return await readReply();
+  }
+
+  try {
+    // 1. Read greeting (220)
+    const greeting = await readReply();
+    if (greeting.code !== 220) {
+      throw new Error(`Gmail SMTP greeting failed: ${greeting.message}`);
+    }
+
+    // 2. EHLO
+    const ehlo = await sendCmd('EHLO ashabd.in');
+    if (ehlo.code !== 250) {
+      throw new Error(`EHLO failed: ${ehlo.message}`);
+    }
+
+    // 3. AUTH LOGIN
+    const authStart = await sendCmd('AUTH LOGIN');
+    if (authStart.code !== 334) {
+      throw new Error(`AUTH LOGIN initiation failed: ${authStart.message}`);
+    }
+
+    // 4. Send username in Base64
+    const userRes = await sendCmd(btoa(user));
+    if (userRes.code !== 334) {
+      throw new Error(`SMTP username submission failed: ${userRes.message}`);
+    }
+
+    // 5. Send password in Base64
+    const cleanPass = pass.replace(/\s+/g, '');
+    const passRes = await sendCmd(btoa(cleanPass));
+    if (passRes.code !== 235) {
+      throw new Error(`Gmail authentication failed (Code ${passRes.code}): ${passRes.message}. Verify that APP_PASSWORD is an active 16-character Gmail App Password without errors.`);
+    }
+
+    // 6. MAIL FROM
+    const plainFrom = from.includes('<') ? (from.match(/<([^>]+)>/)?.[1] || from).trim() : from.trim();
+    const mailFromRes = await sendCmd(`MAIL FROM:<${plainFrom}>`);
+    if (mailFromRes.code !== 250) {
+      throw new Error(`MAIL FROM failed: ${mailFromRes.message}`);
+    }
+
+    // 7. RCPT TO
+    const recipients = Array.isArray(to) ? to : [to];
+    for (const r of recipients) {
+      const plainTo = r.includes('<') ? (r.match(/<([^>]+)>/)?.[1] || r).trim() : r.trim();
+      const rcptRes = await sendCmd(`RCPT TO:<${plainTo}>`);
+      if (rcptRes.code !== 250) {
+        throw new Error(`RCPT TO failed for ${plainTo}: ${rcptRes.message}`);
+      }
+    }
+
+    // 8. DATA
+    const dataRes = await sendCmd('DATA');
+    if (dataRes.code !== 354) {
+      throw new Error(`DATA initiation failed: ${dataRes.message}`);
+    }
+
+    // 9. Send MIME payload
+    const boundary = 'Ashabd_Boundary_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+    const msgId = `<${Date.now()}.${Math.random().toString(36).slice(2, 8)}@ashabd.in>`;
+    const dateStr = new Date().toUTCString();
+
+    let mime = '';
+    mime += `From: ${from}\r\n`;
+    mime += `To: ${recipients.join(', ')}\r\n`;
+    if (replyTo) {
+      mime += `Reply-To: ${replyTo}\r\n`;
+    }
+    mime += `Subject: =?UTF-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=\r\n`;
+    mime += `Date: ${dateStr}\r\n`;
+    mime += `Message-ID: ${msgId}\r\n`;
+    mime += `MIME-Version: 1.0\r\n`;
+    mime += `Content-Type: multipart/alternative; boundary="${boundary}"\r\n\r\n`;
+
+    if (text) {
+      mime += `--${boundary}\r\n`;
+      mime += `Content-Type: text/plain; charset=UTF-8\r\n`;
+      mime += `Content-Transfer-Encoding: base64\r\n\r\n`;
+      mime += `${btoa(unescape(encodeURIComponent(text)))}\r\n\r\n`;
+    }
+
+    if (html) {
+      mime += `--${boundary}\r\n`;
+      mime += `Content-Type: text/html; charset=UTF-8\r\n`;
+      mime += `Content-Transfer-Encoding: base64\r\n\r\n`;
+      mime += `${btoa(unescape(encodeURIComponent(html)))}\r\n\r\n`;
+    }
+
+    mime += `--${boundary}--\r\n`;
+    mime += `.\r\n`;
+
+    await writer.write(encoder.encode(mime));
+    const sendRes = await readReply();
+    if (sendRes.code !== 250) {
+      throw new Error(`Message delivery failed: ${sendRes.message}`);
+    }
+
+    // 10. QUIT
+    try {
+      await sendCmd('QUIT');
+    } catch (_) {}
+
+    return {
+      provider: 'gmail_smtp',
+      success: true,
+      messageId: msgId,
+      status: 'accepted',
+      rawResponse: sendRes.message
+    };
+  } finally {
+    try { reader.releaseLock(); } catch (_) {}
+    try { writer.releaseLock(); } catch (_) {}
+    try { socket.close(); } catch (_) {}
+  }
+}
+
+/**
  * Helper to inspect email provider readiness and configuration
  */
 async function getEmailProviderConfig(env) {
   let provider = 'none';
-  if (env.RESEND_API_KEY) provider = 'resend';
-  else if (env.SENDGRID_API_KEY) provider = 'sendgrid';
-  else if (env.POSTMARK_SERVER_TOKEN) provider = 'postmark';
-  else if (env.BREVO_API_KEY) provider = 'brevo';
+  if (env.GMAIL_RELAY_URL) {
+    provider = 'gmail_relay';
+  } else if (env.APP_PASSWORD || env.GMAIL_APP_PASSWORD) {
+    provider = 'gmail_smtp';
+  } else if (env.RESEND_API_KEY) {
+    provider = 'resend';
+  } else if (env.SENDGRID_API_KEY) {
+    provider = 'sendgrid';
+  } else if (env.POSTMARK_SERVER_TOKEN) {
+    provider = 'postmark';
+  } else if (env.BREVO_API_KEY) {
+    provider = 'brevo';
+  }
 
-  const defaultSender = provider === 'resend'
-    ? 'Ashabd <notifications@ashabd.in>'
-    : 'Ashabd <ashabdpoetry0@gmail.com>';
+  const defaultSender = (provider.startsWith('gmail') || provider === 'none')
+    ? 'Ashabd <ashabdpoetry0@gmail.com>'
+    : 'Ashabd <notifications@ashabd.in>';
 
   const senderEmail = env.EMAIL_FROM || defaultSender;
   const replyToAddress = env.EMAIL_REPLY_TO || 'ashabdpoetry0@gmail.com';
@@ -1723,7 +1901,13 @@ async function getEmailProviderConfig(env) {
 
   if (provider === 'none') {
     senderStatus = 'missing_config';
-    senderDetails = 'Cloudflare Worker secrets (RESEND_API_KEY, SENDGRID_API_KEY, POSTMARK_SERVER_TOKEN, or BREVO_API_KEY) are not configured.';
+    senderDetails = 'Cloudflare Worker secret APP_PASSWORD (for Gmail) or GMAIL_RELAY_URL is not configured.';
+  } else if (provider === 'gmail_smtp') {
+    senderStatus = 'verified';
+    senderDetails = `Configured for Gmail SMTP (smtp.gmail.com:465) using Cloudflare Worker secret APP_PASSWORD. Sender: ${plainSender}.`;
+  } else if (provider === 'gmail_relay') {
+    senderStatus = 'verified';
+    senderDetails = `Configured via secure Gmail SMTP Relay: ${env.GMAIL_RELAY_URL}. Sender: ${plainSender}.`;
   } else if (provider === 'resend') {
     const publicDomains = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com', 'aol.com', 'proton.me', 'protonmail.com'];
     if (publicDomains.includes(senderDomain)) {
@@ -1789,26 +1973,104 @@ async function getEmailProviderConfig(env) {
 
 /**
  * Unified Transactional Email Engine
- * Dispatches via Resend, SendGrid, Postmark, or Brevo.
+ * Dispatches via Gmail SMTP (Direct or Relay), Resend, SendGrid, Postmark, or Brevo.
  * Accurately captures provider message IDs, delivery statuses, and diagnostic errors.
  * Rejects simulation so failures are never falsely recorded as sent in the database.
  */
 async function sendTransactionalEmail(env, { to, subject, html, text, from, replyTo }) {
-  const provider = env.RESEND_API_KEY ? 'resend'
+  const provider = env.GMAIL_RELAY_URL ? 'gmail_relay'
+    : (env.APP_PASSWORD || env.GMAIL_APP_PASSWORD) ? 'gmail_smtp'
+    : env.RESEND_API_KEY ? 'resend'
     : env.SENDGRID_API_KEY ? 'sendgrid'
     : env.POSTMARK_SERVER_TOKEN ? 'postmark'
     : env.BREVO_API_KEY ? 'brevo'
     : 'none';
 
-  const defaultSender = provider === 'resend'
-    ? 'Ashabd <notifications@ashabd.in>'
-    : 'Ashabd <ashabdpoetry0@gmail.com>';
+  const defaultSender = (provider.startsWith('gmail') || provider === 'none')
+    ? 'Ashabd <ashabdpoetry0@gmail.com>'
+    : 'Ashabd <notifications@ashabd.in>';
 
   const senderEmail = from || env.EMAIL_FROM || defaultSender;
   const replyToAddress = replyTo || env.EMAIL_REPLY_TO || 'ashabdpoetry0@gmail.com';
   const recipients = Array.isArray(to) ? to : [to];
 
-  // 1. Resend API
+  // 1. Gmail SMTP Relay
+  if (env.GMAIL_RELAY_URL) {
+    const relaySecret = env.GMAIL_RELAY_SECRET || env.APP_PASSWORD || '';
+    const res = await fetch(env.GMAIL_RELAY_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${relaySecret}`
+      },
+      body: JSON.stringify({
+        to: recipients,
+        subject,
+        html,
+        text,
+        from: senderEmail,
+        replyTo: replyToAddress,
+        gmailUser: env.GMAIL_USER || 'ashabdpoetry0@gmail.com',
+        appPassword: env.APP_PASSWORD ? env.APP_PASSWORD.replace(/\s+/g, '') : undefined
+      })
+    });
+
+    if (!res.ok) {
+      let errTxt = '';
+      try {
+        const errJson = await res.json();
+        errTxt = errJson.error || errJson.message || JSON.stringify(errJson);
+      } catch (_) {
+        errTxt = await res.text().catch(() => 'Unknown relay error');
+      }
+      throw new Error(`Gmail Relay error (${res.status}): ${errTxt}`);
+    }
+
+    const data = await res.json().catch(() => ({}));
+    return {
+      provider: 'gmail_relay',
+      success: true,
+      messageId: data.messageId || `gmail_relay_${Date.now()}`,
+      status: 'accepted'
+    };
+  }
+
+  // 2. Direct Gmail SMTPS (cloudflare:sockets)
+  if (env.APP_PASSWORD || env.GMAIL_APP_PASSWORD) {
+    const rawPass = env.APP_PASSWORD || env.GMAIL_APP_PASSWORD;
+    const cleanPass = rawPass.replace(/\s+/g, '');
+    const user = env.GMAIL_USER || 'ashabdpoetry0@gmail.com';
+
+    let connectFn;
+    try {
+      const socketsMod = await import('cloudflare:sockets');
+      connectFn = socketsMod.connect;
+    } catch (modErr) {
+      throw new Error(
+        `Cloudflare Workers socket connection not available (${modErr.message}). ` +
+        `Direct SMTP socket connections may be restricted in this runtime. ` +
+        `You can configure GMAIL_RELAY_URL to use the Ashabd Gmail SMTP Relay microservice.`
+      );
+    }
+
+    if (!connectFn) {
+      throw new Error('cloudflare:sockets connect function is not available. Please configure GMAIL_RELAY_URL.');
+    }
+
+    return await sendGmailDirectSmtps({
+      connectFn,
+      user,
+      pass: cleanPass,
+      to: recipients,
+      from: senderEmail,
+      replyTo: replyToAddress,
+      subject,
+      html,
+      text
+    });
+  }
+
+  // 3. Resend API
   if (env.RESEND_API_KEY) {
     const plainSender = senderEmail.includes('<') 
       ? (senderEmail.match(/<([^>]+)>/)?.[1] || senderEmail).trim() 
@@ -2002,7 +2264,7 @@ async function sendTransactionalEmail(env, { to, subject, html, text, from, repl
 
   // Honest failure: No email provider secret configured in Cloudflare environment
   const noProviderError = new Error(
-    'No transactional email provider is configured. Please configure an email secret in Cloudflare Settings → Variables and Secrets (RESEND_API_KEY, SENDGRID_API_KEY, POSTMARK_SERVER_TOKEN, or BREVO_API_KEY). Intended sender: ashabdpoetry0@gmail.com.'
+    'No transactional email provider is configured. Please configure an email secret in Cloudflare Settings → Variables and Secrets (APP_PASSWORD for Gmail SMTP, GMAIL_RELAY_URL, RESEND_API_KEY, SENDGRID_API_KEY, POSTMARK_SERVER_TOKEN, or BREVO_API_KEY). Intended sender: ashabdpoetry0@gmail.com.'
   );
   noProviderError.code = 'NO_EMAIL_PROVIDER';
   throw noProviderError;
@@ -2624,6 +2886,7 @@ async function handleListSubscribersAdmin(request, env) {
   const pendingCount = await db.prepare("SELECT COUNT(*) as count FROM subscribers WHERE status = 'pending'").first('count') || 0;
   const unsubscribedCount = await db.prepare("SELECT COUNT(*) as count FROM subscribers WHERE status = 'unsubscribed'").first('count') || 0;
   const deliveredCount = await db.prepare("SELECT COUNT(*) as count FROM poem_notifications WHERE status IN ('sent', 'accepted', 'delivered')").first('count') || 0;
+  const failedCount = await db.prepare("SELECT COUNT(*) as count FROM poem_notifications WHERE status = 'failed'").first('count') || 0;
 
   const { results: subscribers } = await db.prepare(`
     SELECT s.id, s.email, s.status, s.ip_address, s.created_at, s.verified_at, s.unsubscribed_at,
@@ -2664,7 +2927,8 @@ async function handleListSubscribersAdmin(request, env) {
       active: activeCount,
       pending: pendingCount,
       unsubscribed: unsubscribedCount,
-      notifications_sent: deliveredCount
+      notifications_sent: deliveredCount,
+      notifications_failed: failedCount
     },
     email_service: await getEmailProviderConfig(env),
     subscribers: subscribers || [],
@@ -6071,6 +6335,10 @@ function getAdminDashboardHtml() {
             <div class="stat-label">Accepted / Delivered (स्वीकृत/वितरित)</div>
             <div class="stat-value" id="statTotalNotifications" style="color: var(--accent);">0</div>
           </div>
+          <div class="stat-card">
+            <div class="stat-label">Delivery Failed (विफल)</div>
+            <div class="stat-value" id="statFailedNotifications" style="color: var(--danger);">0</div>
+          </div>
         </div>
 
         <div class="filter-bar">
@@ -7915,6 +8183,8 @@ function getAdminDashboardHtml() {
           document.getElementById('statPendingSubscribers').innerText = data.stats.pending || 0;
           document.getElementById('statUnsubscribed').innerText = data.stats.unsubscribed || 0;
           document.getElementById('statTotalNotifications').innerText = data.stats.notifications_sent || 0;
+          const failedEl = document.getElementById('statFailedNotifications');
+          if (failedEl) failedEl.innerText = data.stats.notifications_failed || 0;
           const countBadge = document.getElementById('countSubscribers');
           if (countBadge) countBadge.innerText = data.stats.active || 0;
         }
@@ -7935,11 +8205,11 @@ function getAdminDashboardHtml() {
                     <span>⚠️ Missing Configuration:</span> No Email Provider Configured
                   </div>
                   <div style="font-size: 0.85rem; line-height: 1.5; color: #fed7d7;">
-                    Cloudflare Worker secret <code>RESEND_API_KEY</code> is not configured.
-                    Welcome emails and new-poem alerts cannot reach inboxes until your Resend API key is connected.
+                    Gmail App Password (<code>APP_PASSWORD</code>) is not configured in Cloudflare Workers.
+                    Welcome emails and new-poem alerts cannot reach inboxes until your Gmail App Password secret is added.
                   </div>
                   <div style="font-size: 0.8rem; margin-top: 6px; color: #fbd38d;">
-                    💡 Set secret in terminal: <code>npx wrangler secret put RESEND_API_KEY</code> or via Cloudflare Dashboard &rarr; Workers &amp; Pages &rarr; my-poetry &rarr; Settings &rarr; Variables and Secrets.
+                    💡 Set secret in Cloudflare: <code>npx wrangler secret put APP_PASSWORD</code> or via Cloudflare Dashboard &rarr; Workers &amp; Pages &rarr; <strong>my-poetry</strong> &rarr; Settings &rarr; Variables and Secrets.
                   </div>
                 </div>
                 <div>
@@ -8038,6 +8308,48 @@ function getAdminDashboardHtml() {
                 <div>
                   <button type="button" onclick="openTestPoemModal()" class="action-btn" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.25); color: #fff; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 0.82rem;">
                     🧪 Test Dispatch
+                  </button>
+                </div>
+              </div>
+            \`;
+          } else if (es.provider === 'gmail_smtp') {
+            banner.style.background = 'rgba(34, 197, 94, 0.08)';
+            banner.style.border = '1px solid rgba(34, 197, 94, 0.25)';
+            banner.style.color = '#86efac';
+            banner.innerHTML = \`
+              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+                <div>
+                  <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 3px;">
+                    🟢 Connected Email Provider: Gmail SMTP (smtp.gmail.com:465)
+                  </div>
+                  <div style="font-size: 0.83rem; color: #bbf7d0;">
+                    <strong>Sender:</strong> <code>\${escape(es.sender)}</code> &nbsp;|&nbsp; <strong>Auth:</strong> Gmail App Password (<code>APP_PASSWORD</code>) &nbsp;|&nbsp; <strong>Reply-To:</strong> <code>\${escape(es.replyTo)}</code>
+                  </div>
+                </div>
+                <div>
+                  <button type="button" onclick="openTestPoemModal()" class="action-btn" style="background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.4); color: #86efac; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 0.82rem; font-weight: 600;">
+                    🧪 Send Test Email
+                  </button>
+                </div>
+              </div>
+            \`;
+          } else if (es.provider === 'gmail_relay') {
+            banner.style.background = 'rgba(34, 197, 94, 0.08)';
+            banner.style.border = '1px solid rgba(34, 197, 94, 0.25)';
+            banner.style.color = '#86efac';
+            banner.innerHTML = \`
+              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+                <div>
+                  <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 3px;">
+                    🟢 Connected Email Provider: Gmail SMTP Relay Service
+                  </div>
+                  <div style="font-size: 0.83rem; color: #bbf7d0;">
+                    <strong>Sender:</strong> <code>\${escape(es.sender)}</code> &nbsp;|&nbsp; <strong>Relay:</strong> <code>\${escape(es.senderDetails)}</code>
+                  </div>
+                </div>
+                <div>
+                  <button type="button" onclick="openTestPoemModal()" class="action-btn" style="background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.4); color: #86efac; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 0.82rem; font-weight: 600;">
+                    🧪 Send Test Email
                   </button>
                 </div>
               </div>

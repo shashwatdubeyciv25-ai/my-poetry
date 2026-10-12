@@ -15,7 +15,8 @@
     }
   ],
   "vars": {
-    "EMAIL_FROM": "Ashabd <notifications@ashabd.in>",
+    "GMAIL_USER": "ashabdpoetry0@gmail.com",
+    "EMAIL_FROM": "Ashabd <ashabdpoetry0@gmail.com>",
     "EMAIL_REPLY_TO": "ashabdpoetry0@gmail.com"
   }
 }
