@@ -141,6 +141,9 @@ export default {
       if (pathname === '/unsubscribe' && request.method === 'GET') {
         return handleUnsubscribePage(request, env);
       }
+      if (pathname === '/api/webhooks/email-delivery' && request.method === 'POST') {
+        return handleEmailDeliveryWebhook(request, env);
+      }
 
       if (pathname.startsWith('/api/subscribers')) {
         const user = await getAuthenticatedUser(request, env);
@@ -156,6 +159,10 @@ export default {
         const verifyMatch = pathname.match(/^\/api\/subscribers\/([a-zA-Z0-9_\-]+)\/verify$/);
         if (verifyMatch && request.method === 'POST') {
           return handleVerifySubscriberAdmin(verifyMatch[1], request, env, ctx);
+        }
+        const resendWelcomeMatch = pathname.match(/^\/api\/subscribers\/([a-zA-Z0-9_\-]+)\/resend-welcome$/);
+        if (resendWelcomeMatch && request.method === 'POST') {
+          return handleResendWelcomeAdmin(resendWelcomeMatch[1], request, env, ctx);
         }
         const retryMatch = pathname.match(/^\/api\/subscribers\/notifications\/([a-zA-Z0-9_\-]+)\/retry$/);
         if (retryMatch && request.method === 'POST') {
@@ -474,16 +481,27 @@ async function ensureSubscribersTable(db) {
         writing_id TEXT NOT NULL,
         subscriber_id TEXT NOT NULL,
         recipient_email TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'sent',
+        status TEXT NOT NULL DEFAULT 'accepted',
         error_message TEXT,
+        provider_message_id TEXT,
+        provider TEXT,
+        delivered_at INTEGER,
+        retry_count INTEGER DEFAULT 0,
         sent_at INTEGER NOT NULL
       )
     `).run();
+
+    // Migrate existing table schema dynamically if columns don't exist yet
+    try { await db.prepare(`ALTER TABLE poem_notifications ADD COLUMN provider_message_id TEXT`).run(); } catch (_) {}
+    try { await db.prepare(`ALTER TABLE poem_notifications ADD COLUMN provider TEXT`).run(); } catch (_) {}
+    try { await db.prepare(`ALTER TABLE poem_notifications ADD COLUMN delivered_at INTEGER`).run(); } catch (_) {}
+    try { await db.prepare(`ALTER TABLE poem_notifications ADD COLUMN retry_count INTEGER DEFAULT 0`).run(); } catch (_) {}
 
     try {
       await db.prepare(`CREATE INDEX IF NOT EXISTS idx_poem_notifications_writing ON poem_notifications(writing_id)`).run();
       await db.prepare(`CREATE INDEX IF NOT EXISTS idx_poem_notifications_subscriber ON poem_notifications(subscriber_id)`).run();
       await db.prepare(`CREATE INDEX IF NOT EXISTS idx_poem_notifications_sent_at ON poem_notifications(sent_at DESC)`).run();
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_poem_notifications_msg_id ON poem_notifications(provider_message_id)`).run();
     } catch (_) {}
 
     subscribersTableEnsured = true;
@@ -1677,8 +1695,32 @@ async function handleUpdateEmail(request, env) {
 }
 
 /**
+ * Helper to inspect email provider readiness and configuration
+ */
+function getEmailProviderConfig(env) {
+  let provider = 'none';
+  if (env.RESEND_API_KEY) provider = 'resend';
+  else if (env.SENDGRID_API_KEY) provider = 'sendgrid';
+  else if (env.POSTMARK_SERVER_TOKEN) provider = 'postmark';
+  else if (env.BREVO_API_KEY) provider = 'brevo';
+
+  const senderEmail = env.EMAIL_FROM || 'Ashabd <ashabdpoetry0@gmail.com>';
+  const replyToAddress = env.EMAIL_REPLY_TO || 'ashabdpoetry0@gmail.com';
+
+  return {
+    configured: provider !== 'none',
+    provider,
+    sender: senderEmail,
+    replyTo: replyToAddress,
+    has_custom_from: Boolean(env.EMAIL_FROM)
+  };
+}
+
+/**
  * Unified Transactional Email Engine
- * Dispatches via Resend, SendGrid, or Postmark depending on configured Cloudflare secrets.
+ * Dispatches via Resend, SendGrid, Postmark, or Brevo.
+ * Accurately captures provider message IDs, delivery statuses, and diagnostic errors.
+ * Rejects simulation so failures are never falsely recorded as sent in the database.
  */
 async function sendTransactionalEmail(env, { to, subject, html, text, from, replyTo }) {
   const senderEmail = from || env.EMAIL_FROM || 'Ashabd <ashabdpoetry0@gmail.com>';
@@ -1701,11 +1743,33 @@ async function sendTransactionalEmail(env, { to, subject, html, text, from, repl
         text: text || undefined
       })
     });
+
     if (!res.ok) {
-      const errTxt = await res.text();
-      throw new Error(`Resend API error (${res.status}): ${errTxt}`);
+      let errTxt = '';
+      try {
+        const errJson = await res.json();
+        errTxt = errJson.message || JSON.stringify(errJson);
+      } catch (_) {
+        errTxt = await res.text().catch(() => 'Unknown network error');
+      }
+
+      let hint = '';
+      const lower = errTxt.toLowerCase();
+      if (lower.includes('domain') || lower.includes('gmail.com') || lower.includes('verify')) {
+        hint = ' (Note: Resend requires a verified custom domain on ashabd.in. If sending as ashabdpoetry0@gmail.com, verify ashabd.in in Resend and set EMAIL_FROM to an address on ashabd.in, while keeping reply-to as ashabdpoetry0@gmail.com.)';
+      }
+
+      throw new Error(`Resend API error (${res.status}): ${errTxt}${hint}`);
     }
-    return { provider: 'resend', success: true };
+
+    const data = await res.json().catch(() => null);
+    const messageId = data?.id || `resend_${Date.now()}`;
+    return {
+      provider: 'resend',
+      success: true,
+      messageId,
+      status: 'accepted'
+    };
   }
 
   // 2. SendGrid API
@@ -1728,11 +1792,35 @@ async function sendTransactionalEmail(env, { to, subject, html, text, from, repl
         ]
       })
     });
+
     if (!res.ok) {
-      const errTxt = await res.text();
-      throw new Error(`SendGrid API error (${res.status}): ${errTxt}`);
+      let errTxt = '';
+      try {
+        const errJson = await res.json();
+        if (errJson.errors && Array.isArray(errJson.errors)) {
+          errTxt = errJson.errors.map(e => e.message || JSON.stringify(e)).join(', ');
+        } else {
+          errTxt = JSON.stringify(errJson);
+        }
+      } catch (_) {
+        errTxt = await res.text().catch(() => 'Unknown network error');
+      }
+
+      let hint = '';
+      if (errTxt.toLowerCase().includes('sender identity') || errTxt.toLowerCase().includes('verify')) {
+        hint = ' (Note: SendGrid requires Single Sender Verification for ashabdpoetry0@gmail.com or Domain Authentication for ashabd.in.)';
+      }
+
+      throw new Error(`SendGrid API error (${res.status}): ${errTxt}${hint}`);
     }
-    return { provider: 'sendgrid', success: true };
+
+    const messageId = res.headers.get('x-message-id') || `sendgrid_${Date.now()}`;
+    return {
+      provider: 'sendgrid',
+      success: true,
+      messageId,
+      status: 'accepted'
+    };
   }
 
   // 3. Postmark API
@@ -1752,16 +1840,76 @@ async function sendTransactionalEmail(env, { to, subject, html, text, from, repl
         TextBody: text || undefined
       })
     });
+
     if (!res.ok) {
-      const errTxt = await res.text();
+      let errTxt = '';
+      try {
+        const errJson = await res.json();
+        errTxt = errJson.Message || JSON.stringify(errJson);
+      } catch (_) {
+        errTxt = await res.text().catch(() => 'Unknown network error');
+      }
+
       throw new Error(`Postmark API error (${res.status}): ${errTxt}`);
     }
-    return { provider: 'postmark', success: true };
+
+    const data = await res.json().catch(() => null);
+    const messageId = data?.MessageID || `postmark_${Date.now()}`;
+    return {
+      provider: 'postmark',
+      success: true,
+      messageId,
+      status: 'accepted'
+    };
   }
 
-  // Fallback: No email provider secret configured in Cloudflare environment secrets
-  console.warn(`[Ashabd Email Simulation] No provider secret configured (RESEND_API_KEY, SENDGRID_API_KEY, or POSTMARK_SERVER_TOKEN). Simulated dispatch to ${to} for subject "${subject}".`);
-  return { provider: 'none', success: true, simulated: true };
+  // 4. Brevo API (Sendinblue)
+  if (env.BREVO_API_KEY) {
+    const plainFrom = senderEmail.includes('<') ? senderEmail.replace(/.*<([^>]+)>.*/, '$1') : senderEmail;
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': env.BREVO_API_KEY,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        sender: { email: plainFrom, name: 'Ashabd' },
+        to: [{ email: to }],
+        replyTo: { email: replyToAddress, name: 'Ashabd' },
+        subject,
+        htmlContent: html,
+        textContent: text || undefined
+      })
+    });
+
+    if (!res.ok) {
+      let errTxt = '';
+      try {
+        const errJson = await res.json();
+        errTxt = errJson.message || JSON.stringify(errJson);
+      } catch (_) {
+        errTxt = await res.text().catch(() => 'Unknown network error');
+      }
+
+      throw new Error(`Brevo API error (${res.status}): ${errTxt}`);
+    }
+
+    const data = await res.json().catch(() => null);
+    const messageId = data?.messageId || `brevo_${Date.now()}`;
+    return {
+      provider: 'brevo',
+      success: true,
+      messageId,
+      status: 'accepted'
+    };
+  }
+
+  // Honest failure: No email provider secret configured in Cloudflare environment
+  const noProviderError = new Error(
+    'No transactional email provider is configured. Please configure an email secret in Cloudflare Settings → Variables and Secrets (RESEND_API_KEY, SENDGRID_API_KEY, POSTMARK_SERVER_TOKEN, or BREVO_API_KEY). Intended sender: ashabdpoetry0@gmail.com.'
+  );
+  noProviderError.code = 'NO_EMAIL_PROVIDER';
+  throw noProviderError;
 }
 
 async function sendPasswordResetEmail(env, { to, resetUrl, expiresMinutes = 60 }) {
@@ -2379,17 +2527,29 @@ async function handleListSubscribersAdmin(request, env) {
   const activeCount = await db.prepare("SELECT COUNT(*) as count FROM subscribers WHERE status = 'active'").first('count') || 0;
   const pendingCount = await db.prepare("SELECT COUNT(*) as count FROM subscribers WHERE status = 'pending'").first('count') || 0;
   const unsubscribedCount = await db.prepare("SELECT COUNT(*) as count FROM subscribers WHERE status = 'unsubscribed'").first('count') || 0;
-  const deliveredCount = await db.prepare("SELECT COUNT(*) as count FROM poem_notifications WHERE status = 'sent'").first('count') || 0;
+  const deliveredCount = await db.prepare("SELECT COUNT(*) as count FROM poem_notifications WHERE status IN ('sent', 'accepted', 'delivered')").first('count') || 0;
 
   const { results: subscribers } = await db.prepare(`
-    SELECT id, email, status, ip_address, created_at, verified_at, unsubscribed_at
-    FROM subscribers
-    ORDER BY created_at DESC
+    SELECT s.id, s.email, s.status, s.ip_address, s.created_at, s.verified_at, s.unsubscribed_at,
+      w_notif.status as welcome_email_status,
+      w_notif.error_message as welcome_email_error,
+      w_notif.provider_message_id as welcome_email_msg_id,
+      w_notif.provider as welcome_email_provider,
+      w_notif.id as welcome_notif_id
+    FROM subscribers s
+    LEFT JOIN (
+      SELECT subscriber_id, status, error_message, provider_message_id, provider, id,
+             ROW_NUMBER() OVER (PARTITION BY subscriber_id ORDER BY sent_at DESC) as rn
+      FROM poem_notifications
+      WHERE writing_id = 'welcome' OR writing_id LIKE 'notif_welcome%'
+    ) w_notif ON s.id = w_notif.subscriber_id AND w_notif.rn = 1
+    ORDER BY s.created_at DESC
     LIMIT 300
   `).all();
 
   const { results: recentNotifications } = await db.prepare(`
-    SELECT pn.id, pn.writing_id, pn.subscriber_id, pn.recipient_email, pn.status, pn.error_message, pn.sent_at,
+    SELECT pn.id, pn.writing_id, pn.subscriber_id, pn.recipient_email, pn.status, pn.error_message,
+           pn.provider_message_id, pn.provider, pn.retry_count, pn.delivered_at, pn.sent_at,
       CASE 
         WHEN pn.writing_id = 'welcome' OR pn.writing_id LIKE 'notif_welcome%' THEN '🎉 Welcome Email'
         ELSE COALESCE(w.title, 'Poem Notification')
@@ -2408,6 +2568,7 @@ async function handleListSubscribersAdmin(request, env) {
       unsubscribed: unsubscribedCount,
       notifications_sent: deliveredCount
     },
+    email_service: getEmailProviderConfig(env),
     subscribers: subscribers || [],
     recent_notifications: recentNotifications || []
   });
@@ -2427,7 +2588,10 @@ async function handleVerifySubscriberAdmin(subscriberId, request, env, ctx) {
   }
 
   if (subscriber.status === 'active') {
-    return jsonResponse({ error: 'Subscriber is already verified and active.', already_verified: true }, 400);
+    return jsonResponse({
+      error: 'Subscriber is already verified and active. Use "Retry Welcome Email" if you need to dispatch the welcome note again.',
+      already_verified: true
+    }, 400);
   }
 
   if (subscriber.status !== 'pending') {
@@ -2435,13 +2599,15 @@ async function handleVerifySubscriberAdmin(subscriberId, request, env, ctx) {
   }
 
   const now = Date.now();
+
+  // 1. Activate subscriber on server
   await db.prepare(`
     UPDATE subscribers
     SET status = 'active', verified_at = ?, verification_token_hash = NULL
     WHERE id = ? AND status = 'pending'
   `).bind(now, subscriberId).run();
 
-  // Dispatch warm welcome email from ashabdpoetry0@gmail.com
+  // 2. Dispatch warm welcome email from ashabdpoetry0@gmail.com
   const siteUrl = getSiteUrl(request, env);
   const unsubUrl = `${siteUrl}/unsubscribe?token=${encodeURIComponent(subscriber.unsubscribe_token)}`;
   const welcomeHtml = renderWelcomeEmailHtml({ unsubscribeUrl: unsubUrl });
@@ -2449,10 +2615,12 @@ async function handleVerifySubscriberAdmin(subscriberId, request, env, ctx) {
 
   let emailSent = false;
   let emailError = null;
+  let providerMsgId = null;
+  let providerName = null;
   const notifId = 'notif_welcome_' + Date.now().toString(36) + '_' + generateRandomHexToken(4);
 
   try {
-    await sendTransactionalEmail(env, {
+    const dispatchResult = await sendTransactionalEmail(env, {
       to: subscriber.email,
       from: env.EMAIL_FROM || 'Ashabd <ashabdpoetry0@gmail.com>',
       replyTo: 'ashabdpoetry0@gmail.com',
@@ -2460,25 +2628,31 @@ async function handleVerifySubscriberAdmin(subscriberId, request, env, ctx) {
       html: welcomeHtml,
       text: welcomeText
     });
+
     emailSent = true;
+    providerMsgId = dispatchResult.messageId || null;
+    providerName = dispatchResult.provider || null;
 
     await db.prepare(`
-      INSERT INTO poem_notifications (id, writing_id, subscriber_id, recipient_email, status, error_message, sent_at)
-      VALUES (?, 'welcome', ?, ?, 'sent', NULL, ?)
-    `).bind(notifId, subscriber.id, subscriber.email, now).run();
+      INSERT INTO poem_notifications (id, writing_id, subscriber_id, recipient_email, status, error_message, provider_message_id, provider, retry_count, sent_at)
+      VALUES (?, 'welcome', ?, ?, 'accepted', NULL, ?, ?, 0, ?)
+    `).bind(notifId, subscriber.id, subscriber.email, providerMsgId, providerName, now).run();
   } catch (err) {
     emailError = err?.message || String(err);
-    console.error(`[Ashabd Welcome Email] Failed to send welcome email to ${subscriber.email}:`, err);
+    console.error(`[Ashabd Welcome Email] Delivery attempt failed for ${subscriber.email}:`, err);
+
     await db.prepare(`
-      INSERT INTO poem_notifications (id, writing_id, subscriber_id, recipient_email, status, error_message, sent_at)
-      VALUES (?, 'welcome', ?, ?, 'failed', ?, ?)
-    `).bind(notifId, subscriber.id, subscriber.email, String(emailError).slice(0, 255), now).run();
+      INSERT INTO poem_notifications (id, writing_id, subscriber_id, recipient_email, status, error_message, provider_message_id, provider, retry_count, sent_at)
+      VALUES (?, 'welcome', ?, ?, 'failed', ?, NULL, NULL, 0, ?)
+    `).bind(notifId, subscriber.id, subscriber.email, String(emailError).slice(0, 500), now).run();
   }
 
   return jsonResponse({
     success: true,
     verified: true,
     email_sent: emailSent,
+    provider_message_id: providerMsgId,
+    provider: providerName,
     email_error: emailError,
     subscriber: {
       id: subscriber.id,
@@ -2487,9 +2661,118 @@ async function handleVerifySubscriberAdmin(subscriberId, request, env, ctx) {
       verified_at: now
     },
     message: emailSent
-      ? `Subscriber ${subscriber.email} verified and welcome email successfully sent.`
-      : `Subscriber ${subscriber.email} verified, but welcome email delivery failed: ${emailError}. A retryable failure was recorded in the notification log.`
+      ? `Subscriber ${subscriber.email} verified and welcome email accepted by provider (${providerName}).`
+      : `Subscriber ${subscriber.email} verified, but welcome email could not be sent: ${emailError}. You can retry sending it from the Subscribers table or Recent Notification Dispatches log.`
   });
+}
+
+async function handleResendWelcomeAdmin(subscriberId, request, env, ctx) {
+  const db = await checkDatabase(env);
+  await ensureSubscribersTable(db);
+
+  if (!subscriberId) {
+    return jsonResponse({ error: 'Subscriber ID is required.' }, 400);
+  }
+
+  const subscriber = await db.prepare('SELECT * FROM subscribers WHERE id = ?').bind(subscriberId).first();
+  if (!subscriber) {
+    return jsonResponse({ error: 'Subscriber not found.' }, 404);
+  }
+
+  if (subscriber.status !== 'active') {
+    return jsonResponse({ error: `Cannot send welcome email to subscriber with status "${subscriber.status}". Only active verified subscribers can receive welcome notes.` }, 400);
+  }
+
+  // Deduplication check: check if an existing welcome email was already accepted or delivered
+  const existingNotif = await db.prepare(`
+    SELECT * FROM poem_notifications
+    WHERE subscriber_id = ? AND (writing_id = 'welcome' OR writing_id LIKE 'notif_welcome%')
+    ORDER BY sent_at DESC LIMIT 1
+  `).bind(subscriber.id).first();
+
+  let body = {};
+  try { body = await request.json(); } catch (_) {}
+  const force = Boolean(body.force);
+
+  if (existingNotif && (existingNotif.status === 'accepted' || existingNotif.status === 'delivered') && !force) {
+    return jsonResponse({
+      error: `Welcome email was already ${existingNotif.status} by ${existingNotif.provider || 'provider'} (Message ID: ${existingNotif.provider_message_id || 'N/A'}). To prevent duplicate emails, pass force: true if you really wish to resend.`,
+      already_accepted: true,
+      message_id: existingNotif.provider_message_id
+    }, 409);
+  }
+
+  const currentRetryCount = existingNotif?.retry_count || 0;
+  if (currentRetryCount >= 5 && !force) {
+    return jsonResponse({
+      error: 'Maximum retry limit reached (5 attempts). Please inspect your email provider credentials and sender authorization before attempting again.',
+      limit_reached: true
+    }, 429);
+  }
+
+  const siteUrl = getSiteUrl(request, env);
+  const now = Date.now();
+  const unsubUrl = `${siteUrl}/unsubscribe?token=${encodeURIComponent(subscriber.unsubscribe_token)}`;
+  const welcomeHtml = renderWelcomeEmailHtml({ unsubscribeUrl: unsubUrl });
+  const welcomeText = renderWelcomeEmailText({ unsubscribeUrl: unsubUrl });
+
+  const notifId = existingNotif ? existingNotif.id : ('notif_welcome_' + Date.now().toString(36) + '_' + generateRandomHexToken(4));
+
+  try {
+    const dispatchResult = await sendTransactionalEmail(env, {
+      to: subscriber.email,
+      from: env.EMAIL_FROM || 'Ashabd <ashabdpoetry0@gmail.com>',
+      replyTo: 'ashabdpoetry0@gmail.com',
+      subject: 'Thank you for subscribing to Ashabd!',
+      html: welcomeHtml,
+      text: welcomeText
+    });
+
+    const msgId = dispatchResult.messageId || null;
+    const provider = dispatchResult.provider || null;
+
+    if (existingNotif) {
+      await db.prepare(`
+        UPDATE poem_notifications
+        SET status = 'accepted', error_message = NULL, provider_message_id = ?, provider = ?, retry_count = retry_count + 1, sent_at = ?
+        WHERE id = ?
+      `).bind(msgId, provider, now, notifId).run();
+    } else {
+      await db.prepare(`
+        INSERT INTO poem_notifications (id, writing_id, subscriber_id, recipient_email, status, error_message, provider_message_id, provider, retry_count, sent_at)
+        VALUES (?, 'welcome', ?, ?, 'accepted', NULL, ?, ?, 1, ?)
+      `).bind(notifId, subscriber.id, subscriber.email, msgId, provider, now).run();
+    }
+
+    return jsonResponse({
+      success: true,
+      email_sent: true,
+      provider_message_id: msgId,
+      provider: provider,
+      message: `Welcome email successfully dispatched to ${subscriber.email} via ${provider}.`
+    });
+  } catch (err) {
+    const errMsg = err?.message || String(err);
+    console.error(`[Ashabd Resend Welcome] Failed for ${subscriber.email}:`, err);
+
+    if (existingNotif) {
+      await db.prepare(`
+        UPDATE poem_notifications
+        SET status = 'failed', error_message = ?, retry_count = retry_count + 1, sent_at = ?
+        WHERE id = ?
+      `).bind(errMsg.slice(0, 500), now, notifId).run();
+    } else {
+      await db.prepare(`
+        INSERT INTO poem_notifications (id, writing_id, subscriber_id, recipient_email, status, error_message, provider_message_id, provider, retry_count, sent_at)
+        VALUES (?, 'welcome', ?, ?, 'failed', ?, NULL, NULL, 1, ?)
+      `).bind(notifId, subscriber.id, subscriber.email, errMsg.slice(0, 500), now).run();
+    }
+
+    return jsonResponse({
+      error: `Failed to dispatch welcome email: ${errMsg}`,
+      email_error: errMsg
+    }, 500);
+  }
 }
 
 async function handleRetryNotificationAdmin(notificationId, request, env, ctx) {
@@ -2505,8 +2788,24 @@ async function handleRetryNotificationAdmin(notificationId, request, env, ctx) {
     return jsonResponse({ error: 'Notification record not found.' }, 404);
   }
 
-  if (notif.status === 'sent') {
-    return jsonResponse({ success: true, message: 'Notification was already successfully sent.' });
+  // Deduplication: Don't retry if already accepted or delivered unless explicitly forced
+  let body = {};
+  try { body = await request.json(); } catch (_) {}
+  const force = Boolean(body.force);
+
+  if ((notif.status === 'accepted' || notif.status === 'delivered') && !force) {
+    return jsonResponse({
+      error: `Notification was already ${notif.status} by ${notif.provider || 'provider'} (Message ID: ${notif.provider_message_id || 'N/A'}). Duplicate dispatch prevented.`,
+      already_accepted: true,
+      message_id: notif.provider_message_id
+    }, 409);
+  }
+
+  if ((notif.retry_count || 0) >= 5 && !force) {
+    return jsonResponse({
+      error: 'Maximum retry limit reached (5 attempts). Please check your email provider credentials and sender authorization before retrying again.',
+      limit_reached: true
+    }, 429);
   }
 
   const subscriber = await db.prepare('SELECT * FROM subscribers WHERE id = ?').bind(notif.subscriber_id).first();
@@ -2528,7 +2827,7 @@ async function handleRetryNotificationAdmin(notificationId, request, env, ctx) {
     const welcomeText = renderWelcomeEmailText({ unsubscribeUrl: unsubUrl });
 
     try {
-      await sendTransactionalEmail(env, {
+      const dispatchResult = await sendTransactionalEmail(env, {
         to: notif.recipient_email,
         from: env.EMAIL_FROM || 'Ashabd <ashabdpoetry0@gmail.com>',
         replyTo: 'ashabdpoetry0@gmail.com',
@@ -2537,20 +2836,28 @@ async function handleRetryNotificationAdmin(notificationId, request, env, ctx) {
         text: welcomeText
       });
 
+      const msgId = dispatchResult.messageId || null;
+      const provider = dispatchResult.provider || null;
+
       await db.prepare(`
         UPDATE poem_notifications
-        SET status = 'sent', error_message = NULL, sent_at = ?
+        SET status = 'accepted', error_message = NULL, provider_message_id = ?, provider = ?, retry_count = retry_count + 1, sent_at = ?
         WHERE id = ?
-      `).bind(now, notificationId).run();
+      `).bind(msgId, provider, now, notificationId).run();
 
-      return jsonResponse({ success: true, message: `Welcome email successfully re-sent to ${notif.recipient_email}.` });
+      return jsonResponse({
+        success: true,
+        provider_message_id: msgId,
+        provider: provider,
+        message: `Welcome email successfully re-sent to ${notif.recipient_email} via ${provider}.`
+      });
     } catch (err) {
       const errMsg = err?.message || String(err);
       await db.prepare(`
         UPDATE poem_notifications
-        SET status = 'failed', error_message = ?, sent_at = ?
+        SET status = 'failed', error_message = ?, retry_count = retry_count + 1, sent_at = ?
         WHERE id = ?
-      `).bind(errMsg.slice(0, 255), now, notificationId).run();
+      `).bind(errMsg.slice(0, 500), now, notificationId).run();
 
       return jsonResponse({ error: `Retry failed: ${errMsg}` }, 500);
     }
@@ -2584,7 +2891,7 @@ async function handleRetryNotificationAdmin(notificationId, request, env, ctx) {
     });
 
     try {
-      await sendTransactionalEmail(env, {
+      const dispatchResult = await sendTransactionalEmail(env, {
         to: notif.recipient_email,
         from: env.EMAIL_FROM || 'Ashabd <ashabdpoetry0@gmail.com>',
         replyTo: 'ashabdpoetry0@gmail.com',
@@ -2593,24 +2900,128 @@ async function handleRetryNotificationAdmin(notificationId, request, env, ctx) {
         text: emailText
       });
 
+      const msgId = dispatchResult.messageId || null;
+      const provider = dispatchResult.provider || null;
+
       await db.prepare(`
         UPDATE poem_notifications
-        SET status = 'sent', error_message = NULL, sent_at = ?
+        SET status = 'accepted', error_message = NULL, provider_message_id = ?, provider = ?, retry_count = retry_count + 1, sent_at = ?
         WHERE id = ?
-      `).bind(now, notificationId).run();
+      `).bind(msgId, provider, now, notificationId).run();
 
-      return jsonResponse({ success: true, message: `Poem notification successfully re-sent to ${notif.recipient_email}.` });
+      return jsonResponse({
+        success: true,
+        provider_message_id: msgId,
+        provider: provider,
+        message: `Poem notification successfully re-sent to ${notif.recipient_email} via ${provider}.`
+      });
     } catch (err) {
       const errMsg = err?.message || String(err);
       await db.prepare(`
         UPDATE poem_notifications
-        SET status = 'failed', error_message = ?, sent_at = ?
+        SET status = 'failed', error_message = ?, retry_count = retry_count + 1, sent_at = ?
         WHERE id = ?
-      `).bind(errMsg.slice(0, 255), now, notificationId).run();
+      `).bind(errMsg.slice(0, 500), now, notificationId).run();
 
       return jsonResponse({ error: `Retry failed: ${errMsg}` }, 500);
     }
   }
+}
+
+async function handleEmailDeliveryWebhook(request, env) {
+  if (request.method !== 'POST') {
+    return jsonResponse({ error: 'Method not allowed' }, 405);
+  }
+
+  // Security: Optional secret verification
+  if (env.EMAIL_WEBHOOK_SECRET) {
+    const auth = request.headers.get('Authorization') || '';
+    const url = new URL(request.url);
+    const token = url.searchParams.get('secret') || auth.replace(/^Bearer\s+/i, '');
+    if (token !== env.EMAIL_WEBHOOK_SECRET) {
+      return jsonResponse({ error: 'Unauthorized webhook' }, 401);
+    }
+  }
+
+  const db = await checkDatabase(env);
+  await ensureSubscribersTable(db);
+
+  let payload;
+  try {
+    payload = await request.json();
+  } catch (e) {
+    return jsonResponse({ error: 'Invalid JSON payload' }, 400);
+  }
+
+  const now = Date.now();
+  let updatedCount = 0;
+
+  // 1. Resend Webhook: { type: "email.delivered" | "email.bounced", data: { email_id: "...", ... } }
+  if (payload.type && payload.data && payload.data.email_id) {
+    const emailId = payload.data.email_id;
+    if (payload.type === 'email.delivered') {
+      const res = await db.prepare(`
+        UPDATE poem_notifications
+        SET status = 'delivered', delivered_at = ?
+        WHERE provider_message_id = ?
+      `).bind(now, emailId).run();
+      updatedCount += res.meta?.changes || 1;
+    } else if (payload.type === 'email.bounced' || payload.type === 'email.complained') {
+      const reason = payload.data.bounce_type || payload.type;
+      await db.prepare(`
+        UPDATE poem_notifications
+        SET status = 'failed', error_message = ?
+        WHERE provider_message_id = ?
+      `).bind(`Bounced (${reason})`, emailId).run();
+      updatedCount += 1;
+    }
+  }
+
+  // 2. SendGrid Webhook: Array of events [ { event: "delivered", sg_message_id: "..." } ]
+  if (Array.isArray(payload)) {
+    for (const evt of payload) {
+      const msgId = (evt.sg_message_id || '').split('.')[0];
+      if (!msgId) continue;
+      if (evt.event === 'delivered') {
+        await db.prepare(`
+          UPDATE poem_notifications
+          SET status = 'delivered', delivered_at = ?
+          WHERE provider_message_id LIKE ?
+        `).bind(now, `${msgId}%`).run();
+        updatedCount += 1;
+      } else if (evt.event === 'bounce' || evt.event === 'dropped') {
+        await db.prepare(`
+          UPDATE poem_notifications
+          SET status = 'failed', error_message = ?
+          WHERE provider_message_id LIKE ?
+        `).bind(`SendGrid (${evt.reason || evt.event})`, `${msgId}%`).run();
+        updatedCount += 1;
+      }
+    }
+  }
+
+  // 3. Postmark Webhook: { RecordType: "Delivery" | "Bounce", MessageID: "..." }
+  if (payload.MessageID && (payload.RecordType || payload.Type)) {
+    const msgId = payload.MessageID;
+    const type = payload.RecordType || payload.Type;
+    if (type === 'Delivery') {
+      await db.prepare(`
+        UPDATE poem_notifications
+        SET status = 'delivered', delivered_at = ?
+        WHERE provider_message_id = ?
+      `).bind(now, msgId).run();
+      updatedCount += 1;
+    } else if (type === 'Bounce' || type === 'SpamComplaint') {
+      await db.prepare(`
+        UPDATE poem_notifications
+        SET status = 'failed', error_message = ?
+        WHERE provider_message_id = ?
+      `).bind(`Postmark (${payload.Description || type})`, msgId).run();
+      updatedCount += 1;
+    }
+  }
+
+  return jsonResponse({ success: true, processed: true, updated: updatedCount });
 }
 
 async function handleDeleteSubscriberAdmin(id, env) {
@@ -2669,7 +3080,7 @@ async function handleSendTestPoemNotification(request, env) {
     unsubscribeUrl: unsubUrl
   });
   const emailText = renderPoemNotificationEmailText({
-    poemTitle,
+    poemTitle: poem.title,
     subtitle: poem.subtitle,
     excerptText,
     readUrl,
@@ -2689,8 +3100,8 @@ async function handleSendTestPoemNotification(request, env) {
     return jsonResponse({
       success: true,
       provider: res.provider,
-      simulated: res.simulated,
-      message: `परीक्षण सूचना ${targetEmail} पर भेज दी गई (${res.simulated ? 'सिम्युलेटेड - Provider secret not yet added' : 'सफलतापूर्वक प्रेषित'})!`
+      provider_message_id: res.messageId,
+      message: `परीक्षण सूचना ${targetEmail} पर सफलतापूर्वक प्रेषित (${res.provider}: ${res.messageId})!`
     });
   } catch (err) {
     return jsonResponse({ error: `Failed to send test email: ${err.message}` }, 500);
@@ -2727,7 +3138,7 @@ async function triggerPoemNotifications(env, poem, siteUrl) {
 
     for (const sub of activeSubscribers) {
       const alreadySent = await db.prepare(`
-        SELECT id FROM poem_notifications WHERE writing_id = ? AND subscriber_id = ? AND status = 'sent'
+        SELECT id FROM poem_notifications WHERE writing_id = ? AND subscriber_id = ? AND status IN ('sent', 'accepted', 'delivered')
       `).bind(poem.id, sub.id).first();
 
       if (alreadySent) continue;
@@ -2752,11 +3163,11 @@ async function triggerPoemNotifications(env, poem, siteUrl) {
       const now = Date.now();
 
       const existingNotif = await db.prepare(`
-        SELECT id FROM poem_notifications WHERE writing_id = ? AND subscriber_id = ?
+        SELECT id, retry_count FROM poem_notifications WHERE writing_id = ? AND subscriber_id = ?
       `).bind(poem.id, sub.id).first();
 
       try {
-        await sendTransactionalEmail(env, {
+        const dispatchResult = await sendTransactionalEmail(env, {
           to: sub.email,
           from: env.EMAIL_FROM || 'Ashabd <ashabdpoetry0@gmail.com>',
           replyTo: 'ashabdpoetry0@gmail.com',
@@ -2765,31 +3176,34 @@ async function triggerPoemNotifications(env, poem, siteUrl) {
           text: emailText
         });
 
+        const msgId = dispatchResult.messageId || null;
+        const provider = dispatchResult.provider || null;
+
         if (existingNotif) {
           await db.prepare(`
             UPDATE poem_notifications
-            SET status = 'sent', error_message = NULL, sent_at = ?
+            SET status = 'accepted', error_message = NULL, provider_message_id = ?, provider = ?, retry_count = retry_count + 1, sent_at = ?
             WHERE id = ?
-          `).bind(now, existingNotif.id).run();
+          `).bind(msgId, provider, now, existingNotif.id).run();
         } else {
           await db.prepare(`
-            INSERT INTO poem_notifications (id, writing_id, subscriber_id, recipient_email, status, error_message, sent_at)
-            VALUES (?, ?, ?, ?, 'sent', NULL, ?)
-          `).bind(notifId, poem.id, sub.id, sub.email, now).run();
+            INSERT INTO poem_notifications (id, writing_id, subscriber_id, recipient_email, status, error_message, provider_message_id, provider, retry_count, sent_at)
+            VALUES (?, ?, ?, ?, 'accepted', NULL, ?, ?, 0, ?)
+          `).bind(notifId, poem.id, sub.id, sub.email, msgId, provider, now).run();
         }
       } catch (err) {
-        const errMsg = String(err.message || err).slice(0, 255);
+        const errMsg = String(err.message || err).slice(0, 500);
         console.error(`Failed to send poem notification to ${sub.email}:`, err);
         if (existingNotif) {
           await db.prepare(`
             UPDATE poem_notifications
-            SET status = 'failed', error_message = ?, sent_at = ?
+            SET status = 'failed', error_message = ?, retry_count = retry_count + 1, sent_at = ?
             WHERE id = ?
           `).bind(errMsg, now, existingNotif.id).run();
         } else {
           await db.prepare(`
-            INSERT INTO poem_notifications (id, writing_id, subscriber_id, recipient_email, status, error_message, sent_at)
-            VALUES (?, ?, ?, ?, 'failed', ?, ?)
+            INSERT INTO poem_notifications (id, writing_id, subscriber_id, recipient_email, status, error_message, provider_message_id, provider, retry_count, sent_at)
+            VALUES (?, ?, ?, ?, 'failed', ?, NULL, NULL, 0, ?)
           `).bind(notifId, poem.id, sub.id, sub.email, errMsg, now).run();
         }
       }
@@ -5510,6 +5924,8 @@ function getAdminDashboardHtml() {
           </div>
         </div>
 
+        <div id="emailServiceBanner" style="display: none; margin-bottom: 1.5rem; padding: 12px 18px; border-radius: 8px; font-size: 0.88rem; line-height: 1.5;"></div>
+
         <div class="stats-grid">
           <div class="stat-card">
             <div class="stat-label">Active Verified (सक्रिय)</div>
@@ -5524,7 +5940,7 @@ function getAdminDashboardHtml() {
             <div class="stat-value" id="statUnsubscribed" style="color: var(--text-muted);">0</div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">Total Delivered (कुल प्रेषित)</div>
+            <div class="stat-label">Accepted / Delivered (स्वीकृत/वितरित)</div>
             <div class="stat-value" id="statTotalNotifications" style="color: var(--accent);">0</div>
           </div>
         </div>
@@ -5563,10 +5979,10 @@ function getAdminDashboardHtml() {
           <table class="writings-table">
             <thead>
               <tr>
-                <th>Poem Title</th>
+                <th>Poem Title / Event</th>
                 <th>Recipient</th>
-                <th>Status</th>
-                <th>Sent At</th>
+                <th>Delivery Status & Details</th>
+                <th>Dispatched At</th>
               </tr>
             </thead>
             <tbody id="notificationsLogTableBody">
@@ -7358,6 +7774,24 @@ function getAdminDashboardHtml() {
           if (countBadge) countBadge.innerText = data.stats.active || 0;
         }
 
+        // Email Service Provider Diagnostics Banner
+        const banner = document.getElementById('emailServiceBanner');
+        if (banner && data.email_service) {
+          const es = data.email_service;
+          banner.style.display = 'block';
+          if (!es.configured) {
+            banner.style.background = 'rgba(239, 68, 68, 0.12)';
+            banner.style.border = '1px solid rgba(239, 68, 68, 0.35)';
+            banner.style.color = '#fca5a5';
+            banner.innerHTML = \`<strong>⚠️ No Email Provider Configured:</strong> Cloudflare Worker secrets (<code>RESEND_API_KEY</code>, <code>SENDGRID_API_KEY</code>, <code>POSTMARK_SERVER_TOKEN</code>, or <code>BREVO_API_KEY</code>) are not configured. Welcome emails and poem notifications cannot reach inboxes until a provider is connected in Cloudflare Settings → Variables and Secrets. (Intended sender: <code>ashabdpoetry0@gmail.com</code>).\`;
+          } else {
+            banner.style.background = 'rgba(34, 197, 94, 0.08)';
+            banner.style.border = '1px solid rgba(34, 197, 94, 0.25)';
+            banner.style.color = '#86efac';
+            banner.innerHTML = \`<strong>🟢 Connected Email Provider:</strong> <span style="text-transform: capitalize; font-weight: 600;">\${escape(es.provider)}</span> &nbsp;|&nbsp; <strong>Sender:</strong> <code>\${escape(es.sender)}</code> &nbsp;|&nbsp; <strong>Reply-To:</strong> <code>\${escape(es.replyTo)}</code>\`;
+          }
+        }
+
         allSubscribers = data.subscribers || [];
         renderSubscribersTable(allSubscribers);
         renderNotificationLogs(data.recent_notifications || []);
@@ -7378,7 +7812,16 @@ function getAdminDashboardHtml() {
       tbody.innerHTML = list.map(sub => {
         let statusBadge = '';
         if (sub.status === 'active') {
-          statusBadge = '<span class="status-tag status-published" style="display: inline-flex; align-items: center; gap: 4px;">✓ Verified (सक्रिय)</span>';
+          let emailSubBadge = '';
+          if (sub.welcome_email_status === 'delivered') {
+            emailSubBadge = '<div style="font-size: 0.72rem; color: #3fb950; margin-top: 3px; font-weight: 500;">✓ Welcome Delivered</div>';
+          } else if (sub.welcome_email_status === 'accepted') {
+            emailSubBadge = \`<div style="font-size: 0.72rem; color: #38bdf8; margin-top: 3px; font-weight: 500;" title="Accepted by \${escape(sub.welcome_email_provider || 'provider')}. Message ID: \${escape(sub.welcome_email_msg_id || '')}">📨 Welcome Accepted</div>\`;
+          } else if (sub.welcome_email_status === 'failed') {
+            emailSubBadge = \`<div style="font-size: 0.72rem; color: var(--danger); margin-top: 3px; font-weight: 500;" title="\${escape(sub.welcome_email_error || 'Delivery failed')}">⚠️ Welcome Failed</div>\`;
+          }
+
+          statusBadge = \`<div><span class="status-tag status-published" style="display: inline-flex; align-items: center; gap: 4px;">✓ Verified (सक्रिय)</span>\${emailSubBadge}</div>\`;
         } else if (sub.status === 'pending') {
           statusBadge = '<span class="status-tag status-draft">Pending (प्रतीक्षारत)</span>';
         } else {
@@ -7391,11 +7834,18 @@ function getAdminDashboardHtml() {
         let actions = '<div style="display: flex; align-items: center; gap: 6px;">';
         if (sub.status === 'pending') {
           actions += \`
-            <button class="action-btn" id="verify-btn-\${escape(sub.id)}" onclick="verifySubscriber('\${escape(sub.id)}', '\${escape(sub.email)}')" title="Verify subscriber and send welcome email" style="color: #3fb950; font-weight: 600; font-size: 0.8rem; border: 1px solid rgba(63,185,80,0.4); border-radius: 4px; padding: 3px 8px; background: rgba(63,185,80,0.08); cursor: pointer; transition: all 0.2s;">
+            <button class="action-btn" id="verify-btn-\${escape(sub.id)}" onclick="verifySubscriber('\${escape(sub.id)}', '\${escape(sub.email)}')" title="Verify subscriber and trigger welcome email" style="color: #3fb950; font-weight: 600; font-size: 0.8rem; border: 1px solid rgba(63,185,80,0.4); border-radius: 4px; padding: 3px 8px; background: rgba(63,185,80,0.08); cursor: pointer; transition: all 0.2s;">
               ✓ Verify
             </button>
           \`;
+        } else if (sub.status === 'active' && (sub.welcome_email_status === 'failed' || !sub.welcome_email_status)) {
+          actions += \`
+            <button class="action-btn" id="resend-welcome-btn-\${escape(sub.id)}" onclick="resendWelcomeEmail('\${escape(sub.id)}', '\${escape(sub.email)}')" title="Retry sending welcome email to subscriber (\${escape(sub.welcome_email_error || 'Not dispatched')})" style="color: var(--accent); font-weight: 600; font-size: 0.78rem; border: 1px solid rgba(224,122,95,0.4); border-radius: 4px; padding: 2px 7px; background: rgba(224,122,95,0.08); cursor: pointer;">
+              ✉️ Retry Welcome
+            </button>
+          \`;
         }
+
         actions += \`
           <button class="action-btn" onclick="deleteSubscriber('\${escape(sub.id)}', '\${escape(sub.email)}')" title="Remove subscriber" style="color: var(--danger); font-size: 0.85rem; padding: 3px 6px;">
             🗑️
@@ -7435,9 +7885,9 @@ function getAdminDashboardHtml() {
         const data = await res.json();
         if (res.ok && data.success) {
           if (data.email_sent) {
-            alert('✓ Subscriber verified successfully!\\nWelcome email sent to ' + email + '.');
+            alert('✓ Subscriber verified successfully!\\nWelcome email accepted by provider (' + (data.provider || 'API') + ').\\nMessage ID: ' + (data.provider_message_id || 'N/A'));
           } else {
-            alert('✓ Subscriber verified successfully!\\nNotice: Welcome email delivery could not be completed immediately (' + (data.email_error || 'Delivery queued/failed') + '). You can retry sending it from the Recent Notification Dispatches log.');
+            alert('✓ Subscriber verified in database!\\n\\n⚠️ Notice: Welcome email could not be delivered:\\n' + (data.email_error || 'Delivery failed') + '\\n\\nPlease check your email provider credentials and domain authorization. You can retry sending anytime using the "✉️ Retry Welcome" button.');
           }
           await loadSubscribers();
         } else {
@@ -7460,6 +7910,63 @@ function getAdminDashboardHtml() {
       }
     }
 
+    async function resendWelcomeEmail(id, email) {
+      if (!confirm('Retry sending welcome email to ' + email + '?')) {
+        return;
+      }
+
+      const btn = document.getElementById('resend-welcome-btn-' + id);
+      if (btn) {
+        btn.disabled = true;
+        btn.innerText = 'Sending...';
+        btn.style.opacity = '0.6';
+        btn.style.cursor = 'not-allowed';
+      }
+
+      try {
+        const res = await fetch('/api/subscribers/' + id + '/resend-welcome', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ force: false })
+        });
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+          alert('✓ Welcome email accepted by provider (' + (data.provider || 'API') + ')!\\nMessage ID: ' + (data.provider_message_id || 'N/A'));
+          await loadSubscribers();
+        } else {
+          if (data.already_accepted) {
+            if (confirm(data.error + '\\n\\nDo you want to FORCE resend anyway?')) {
+              const forceRes = await fetch('/api/subscribers/' + id + '/resend-welcome', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ force: true })
+              });
+              const forceData = await forceRes.json();
+              if (forceRes.ok && forceData.success) {
+                alert('✓ Welcome email forced dispatch succeeded!');
+                await loadSubscribers();
+                return;
+              } else {
+                alert('Force dispatch failed: ' + (forceData.error || 'Server error'));
+              }
+            }
+          } else {
+            alert('Failed to send welcome email: ' + (data.error || 'Server error'));
+          }
+          await loadSubscribers();
+        }
+      } catch (err) {
+        alert('Network error: ' + err.message);
+        if (btn) {
+          btn.disabled = false;
+          btn.innerText = '✉️ Retry Welcome';
+          btn.style.opacity = '1';
+          btn.style.cursor = 'pointer';
+        }
+      }
+    }
+
     function renderNotificationLogs(logs) {
       const logBody = document.getElementById('notificationsLogTableBody');
       if (!logBody) return;
@@ -7472,14 +7979,24 @@ function getAdminDashboardHtml() {
       logBody.innerHTML = logs.map(log => {
         const sentDate = log.sent_at ? new Date(log.sent_at).toLocaleString('hi-IN', { dateStyle: 'short', timeStyle: 'short' }) : '--';
         let statusBadge = '';
-        if (log.status === 'sent') {
-          statusBadge = '<span style="color: #3fb950; font-weight: 600; font-size: 0.8rem;">✓ Sent</span>';
-        } else if (log.status === 'failed') {
-          statusBadge = \`<span style="color: var(--danger); font-weight: 600; font-size: 0.8rem;" title="\${escape(log.error_message || '')}">✕ Failed</span>\`;
+        if (log.status === 'delivered' || log.status === 'sent') {
+          statusBadge = '<span style="color: #3fb950; font-weight: 600; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 4px;">✓ Delivered</span>';
+        } else if (log.status === 'accepted') {
+          statusBadge = \`<span style="color: #38bdf8; font-weight: 600; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 4px;" title="Accepted by \${escape(log.provider || 'provider')}">📨 Accepted by provider</span>\`;
         } else if (log.status === 'retrying') {
           statusBadge = '<span style="color: var(--accent); font-weight: 600; font-size: 0.8rem;">⟳ Retrying</span>';
+        } else if (log.status === 'queued') {
+          statusBadge = '<span style="color: #a29d93; font-weight: 600; font-size: 0.8rem;">⏳ Queued</span>';
         } else {
-          statusBadge = \`<span style="color: var(--text-muted); font-weight: 600; font-size: 0.8rem;">\${escape(log.status || 'Queued')}</span>\`;
+          statusBadge = \`<span style="color: var(--danger); font-weight: 600; font-size: 0.8rem;">✕ Failed</span>\`;
+        }
+
+        let details = '';
+        if (log.provider_message_id) {
+          details += \`<div style="font-size: 0.72rem; color: var(--text-muted); font-family: monospace; margin-top: 2px;">ID: \${escape(log.provider_message_id.slice(0, 18))}... (\${escape(log.provider || 'api')})</div>\`;
+        }
+        if (log.error_message) {
+          details += \`<div style="font-size: 0.72rem; color: var(--danger); margin-top: 2px; max-width: 280px; word-break: break-word;">\${escape(log.error_message)}</div>\`;
         }
 
         let retryAction = '';
@@ -7491,7 +8008,10 @@ function getAdminDashboardHtml() {
           <tr>
             <td style="font-weight: 500; color: var(--text-main);">\${escape(log.poem_title || log.writing_id)}</td>
             <td style="color: var(--text-muted); font-family: monospace; font-size: 0.82rem;">\${escape(log.recipient_email)}</td>
-            <td><div style="display: flex; align-items: center;">\${statusBadge}\${retryAction}</div></td>
+            <td>
+              <div style="display: flex; align-items: center;">\${statusBadge}\${retryAction}</div>
+              \${details}
+            </td>
             <td style="color: var(--text-muted); font-size: 0.82rem;">\${sentDate}</td>
           </tr>
         \`;
@@ -7510,11 +8030,12 @@ function getAdminDashboardHtml() {
       try {
         const res = await fetch('/api/subscribers/notifications/' + id + '/retry', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ force: false })
         });
         const data = await res.json();
         if (res.ok && data.success) {
-          alert('✓ Notification re-sent successfully to ' + recipient + '!');
+          alert('✓ Notification re-sent successfully to ' + recipient + '!\\nProvider ID: ' + (data.provider_message_id || 'N/A'));
           await loadSubscribers();
         } else {
           alert('Retry failed: ' + (data.error || 'Delivery failed'));

@@ -1557,6 +1557,8 @@
           </div>
         </div>
 
+        <div id="emailServiceBanner" style="display: none; margin-bottom: 1.5rem; padding: 12px 18px; border-radius: 8px; font-size: 0.88rem; line-height: 1.5;"></div>
+
         <div class="stats-grid">
           <div class="stat-card">
             <div class="stat-label">Active Verified (सक्रिय)</div>
@@ -1571,7 +1573,7 @@
             <div class="stat-value" id="statUnsubscribed" style="color: var(--text-muted);">0</div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">Total Delivered (कुल प्रेषित)</div>
+            <div class="stat-label">Accepted / Delivered (स्वीकृत/वितरित)</div>
             <div class="stat-value" id="statTotalNotifications" style="color: var(--accent);">0</div>
           </div>
         </div>
@@ -1610,10 +1612,10 @@
           <table class="writings-table">
             <thead>
               <tr>
-                <th>Poem Title</th>
+                <th>Poem Title / Event</th>
                 <th>Recipient</th>
-                <th>Status</th>
-                <th>Sent At</th>
+                <th>Delivery Status & Details</th>
+                <th>Dispatched At</th>
               </tr>
             </thead>
             <tbody id="notificationsLogTableBody">
@@ -3405,6 +3407,24 @@
           if (countBadge) countBadge.innerText = data.stats.active || 0;
         }
 
+        // Email Service Provider Diagnostics Banner
+        const banner = document.getElementById('emailServiceBanner');
+        if (banner && data.email_service) {
+          const es = data.email_service;
+          banner.style.display = 'block';
+          if (!es.configured) {
+            banner.style.background = 'rgba(239, 68, 68, 0.12)';
+            banner.style.border = '1px solid rgba(239, 68, 68, 0.35)';
+            banner.style.color = '#fca5a5';
+            banner.innerHTML = `<strong>⚠️ No Email Provider Configured:</strong> Cloudflare Worker secrets (<code>RESEND_API_KEY</code>, <code>SENDGRID_API_KEY</code>, <code>POSTMARK_SERVER_TOKEN</code>, or <code>BREVO_API_KEY</code>) are not configured. Welcome emails and poem notifications cannot reach inboxes until a provider is connected in Cloudflare Settings → Variables and Secrets. (Intended sender: <code>ashabdpoetry0@gmail.com</code>).`;
+          } else {
+            banner.style.background = 'rgba(34, 197, 94, 0.08)';
+            banner.style.border = '1px solid rgba(34, 197, 94, 0.25)';
+            banner.style.color = '#86efac';
+            banner.innerHTML = `<strong>🟢 Connected Email Provider:</strong> <span style="text-transform: capitalize; font-weight: 600;">${escape(es.provider)}</span> &nbsp;|&nbsp; <strong>Sender:</strong> <code>${escape(es.sender)}</code> &nbsp;|&nbsp; <strong>Reply-To:</strong> <code>${escape(es.replyTo)}</code>`;
+          }
+        }
+
         allSubscribers = data.subscribers || [];
         renderSubscribersTable(allSubscribers);
         renderNotificationLogs(data.recent_notifications || []);
@@ -3425,7 +3445,16 @@
       tbody.innerHTML = list.map(sub => {
         let statusBadge = '';
         if (sub.status === 'active') {
-          statusBadge = '<span class="status-tag status-published" style="display: inline-flex; align-items: center; gap: 4px;">✓ Verified (सक्रिय)</span>';
+          let emailSubBadge = '';
+          if (sub.welcome_email_status === 'delivered') {
+            emailSubBadge = '<div style="font-size: 0.72rem; color: #3fb950; margin-top: 3px; font-weight: 500;">✓ Welcome Delivered</div>';
+          } else if (sub.welcome_email_status === 'accepted') {
+            emailSubBadge = `<div style="font-size: 0.72rem; color: #38bdf8; margin-top: 3px; font-weight: 500;" title="Accepted by ${escape(sub.welcome_email_provider || 'provider')}. Message ID: ${escape(sub.welcome_email_msg_id || '')}">📨 Welcome Accepted</div>`;
+          } else if (sub.welcome_email_status === 'failed') {
+            emailSubBadge = `<div style="font-size: 0.72rem; color: var(--danger); margin-top: 3px; font-weight: 500;" title="${escape(sub.welcome_email_error || 'Delivery failed')}">⚠️ Welcome Failed</div>`;
+          }
+
+          statusBadge = `<div><span class="status-tag status-published" style="display: inline-flex; align-items: center; gap: 4px;">✓ Verified (सक्रिय)</span>${emailSubBadge}</div>`;
         } else if (sub.status === 'pending') {
           statusBadge = '<span class="status-tag status-draft">Pending (प्रतीक्षारत)</span>';
         } else {
@@ -3438,11 +3467,18 @@
         let actions = '<div style="display: flex; align-items: center; gap: 6px;">';
         if (sub.status === 'pending') {
           actions += `
-            <button class="action-btn" id="verify-btn-${escape(sub.id)}" onclick="verifySubscriber('${escape(sub.id)}', '${escape(sub.email)}')" title="Verify subscriber and send welcome email" style="color: #3fb950; font-weight: 600; font-size: 0.8rem; border: 1px solid rgba(63,185,80,0.4); border-radius: 4px; padding: 3px 8px; background: rgba(63,185,80,0.08); cursor: pointer; transition: all 0.2s;">
+            <button class="action-btn" id="verify-btn-${escape(sub.id)}" onclick="verifySubscriber('${escape(sub.id)}', '${escape(sub.email)}')" title="Verify subscriber and trigger welcome email" style="color: #3fb950; font-weight: 600; font-size: 0.8rem; border: 1px solid rgba(63,185,80,0.4); border-radius: 4px; padding: 3px 8px; background: rgba(63,185,80,0.08); cursor: pointer; transition: all 0.2s;">
               ✓ Verify
             </button>
           `;
+        } else if (sub.status === 'active' && (sub.welcome_email_status === 'failed' || !sub.welcome_email_status)) {
+          actions += `
+            <button class="action-btn" id="resend-welcome-btn-${escape(sub.id)}" onclick="resendWelcomeEmail('${escape(sub.id)}', '${escape(sub.email)}')" title="Retry sending welcome email to subscriber (${escape(sub.welcome_email_error || 'Not dispatched')})" style="color: var(--accent); font-weight: 600; font-size: 0.78rem; border: 1px solid rgba(224,122,95,0.4); border-radius: 4px; padding: 2px 7px; background: rgba(224,122,95,0.08); cursor: pointer;">
+              ✉️ Retry Welcome
+            </button>
+          `;
         }
+
         actions += `
           <button class="action-btn" onclick="deleteSubscriber('${escape(sub.id)}', '${escape(sub.email)}')" title="Remove subscriber" style="color: var(--danger); font-size: 0.85rem; padding: 3px 6px;">
             🗑️
@@ -3482,9 +3518,9 @@
         const data = await res.json();
         if (res.ok && data.success) {
           if (data.email_sent) {
-            alert(`✓ Subscriber verified successfully!\nWelcome email sent to ${email}.`);
+            alert(`✓ Subscriber verified successfully!\nWelcome email accepted by provider (${data.provider || 'API'}).\nMessage ID: ${data.provider_message_id || 'N/A'}`);
           } else {
-            alert(`✓ Subscriber verified successfully!\nNotice: Welcome email delivery could not be completed immediately (${data.email_error || 'Delivery queued/failed'}). You can retry sending it from the Recent Notification Dispatches log.`);
+            alert(`✓ Subscriber verified in database!\n\n⚠️ Notice: Welcome email could not be delivered:\n${data.email_error || 'Delivery failed'}\n\nPlease check your email provider credentials and domain authorization. You can retry sending anytime using the "✉️ Retry Welcome" button.`);
           }
           await loadSubscribers();
         } else {
@@ -3507,6 +3543,63 @@
       }
     }
 
+    async function resendWelcomeEmail(id, email) {
+      if (!confirm(`Retry sending welcome email to ${email}?`)) {
+        return;
+      }
+
+      const btn = document.getElementById(`resend-welcome-btn-${id}`);
+      if (btn) {
+        btn.disabled = true;
+        btn.innerText = 'Sending...';
+        btn.style.opacity = '0.6';
+        btn.style.cursor = 'not-allowed';
+      }
+
+      try {
+        const res = await fetch(`/api/subscribers/${id}/resend-welcome`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ force: false })
+        });
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+          alert(`✓ Welcome email accepted by provider (${data.provider || 'API'})!\nMessage ID: ${data.provider_message_id || 'N/A'}`);
+          await loadSubscribers();
+        } else {
+          if (data.already_accepted) {
+            if (confirm(`${data.error}\n\nDo you want to FORCE resend anyway?`)) {
+              const forceRes = await fetch(`/api/subscribers/${id}/resend-welcome`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ force: true })
+              });
+              const forceData = await forceRes.json();
+              if (forceRes.ok && forceData.success) {
+                alert(`✓ Welcome email forced dispatch succeeded!`);
+                await loadSubscribers();
+                return;
+              } else {
+                alert(`Force dispatch failed: ${forceData.error || 'Server error'}`);
+              }
+            }
+          } else {
+            alert(`Failed to send welcome email: ${data.error || 'Server error'}`);
+          }
+          await loadSubscribers();
+        }
+      } catch (err) {
+        alert(`Network error: ${err.message}`);
+        if (btn) {
+          btn.disabled = false;
+          btn.innerText = '✉️ Retry Welcome';
+          btn.style.opacity = '1';
+          btn.style.cursor = 'pointer';
+        }
+      }
+    }
+
     function renderNotificationLogs(logs) {
       const logBody = document.getElementById('notificationsLogTableBody');
       if (!logBody) return;
@@ -3519,14 +3612,24 @@
       logBody.innerHTML = logs.map(log => {
         const sentDate = log.sent_at ? new Date(log.sent_at).toLocaleString('hi-IN', { dateStyle: 'short', timeStyle: 'short' }) : '--';
         let statusBadge = '';
-        if (log.status === 'sent') {
-          statusBadge = '<span style="color: #3fb950; font-weight: 600; font-size: 0.8rem;">✓ Sent</span>';
-        } else if (log.status === 'failed') {
-          statusBadge = `<span style="color: var(--danger); font-weight: 600; font-size: 0.8rem;" title="${escape(log.error_message || '')}">✕ Failed</span>`;
+        if (log.status === 'delivered' || log.status === 'sent') {
+          statusBadge = '<span style="color: #3fb950; font-weight: 600; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 4px;">✓ Delivered</span>';
+        } else if (log.status === 'accepted') {
+          statusBadge = `<span style="color: #38bdf8; font-weight: 600; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 4px;" title="Accepted by ${escape(log.provider || 'provider')}">📨 Accepted by provider</span>`;
         } else if (log.status === 'retrying') {
           statusBadge = '<span style="color: var(--accent); font-weight: 600; font-size: 0.8rem;">⟳ Retrying</span>';
+        } else if (log.status === 'queued') {
+          statusBadge = '<span style="color: #a29d93; font-weight: 600; font-size: 0.8rem;">⏳ Queued</span>';
         } else {
-          statusBadge = `<span style="color: var(--text-muted); font-weight: 600; font-size: 0.8rem;">${escape(log.status || 'Queued')}</span>`;
+          statusBadge = `<span style="color: var(--danger); font-weight: 600; font-size: 0.8rem;">✕ Failed</span>`;
+        }
+
+        let details = '';
+        if (log.provider_message_id) {
+          details += `<div style="font-size: 0.72rem; color: var(--text-muted); font-family: monospace; margin-top: 2px;">ID: ${escape(log.provider_message_id.slice(0, 18))}... (${escape(log.provider || 'api')})</div>`;
+        }
+        if (log.error_message) {
+          details += `<div style="font-size: 0.72rem; color: var(--danger); margin-top: 2px; max-width: 280px; word-break: break-word;">${escape(log.error_message)}</div>`;
         }
 
         let retryAction = '';
@@ -3538,7 +3641,10 @@
           <tr>
             <td style="font-weight: 500; color: var(--text-main);">${escape(log.poem_title || log.writing_id)}</td>
             <td style="color: var(--text-muted); font-family: monospace; font-size: 0.82rem;">${escape(log.recipient_email)}</td>
-            <td><div style="display: flex; align-items: center;">${statusBadge}${retryAction}</div></td>
+            <td>
+              <div style="display: flex; align-items: center;">${statusBadge}${retryAction}</div>
+              ${details}
+            </td>
             <td style="color: var(--text-muted); font-size: 0.82rem;">${sentDate}</td>
           </tr>
         `;
@@ -3557,11 +3663,12 @@
       try {
         const res = await fetch(`/api/subscribers/notifications/${id}/retry`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ force: false })
         });
         const data = await res.json();
         if (res.ok && data.success) {
-          alert(`✓ Notification re-sent successfully to ${recipient}!`);
+          alert(`✓ Notification re-sent successfully to ${recipient}!\nProvider ID: ${data.provider_message_id || 'N/A'}`);
           await loadSubscribers();
         } else {
           alert('Retry failed: ' + (data.error || 'Delivery failed'));
