@@ -439,7 +439,7 @@ html, body {
   visibility: visible !important;
 }
 
-/* Contact Email Address Link below Social Icons */
+/* Contact Email Text below Social Icons (Plain, Selectable) */
 .manuscript-email-wrapper {
   display: flex !important;
   align-items: center !important;
@@ -447,8 +447,11 @@ html, body {
   text-align: center;
   line-height: 1;
   visibility: visible !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
 }
 
+.manuscript-email-text,
 .manuscript-email-address {
   display: inline-block !important;
   font-family: 'Georgia', 'Noto Serif Devanagari', 'Times New Roman', serif;
@@ -457,24 +460,17 @@ html, body {
   color: #2b180d !important;
   text-decoration: none;
   opacity: 0.85;
-  transition: opacity 0.25s ease, color 0.25s ease;
-  -webkit-tap-highlight-color: transparent;
-  cursor: pointer;
   visibility: visible !important;
   white-space: nowrap !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  cursor: text;
 }
 
-.manuscript-email-address:hover {
-  opacity: 1 !important;
-  color: #120601 !important;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.manuscript-email-address:focus-visible {
-  outline: 1px dashed rgba(68, 34, 15, 0.5);
-  outline-offset: 3px;
-  border-radius: 2px;
+.manuscript-email-text::selection,
+.manuscript-email-address::selection {
+  background: rgba(140, 80, 35, 0.25);
+  color: #120601;
 }
 
 
@@ -509,6 +505,7 @@ html, body {
     gap: 4px !important;
   }
 
+  .manuscript-email-text,
   .manuscript-email-address {
     font-size: clamp(0.66rem, 2.9vw, 0.75rem);
     white-space: nowrap !important;
@@ -574,6 +571,7 @@ html, body {
     gap: clamp(4px, 0.7vh, 7px) !important;
   }
 
+  .manuscript-email-text,
   .manuscript-email-address {
     font-size: clamp(0.72rem, 1.3vw, 0.80rem);
   }
@@ -636,6 +634,7 @@ html, body {
     gap: 3px !important;
   }
 
+  .manuscript-email-text,
   .manuscript-email-address {
     font-size: 0.68rem;
   }
