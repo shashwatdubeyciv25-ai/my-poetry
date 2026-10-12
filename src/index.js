@@ -2648,6 +2648,8 @@ async function handleListSubscribersAdmin(request, env) {
            pn.provider_message_id, pn.provider, pn.retry_count, pn.delivered_at, pn.sent_at,
       CASE 
         WHEN pn.writing_id = 'welcome' OR pn.writing_id LIKE 'notif_welcome%' THEN '🎉 Welcome Email'
+        WHEN pn.writing_id = 'test_welcome' THEN '🧪 Test Welcome Email'
+        WHEN pn.writing_id = 'test_poem' THEN '🧪 Test Poem Notification'
         ELSE COALESCE(w.title, 'Poem Notification')
       END as poem_title
     FROM poem_notifications pn
@@ -3195,16 +3197,44 @@ async function handleSendTestPoemNotification(request, env) {
       text: emailText
     });
 
+    const notifId = 'notif_test_' + Date.now().toString(36) + '_' + generateRandomHexToken(4);
+    const writingId = testType === 'welcome' ? 'test_welcome' : 'test_poem';
+    const now = Date.now();
+
+    await db.prepare(`
+      INSERT INTO poem_notifications (id, writing_id, subscriber_id, recipient_email, status, error_message, provider_message_id, provider, retry_count, sent_at)
+      VALUES (?, ?, 'admin_test', ?, 'accepted', NULL, ?, ?, 0, ?)
+    `).bind(notifId, writingId, targetEmail, res.messageId, res.provider, now).run();
+
     const typeLabel = testType === 'welcome' ? 'welcome email' : 'poem notification';
     return jsonResponse({
       success: true,
       provider: res.provider,
       provider_message_id: res.messageId,
-      status: res.status,
-      message: `Test ${typeLabel} dispatched to ${targetEmail} via ${res.provider} (ID: ${res.messageId})!`
+      status: 'accepted',
+      type: testType,
+      recipient: targetEmail,
+      notification_id: notifId,
+      message: `Test ${typeLabel} accepted by ${res.provider} (ID: ${res.messageId}). Provider has queued the email for delivery.`
     });
   } catch (err) {
-    return jsonResponse({ error: `Failed to send test email: ${err.message}` }, 500);
+    const errMsg = err?.message || String(err);
+    const notifId = 'notif_test_' + Date.now().toString(36) + '_' + generateRandomHexToken(4);
+    const writingId = testType === 'welcome' ? 'test_welcome' : 'test_poem';
+    const now = Date.now();
+
+    try {
+      await db.prepare(`
+        INSERT INTO poem_notifications (id, writing_id, subscriber_id, recipient_email, status, error_message, provider_message_id, provider, retry_count, sent_at)
+        VALUES (?, ?, 'admin_test', ?, 'failed', ?, NULL, ?, 0, ?)
+      `).bind(notifId, writingId, targetEmail, errMsg.slice(0, 500), env.RESEND_API_KEY ? 'resend' : 'none', now).run();
+    } catch (_) {}
+
+    return jsonResponse({
+      success: false,
+      error: `Failed to send test email: ${errMsg}`,
+      code: err?.code || 'SEND_ERROR'
+    }, 500);
   }
 }
 
@@ -8223,8 +8253,10 @@ function getAdminDashboardHtml() {
       logBody.innerHTML = logs.map(log => {
         const sentDate = log.sent_at ? new Date(log.sent_at).toLocaleString('hi-IN', { dateStyle: 'short', timeStyle: 'short' }) : '--';
         let statusBadge = '';
-        if (log.status === 'delivered' || log.status === 'sent') {
-          statusBadge = '<span style="color: #3fb950; font-weight: 600; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 4px;">✓ Delivered</span>';
+        if (log.status === 'delivered') {
+          statusBadge = '<span style="color: #3fb950; font-weight: 600; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 4px;">✓ Confirmed Delivered</span>';
+        } else if (log.status === 'sent') {
+          statusBadge = '<span style="color: #3fb950; font-weight: 600; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 4px;">✓ Sent</span>';
         } else if (log.status === 'accepted') {
           statusBadge = \`<span style="color: #38bdf8; font-weight: 600; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 4px;" title="Accepted by \${escape(log.provider || 'provider')}">📨 Accepted by provider</span>\`;
         } else if (log.status === 'retrying') {
@@ -8238,6 +8270,10 @@ function getAdminDashboardHtml() {
         let details = '';
         if (log.provider_message_id) {
           details += \`<div style="font-size: 0.72rem; color: var(--text-muted); font-family: monospace; margin-top: 2px;">ID: \${escape(log.provider_message_id.slice(0, 18))}... (\${escape(log.provider || 'api')})</div>\`;
+        }
+        if (log.delivered_at) {
+          const delDate = new Date(log.delivered_at).toLocaleString('hi-IN', { dateStyle: 'short', timeStyle: 'short' });
+          details += \`<div style="font-size: 0.72rem; color: #3fb950; margin-top: 2px;">✓ Verified delivered at \${delDate}</div>\`;
         }
         if (log.error_message) {
           details += \`<div style="font-size: 0.72rem; color: var(--danger); margin-top: 2px; max-width: 280px; word-break: break-word;">\${escape(log.error_message)}</div>\`;
@@ -8371,16 +8407,37 @@ function getAdminDashboardHtml() {
 
         feedback.style.display = 'block';
         if (res.ok && data.success) {
-          feedback.style.background = 'rgba(63, 185, 80, 0.14)';
-          feedback.style.border = '1px solid rgba(63, 185, 80, 0.3)';
-          feedback.style.color = '#3fb950';
-          feedback.innerText = '✅ ' + (data.message || 'Test email dispatched successfully!');
+          feedback.style.background = 'rgba(63, 185, 80, 0.12)';
+          feedback.style.border = '1px solid rgba(63, 185, 80, 0.35)';
+          feedback.style.color = '#86efac';
+          feedback.innerHTML = \`
+            <div style="font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+              <span>📨 Accepted by \${escape(data.provider || 'Provider')}</span>
+            </div>
+            <div style="font-size: 0.82rem; margin-bottom: 3px; color: #f5f2eb;">
+              <strong>Recipient:</strong> <code>\${escape(data.recipient || email)}</code>
+            </div>
+            <div style="font-size: 0.82rem; margin-bottom: 5px; color: #f5f2eb;">
+              <strong>Provider Message ID:</strong> <code style="font-family: monospace;">\${escape(data.provider_message_id || 'N/A')}</code>
+            </div>
+            <div style="font-size: 0.78rem; line-height: 1.5; color: #bbf7d0; margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(63, 185, 80, 0.25);">
+              ℹ️ <strong>Status: Accepted (Transmission in Progress)</strong><br>
+              The email has been accepted by the Resend API and queued. Check the <em>Recent Notification Dispatches</em> table below to confirm inbox delivery via webhook.
+            </div>
+          \`;
           await loadSubscribers();
         } else {
           feedback.style.background = 'rgba(248, 81, 73, 0.14)';
-          feedback.style.border = '1px solid rgba(248, 81, 73, 0.3)';
-          feedback.style.color = 'var(--danger)';
-          feedback.innerText = '❌ ' + (data.error || 'Failed to dispatch test notification.');
+          feedback.style.border = '1px solid rgba(248, 81, 73, 0.35)';
+          feedback.style.color = '#fca5a5';
+          feedback.innerHTML = \`
+            <div style="font-weight: 700; margin-bottom: 4px;">✕ Dispatch Failed</div>
+            <div style="font-size: 0.82rem; line-height: 1.5; color: #fecaca; margin-bottom: 4px;">\${escape(data.error || 'Server error')}</div>
+            <div style="font-size: 0.78rem; color: #fed7aa; margin-top: 4px;">
+              💡 <strong>Next Step:</strong> Ensure <code>RESEND_API_KEY</code> is configured in Cloudflare Secrets and the sender domain is authorized.
+            </div>
+          \`;
+          await loadSubscribers();
         }
       } catch (err) {
         feedback.style.display = 'block';
