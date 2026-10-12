@@ -153,6 +153,14 @@ export default {
         if (pathname === '/api/subscribers/send-test-notification' && request.method === 'POST') {
           return handleSendTestPoemNotification(request, env);
         }
+        const verifyMatch = pathname.match(/^\/api\/subscribers\/([a-zA-Z0-9_\-]+)\/verify$/);
+        if (verifyMatch && request.method === 'POST') {
+          return handleVerifySubscriberAdmin(verifyMatch[1], request, env, ctx);
+        }
+        const retryMatch = pathname.match(/^\/api\/subscribers\/notifications\/([a-zA-Z0-9_\-]+)\/retry$/);
+        if (retryMatch && request.method === 'POST') {
+          return handleRetryNotificationAdmin(retryMatch[1], request, env, ctx);
+        }
         const subIdMatch = pathname.match(/^\/api\/subscribers\/([a-zA-Z0-9_\-]+)$/);
         if (subIdMatch && request.method === 'DELETE') {
           return handleDeleteSubscriberAdmin(subIdMatch[1], env);
@@ -1672,8 +1680,9 @@ async function handleUpdateEmail(request, env) {
  * Unified Transactional Email Engine
  * Dispatches via Resend, SendGrid, or Postmark depending on configured Cloudflare secrets.
  */
-async function sendTransactionalEmail(env, { to, subject, html, text }) {
-  const senderEmail = env.EMAIL_FROM || 'Ashabd <noreply@ashabd.in>';
+async function sendTransactionalEmail(env, { to, subject, html, text, from, replyTo }) {
+  const senderEmail = from || env.EMAIL_FROM || 'Ashabd <ashabdpoetry0@gmail.com>';
+  const replyToAddress = replyTo || env.EMAIL_REPLY_TO || 'ashabdpoetry0@gmail.com';
 
   // 1. Resend API
   if (env.RESEND_API_KEY) {
@@ -1686,6 +1695,7 @@ async function sendTransactionalEmail(env, { to, subject, html, text }) {
       body: JSON.stringify({
         from: senderEmail,
         to: [to],
+        reply_to: replyToAddress,
         subject,
         html,
         text: text || undefined
@@ -1710,8 +1720,12 @@ async function sendTransactionalEmail(env, { to, subject, html, text }) {
       body: JSON.stringify({
         personalizations: [{ to: [{ email: to }] }],
         from: { email: plainFrom, name: 'Ashabd' },
+        reply_to: { email: replyToAddress, name: 'Ashabd' },
         subject,
-        content: [{ type: 'text/html', value: html }]
+        content: [
+          { type: 'text/html', value: html },
+          ...(text ? [{ type: 'text/plain', value: text }] : [])
+        ]
       })
     });
     if (!res.ok) {
@@ -1732,6 +1746,7 @@ async function sendTransactionalEmail(env, { to, subject, html, text }) {
       body: JSON.stringify({
         From: senderEmail,
         To: to,
+        ReplyTo: replyToAddress,
         Subject: subject,
         HtmlBody: html,
         TextBody: text || undefined
@@ -1875,6 +1890,72 @@ async function sendSubscriptionVerificationEmail(env, { to, verifyUrl }) {
   });
 }
 
+function renderWelcomeEmailHtml({ unsubscribeUrl }) {
+  return `<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Thank you for subscribing to Ashabd!</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0f1115; color: #f5f2eb; margin: 0; padding: 24px; }
+    .container { max-width: 540px; margin: 0 auto; background-color: #171a21; border: 1px solid rgba(212, 107, 36, 0.35); border-radius: 12px; padding: 34px 28px; }
+    .brand { font-family: Georgia, serif; font-size: 34px; color: #d46b24; text-align: center; margin: 0 0 6px 0; letter-spacing: 2px; }
+    .tagline { text-align: center; color: #a29d93; font-size: 13px; margin: 0 0 26px 0; letter-spacing: 1.5px; }
+    .greeting { font-size: 16px; font-weight: 600; margin-bottom: 14px; color: #f5f2eb; }
+    .text { font-size: 14.5px; line-height: 1.7; color: #d1ccc2; margin-bottom: 18px; }
+    .btn-wrap { text-align: center; margin: 28px 0; }
+    .btn { display: inline-block; background-color: #d46b24; color: #ffffff !important; text-decoration: none; font-weight: 600; font-size: 15px; padding: 13px 34px; border-radius: 6px; box-shadow: 0 4px 12px rgba(212, 107, 36, 0.3); }
+    .footer { text-align: center; font-size: 12px; color: #6d675e; margin-top: 28px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 16px; line-height: 1.6; }
+    .footer a { color: #8e887d; text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 class="brand">अशब्द</h1>
+    <p class="tagline">काव्य एवं विचार • Poetry &amp; Reflection</p>
+
+    <p class="greeting">Namaste,</p>
+    <p class="text">Thank you for subscribing to <strong>Ashabd</strong>!</p>
+    <p class="text">You are now part of our poetry community. Whenever a new poem is published on Ashabd, we will send you a short email notification so you can read it.</p>
+    <p class="text">Thank you for being here and supporting poetry.</p>
+
+    <div class="btn-wrap">
+      <a href="https://ashabd.in/" class="btn" target="_blank">Visit Ashabd (मुख्य पृष्ठ देखें) ↗</a>
+    </div>
+
+    <p class="text" style="margin-top: 24px;">
+      With regards,<br>
+      <strong>Ashabd</strong><br>
+      <a href="https://ashabd.in/" style="color: #d46b24; text-decoration: none;">https://ashabd.in/</a>
+    </p>
+
+    <div class="footer">
+      You are receiving this note because you subscribed on <strong>ashabd.in</strong>.<br>
+      ${unsubscribeUrl ? `<a href="${unsubscribeUrl}">Unsubscribe (सदस्यता समाप्त करें)</a> • ` : ''}© ${new Date().getFullYear()} Ashabd
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+function renderWelcomeEmailText({ unsubscribeUrl }) {
+  return `Namaste,
+
+Thank you for subscribing to Ashabd!
+
+You are now part of our poetry community. Whenever a new poem is published on Ashabd, we will send you a short email notification so you can read it.
+
+Thank you for being here and supporting poetry.
+
+With regards,
+Ashabd
+https://ashabd.in/
+
+---
+${unsubscribeUrl ? `To unsubscribe: ${unsubscribeUrl}` : ''}`.trim();
+}
+
 function renderPoemNotificationEmailHtml({ poemTitle, subtitle, excerptHtml, readUrl, unsubscribeUrl }) {
   return `<!DOCTYPE html>
 <html lang="hi">
@@ -1919,6 +2000,26 @@ function renderPoemNotificationEmailHtml({ poemTitle, subtitle, excerptHtml, rea
   </div>
 </body>
 </html>`;
+}
+
+function renderPoemNotificationEmailText({ poemTitle, subtitle, excerptText, readUrl, unsubscribeUrl }) {
+  return `Namaste,
+
+A new poem has been published on Ashabd!
+
+${poemTitle}
+${subtitle ? `(${subtitle})\n` : ''}
+${excerptText ? `${excerptText}\n` : ''}
+Read the poem here: ${readUrl}
+
+Thank you for being part of Ashabd.
+
+With regards,
+Ashabd
+https://ashabd.in/
+
+---
+${unsubscribeUrl ? `To unsubscribe: ${unsubscribeUrl}` : ''}`.trim();
 }
 
 function renderSubscriptionPageHtml({ title, heading, message, subtext, buttonText, buttonUrl }) {
@@ -2278,7 +2379,7 @@ async function handleListSubscribersAdmin(request, env) {
   const activeCount = await db.prepare("SELECT COUNT(*) as count FROM subscribers WHERE status = 'active'").first('count') || 0;
   const pendingCount = await db.prepare("SELECT COUNT(*) as count FROM subscribers WHERE status = 'pending'").first('count') || 0;
   const unsubscribedCount = await db.prepare("SELECT COUNT(*) as count FROM subscribers WHERE status = 'unsubscribed'").first('count') || 0;
-  const notifCount = await db.prepare("SELECT COUNT(*) as count FROM poem_notifications WHERE status = 'sent'").first('count') || 0;
+  const deliveredCount = await db.prepare("SELECT COUNT(*) as count FROM poem_notifications WHERE status = 'sent'").first('count') || 0;
 
   const { results: subscribers } = await db.prepare(`
     SELECT id, email, status, ip_address, created_at, verified_at, unsubscribed_at
@@ -2288,11 +2389,15 @@ async function handleListSubscribersAdmin(request, env) {
   `).all();
 
   const { results: recentNotifications } = await db.prepare(`
-    SELECT pn.id, pn.writing_id, pn.recipient_email, pn.status, pn.error_message, pn.sent_at, w.title as poem_title
+    SELECT pn.id, pn.writing_id, pn.subscriber_id, pn.recipient_email, pn.status, pn.error_message, pn.sent_at,
+      CASE 
+        WHEN pn.writing_id = 'welcome' OR pn.writing_id LIKE 'notif_welcome%' THEN '🎉 Welcome Email'
+        ELSE COALESCE(w.title, 'Poem Notification')
+      END as poem_title
     FROM poem_notifications pn
     LEFT JOIN writings w ON pn.writing_id = w.id
     ORDER BY pn.sent_at DESC
-    LIMIT 30
+    LIMIT 50
   `).all();
 
   return jsonResponse({
@@ -2301,11 +2406,211 @@ async function handleListSubscribersAdmin(request, env) {
       active: activeCount,
       pending: pendingCount,
       unsubscribed: unsubscribedCount,
-      notifications_sent: notifCount
+      notifications_sent: deliveredCount
     },
     subscribers: subscribers || [],
     recent_notifications: recentNotifications || []
   });
+}
+
+async function handleVerifySubscriberAdmin(subscriberId, request, env, ctx) {
+  const db = await checkDatabase(env);
+  await ensureSubscribersTable(db);
+
+  if (!subscriberId) {
+    return jsonResponse({ error: 'Subscriber ID is required.' }, 400);
+  }
+
+  const subscriber = await db.prepare('SELECT * FROM subscribers WHERE id = ?').bind(subscriberId).first();
+  if (!subscriber) {
+    return jsonResponse({ error: 'Subscriber not found in database.' }, 404);
+  }
+
+  if (subscriber.status === 'active') {
+    return jsonResponse({ error: 'Subscriber is already verified and active.', already_verified: true }, 400);
+  }
+
+  if (subscriber.status !== 'pending') {
+    return jsonResponse({ error: `Cannot verify subscriber with status "${subscriber.status}". Only pending subscribers can be verified.` }, 400);
+  }
+
+  const now = Date.now();
+  await db.prepare(`
+    UPDATE subscribers
+    SET status = 'active', verified_at = ?, verification_token_hash = NULL
+    WHERE id = ? AND status = 'pending'
+  `).bind(now, subscriberId).run();
+
+  // Dispatch warm welcome email from ashabdpoetry0@gmail.com
+  const siteUrl = getSiteUrl(request, env);
+  const unsubUrl = `${siteUrl}/unsubscribe?token=${encodeURIComponent(subscriber.unsubscribe_token)}`;
+  const welcomeHtml = renderWelcomeEmailHtml({ unsubscribeUrl: unsubUrl });
+  const welcomeText = renderWelcomeEmailText({ unsubscribeUrl: unsubUrl });
+
+  let emailSent = false;
+  let emailError = null;
+  const notifId = 'notif_welcome_' + Date.now().toString(36) + '_' + generateRandomHexToken(4);
+
+  try {
+    await sendTransactionalEmail(env, {
+      to: subscriber.email,
+      from: env.EMAIL_FROM || 'Ashabd <ashabdpoetry0@gmail.com>',
+      replyTo: 'ashabdpoetry0@gmail.com',
+      subject: 'Thank you for subscribing to Ashabd!',
+      html: welcomeHtml,
+      text: welcomeText
+    });
+    emailSent = true;
+
+    await db.prepare(`
+      INSERT INTO poem_notifications (id, writing_id, subscriber_id, recipient_email, status, error_message, sent_at)
+      VALUES (?, 'welcome', ?, ?, 'sent', NULL, ?)
+    `).bind(notifId, subscriber.id, subscriber.email, now).run();
+  } catch (err) {
+    emailError = err?.message || String(err);
+    console.error(`[Ashabd Welcome Email] Failed to send welcome email to ${subscriber.email}:`, err);
+    await db.prepare(`
+      INSERT INTO poem_notifications (id, writing_id, subscriber_id, recipient_email, status, error_message, sent_at)
+      VALUES (?, 'welcome', ?, ?, 'failed', ?, ?)
+    `).bind(notifId, subscriber.id, subscriber.email, String(emailError).slice(0, 255), now).run();
+  }
+
+  return jsonResponse({
+    success: true,
+    verified: true,
+    email_sent: emailSent,
+    email_error: emailError,
+    subscriber: {
+      id: subscriber.id,
+      email: subscriber.email,
+      status: 'active',
+      verified_at: now
+    },
+    message: emailSent
+      ? `Subscriber ${subscriber.email} verified and welcome email successfully sent.`
+      : `Subscriber ${subscriber.email} verified, but welcome email delivery failed: ${emailError}. A retryable failure was recorded in the notification log.`
+  });
+}
+
+async function handleRetryNotificationAdmin(notificationId, request, env, ctx) {
+  const db = await checkDatabase(env);
+  await ensureSubscribersTable(db);
+
+  if (!notificationId) {
+    return jsonResponse({ error: 'Notification ID is required.' }, 400);
+  }
+
+  const notif = await db.prepare('SELECT * FROM poem_notifications WHERE id = ?').bind(notificationId).first();
+  if (!notif) {
+    return jsonResponse({ error: 'Notification record not found.' }, 404);
+  }
+
+  if (notif.status === 'sent') {
+    return jsonResponse({ success: true, message: 'Notification was already successfully sent.' });
+  }
+
+  const subscriber = await db.prepare('SELECT * FROM subscribers WHERE id = ?').bind(notif.subscriber_id).first();
+  if (!subscriber) {
+    return jsonResponse({ error: 'Subscriber record no longer exists.' }, 404);
+  }
+
+  if (subscriber.status === 'unsubscribed') {
+    return jsonResponse({ error: 'Cannot send notification: subscriber is currently unsubscribed.' }, 400);
+  }
+
+  const siteUrl = getSiteUrl(request, env);
+  const now = Date.now();
+  const unsubUrl = `${siteUrl}/unsubscribe?token=${encodeURIComponent(subscriber.unsubscribe_token)}`;
+
+  if (notif.writing_id === 'welcome' || notif.writing_id.startsWith('notif_welcome')) {
+    // Retry welcome email
+    const welcomeHtml = renderWelcomeEmailHtml({ unsubscribeUrl: unsubUrl });
+    const welcomeText = renderWelcomeEmailText({ unsubscribeUrl: unsubUrl });
+
+    try {
+      await sendTransactionalEmail(env, {
+        to: notif.recipient_email,
+        from: env.EMAIL_FROM || 'Ashabd <ashabdpoetry0@gmail.com>',
+        replyTo: 'ashabdpoetry0@gmail.com',
+        subject: 'Thank you for subscribing to Ashabd!',
+        html: welcomeHtml,
+        text: welcomeText
+      });
+
+      await db.prepare(`
+        UPDATE poem_notifications
+        SET status = 'sent', error_message = NULL, sent_at = ?
+        WHERE id = ?
+      `).bind(now, notificationId).run();
+
+      return jsonResponse({ success: true, message: `Welcome email successfully re-sent to ${notif.recipient_email}.` });
+    } catch (err) {
+      const errMsg = err?.message || String(err);
+      await db.prepare(`
+        UPDATE poem_notifications
+        SET status = 'failed', error_message = ?, sent_at = ?
+        WHERE id = ?
+      `).bind(errMsg.slice(0, 255), now, notificationId).run();
+
+      return jsonResponse({ error: `Retry failed: ${errMsg}` }, 500);
+    }
+  } else {
+    // Retry poem notification
+    const poem = await db.prepare('SELECT * FROM writings WHERE id = ?').bind(notif.writing_id).first();
+    if (!poem) {
+      return jsonResponse({ error: 'Associated poem no longer exists in database.' }, 404);
+    }
+
+    const poemTitle = poem.title || 'नवीन कविता';
+    const poemSlug = poem.slug || '';
+    const readUrl = `${siteUrl}/poems/${encodeURIComponent(poemSlug)}`;
+    const lines = (poem.content || '').split('\n').map(l => l.trim()).filter(Boolean);
+    const excerptLines = lines.slice(0, 6).join('<br>');
+    const excerptText = lines.slice(0, 6).join('\n');
+
+    const emailHtml = renderPoemNotificationEmailHtml({
+      poemTitle,
+      subtitle: poem.subtitle,
+      excerptHtml: excerptLines,
+      readUrl,
+      unsubscribeUrl: unsubUrl
+    });
+    const emailText = renderPoemNotificationEmailText({
+      poemTitle,
+      subtitle: poem.subtitle,
+      excerptText,
+      readUrl,
+      unsubscribeUrl: unsubUrl
+    });
+
+    try {
+      await sendTransactionalEmail(env, {
+        to: notif.recipient_email,
+        from: env.EMAIL_FROM || 'Ashabd <ashabdpoetry0@gmail.com>',
+        replyTo: 'ashabdpoetry0@gmail.com',
+        subject: 'A new poem has arrived on Ashabd',
+        html: emailHtml,
+        text: emailText
+      });
+
+      await db.prepare(`
+        UPDATE poem_notifications
+        SET status = 'sent', error_message = NULL, sent_at = ?
+        WHERE id = ?
+      `).bind(now, notificationId).run();
+
+      return jsonResponse({ success: true, message: `Poem notification successfully re-sent to ${notif.recipient_email}.` });
+    } catch (err) {
+      const errMsg = err?.message || String(err);
+      await db.prepare(`
+        UPDATE poem_notifications
+        SET status = 'failed', error_message = ?, sent_at = ?
+        WHERE id = ?
+      `).bind(errMsg.slice(0, 255), now, notificationId).run();
+
+      return jsonResponse({ error: `Retry failed: ${errMsg}` }, 500);
+    }
+  }
 }
 
 async function handleDeleteSubscriberAdmin(id, env) {
@@ -2354,6 +2659,7 @@ async function handleSendTestPoemNotification(request, env) {
 
   const lines = (poem.content || '').split('\n').map(l => l.trim()).filter(Boolean);
   const excerptLines = lines.slice(0, 6).join('<br>');
+  const excerptText = lines.slice(0, 6).join('\n');
 
   const emailHtml = renderPoemNotificationEmailHtml({
     poemTitle: poem.title,
@@ -2362,12 +2668,22 @@ async function handleSendTestPoemNotification(request, env) {
     readUrl,
     unsubscribeUrl: unsubUrl
   });
+  const emailText = renderPoemNotificationEmailText({
+    poemTitle,
+    subtitle: poem.subtitle,
+    excerptText,
+    readUrl,
+    unsubscribeUrl: unsubUrl
+  });
 
   try {
     const res = await sendTransactionalEmail(env, {
       to: targetEmail,
-      subject: `[TEST PREVIEW] Ashabd (अशब्द) — नवीन कविता: ${poem.title}`,
-      html: emailHtml
+      from: env.EMAIL_FROM || 'Ashabd <ashabdpoetry0@gmail.com>',
+      replyTo: 'ashabdpoetry0@gmail.com',
+      subject: `[TEST PREVIEW] A new poem has arrived on Ashabd: ${poem.title}`,
+      html: emailHtml,
+      text: emailText
     });
 
     return jsonResponse({
@@ -2386,7 +2702,8 @@ async function triggerPoemNotifications(env, poem, siteUrl) {
   if (!db || !poem) return;
 
   // Only trigger automatic notifications for poetry
-  if (poem.content_type && poem.content_type !== 'Poetry') {
+  const isPoetry = !poem.content_type || poem.content_type === 'Poetry' || poem.content_type === 'कविता' || poem.content_type === 'poem';
+  if (!isPoetry) {
     return;
   }
 
@@ -2406,6 +2723,7 @@ async function triggerPoemNotifications(env, poem, siteUrl) {
 
     const lines = (poem.content || '').split('\n').map(l => l.trim()).filter(Boolean);
     const excerptLines = lines.slice(0, 6).join('<br>');
+    const excerptText = lines.slice(0, 6).join('\n');
 
     for (const sub of activeSubscribers) {
       const alreadySent = await db.prepare(`
@@ -2422,27 +2740,58 @@ async function triggerPoemNotifications(env, poem, siteUrl) {
         readUrl,
         unsubscribeUrl: unsubUrl
       });
+      const emailText = renderPoemNotificationEmailText({
+        poemTitle,
+        subtitle: poem.subtitle,
+        excerptText,
+        readUrl,
+        unsubscribeUrl: unsubUrl
+      });
 
       const notifId = 'notif_' + Date.now().toString(36) + '_' + generateRandomHexToken(4);
       const now = Date.now();
 
+      const existingNotif = await db.prepare(`
+        SELECT id FROM poem_notifications WHERE writing_id = ? AND subscriber_id = ?
+      `).bind(poem.id, sub.id).first();
+
       try {
         await sendTransactionalEmail(env, {
           to: sub.email,
-          subject: `Ashabd (अशब्द) — नवीन कविता: ${poemTitle}`,
-          html: emailHtml
+          from: env.EMAIL_FROM || 'Ashabd <ashabdpoetry0@gmail.com>',
+          replyTo: 'ashabdpoetry0@gmail.com',
+          subject: 'A new poem has arrived on Ashabd',
+          html: emailHtml,
+          text: emailText
         });
 
-        await db.prepare(`
-          INSERT INTO poem_notifications (id, writing_id, subscriber_id, recipient_email, status, error_message, sent_at)
-          VALUES (?, ?, ?, ?, 'sent', NULL, ?)
-        `).bind(notifId, poem.id, sub.id, sub.email, now).run();
+        if (existingNotif) {
+          await db.prepare(`
+            UPDATE poem_notifications
+            SET status = 'sent', error_message = NULL, sent_at = ?
+            WHERE id = ?
+          `).bind(now, existingNotif.id).run();
+        } else {
+          await db.prepare(`
+            INSERT INTO poem_notifications (id, writing_id, subscriber_id, recipient_email, status, error_message, sent_at)
+            VALUES (?, ?, ?, ?, 'sent', NULL, ?)
+          `).bind(notifId, poem.id, sub.id, sub.email, now).run();
+        }
       } catch (err) {
+        const errMsg = String(err.message || err).slice(0, 255);
         console.error(`Failed to send poem notification to ${sub.email}:`, err);
-        await db.prepare(`
-          INSERT INTO poem_notifications (id, writing_id, subscriber_id, recipient_email, status, error_message, sent_at)
-          VALUES (?, ?, ?, ?, 'failed', ?, ?)
-        `).bind(notifId, poem.id, sub.id, sub.email, String(err.message || err).slice(0, 255), now).run();
+        if (existingNotif) {
+          await db.prepare(`
+            UPDATE poem_notifications
+            SET status = 'failed', error_message = ?, sent_at = ?
+            WHERE id = ?
+          `).bind(errMsg, now, existingNotif.id).run();
+        } else {
+          await db.prepare(`
+            INSERT INTO poem_notifications (id, writing_id, subscriber_id, recipient_email, status, error_message, sent_at)
+            VALUES (?, ?, ?, ?, 'failed', ?, ?)
+          `).bind(notifId, poem.id, sub.id, sub.email, errMsg, now).run();
+        }
       }
     }
   } catch (err) {
@@ -7029,15 +7378,29 @@ function getAdminDashboardHtml() {
       tbody.innerHTML = list.map(sub => {
         let statusBadge = '';
         if (sub.status === 'active') {
-          statusBadge = '<span class="status-tag status-published">Active (सक्रिय)</span>';
+          statusBadge = '<span class="status-tag status-published" style="display: inline-flex; align-items: center; gap: 4px;">✓ Verified (सक्रिय)</span>';
         } else if (sub.status === 'pending') {
           statusBadge = '<span class="status-tag status-draft">Pending (प्रतीक्षारत)</span>';
         } else {
-          statusBadge = '<span class="status-tag" style="background: rgba(138,138,138,0.15); color: #888; border-color: rgba(138,138,138,0.3);">Unsubscribed</span>';
+          statusBadge = '<span class="status-tag" style="background: rgba(138,138,138,0.15); color: #888; border-color: rgba(138,138,138,0.3);">Unsubscribed (समाप्त)</span>';
         }
 
         const createdDate = sub.created_at ? new Date(sub.created_at).toLocaleDateString('hi-IN', { year: 'numeric', month: 'short', day: 'numeric' }) : '--';
-        const verifiedDate = sub.verified_at ? new Date(sub.verified_at).toLocaleDateString('hi-IN', { year: 'numeric', month: 'short', day: 'numeric' }) : (sub.status === 'active' ? '✓ Verified' : '--');
+        const verifiedDate = sub.verified_at ? new Date(sub.verified_at).toLocaleDateString('hi-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : (sub.status === 'active' ? '✓ Verified' : '--');
+
+        let actions = '<div style="display: flex; align-items: center; gap: 6px;">';
+        if (sub.status === 'pending') {
+          actions += \`
+            <button class="action-btn" id="verify-btn-\${escape(sub.id)}" onclick="verifySubscriber('\${escape(sub.id)}', '\${escape(sub.email)}')" title="Verify subscriber and send welcome email" style="color: #3fb950; font-weight: 600; font-size: 0.8rem; border: 1px solid rgba(63,185,80,0.4); border-radius: 4px; padding: 3px 8px; background: rgba(63,185,80,0.08); cursor: pointer; transition: all 0.2s;">
+              ✓ Verify
+            </button>
+          \`;
+        }
+        actions += \`
+          <button class="action-btn" onclick="deleteSubscriber('\${escape(sub.id)}', '\${escape(sub.email)}')" title="Remove subscriber" style="color: var(--danger); font-size: 0.85rem; padding: 3px 6px;">
+            🗑️
+          </button>
+        </div>\`;
 
         return \`
           <tr>
@@ -7045,14 +7408,56 @@ function getAdminDashboardHtml() {
             <td>\${statusBadge}</td>
             <td style="color: var(--text-muted); font-size: 0.82rem;">\${createdDate}</td>
             <td style="color: var(--text-muted); font-size: 0.82rem;">\${verifiedDate}</td>
-            <td>
-              <button class="action-btn" onclick="deleteSubscriber('\${escape(sub.id)}', '\${escape(sub.email)}')" title="Remove subscriber" style="color: var(--danger);">
-                🗑️
-              </button>
-            </td>
+            <td>\${actions}</td>
           </tr>
         \`;
       }).join('');
+    }
+
+    async function verifySubscriber(id, email) {
+      if (!confirm('Verify this email and send the welcome email?\\n\\n' + email)) {
+        return;
+      }
+
+      const btn = document.getElementById('verify-btn-' + id);
+      if (btn) {
+        btn.disabled = true;
+        btn.innerText = 'Verifying...';
+        btn.style.opacity = '0.6';
+        btn.style.cursor = 'not-allowed';
+      }
+
+      try {
+        const res = await fetch('/api/subscribers/' + id + '/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          if (data.email_sent) {
+            alert('✓ Subscriber verified successfully!\\nWelcome email sent to ' + email + '.');
+          } else {
+            alert('✓ Subscriber verified successfully!\\nNotice: Welcome email delivery could not be completed immediately (' + (data.email_error || 'Delivery queued/failed') + '). You can retry sending it from the Recent Notification Dispatches log.');
+          }
+          await loadSubscribers();
+        } else {
+          alert('Verification failed: ' + (data.error || 'Server error'));
+          if (btn) {
+            btn.disabled = false;
+            btn.innerText = '✓ Verify';
+            btn.style.opacity = '1';
+            btn.style.cursor = 'pointer';
+          }
+        }
+      } catch (err) {
+        alert('Network error during verification: ' + err.message);
+        if (btn) {
+          btn.disabled = false;
+          btn.innerText = '✓ Verify';
+          btn.style.opacity = '1';
+          btn.style.cursor = 'pointer';
+        }
+      }
     }
 
     function renderNotificationLogs(logs) {
@@ -7066,19 +7471,64 @@ function getAdminDashboardHtml() {
 
       logBody.innerHTML = logs.map(log => {
         const sentDate = log.sent_at ? new Date(log.sent_at).toLocaleString('hi-IN', { dateStyle: 'short', timeStyle: 'short' }) : '--';
-        const statusBadge = log.status === 'sent'
-          ? '<span style="color: #3fb950; font-weight: 600; font-size: 0.8rem;">✓ Sent</span>'
-          : \`<span style="color: var(--danger); font-weight: 600; font-size: 0.8rem;">✕ Failed (\${escape(log.error_message || '')})</span>\`;
+        let statusBadge = '';
+        if (log.status === 'sent') {
+          statusBadge = '<span style="color: #3fb950; font-weight: 600; font-size: 0.8rem;">✓ Sent</span>';
+        } else if (log.status === 'failed') {
+          statusBadge = \`<span style="color: var(--danger); font-weight: 600; font-size: 0.8rem;" title="\${escape(log.error_message || '')}">✕ Failed</span>\`;
+        } else if (log.status === 'retrying') {
+          statusBadge = '<span style="color: var(--accent); font-weight: 600; font-size: 0.8rem;">⟳ Retrying</span>';
+        } else {
+          statusBadge = \`<span style="color: var(--text-muted); font-weight: 600; font-size: 0.8rem;">\${escape(log.status || 'Queued')}</span>\`;
+        }
+
+        let retryAction = '';
+        if (log.status === 'failed') {
+          retryAction = \`<button class="action-btn" id="retry-btn-\${escape(log.id)}" onclick="retryNotification('\${escape(log.id)}', '\${escape(log.recipient_email)}')" title="Retry notification dispatch" style="color: var(--accent); font-weight: 600; font-size: 0.78rem; margin-left: 8px; border: 1px solid rgba(224,122,95,0.4); border-radius: 4px; padding: 2px 6px; background: rgba(224,122,95,0.08); cursor: pointer;">⟳ Retry</button>\`;
+        }
 
         return \`
           <tr>
             <td style="font-weight: 500; color: var(--text-main);">\${escape(log.poem_title || log.writing_id)}</td>
             <td style="color: var(--text-muted); font-family: monospace; font-size: 0.82rem;">\${escape(log.recipient_email)}</td>
-            <td>\${statusBadge}</td>
+            <td><div style="display: flex; align-items: center;">\${statusBadge}\${retryAction}</div></td>
             <td style="color: var(--text-muted); font-size: 0.82rem;">\${sentDate}</td>
           </tr>
         \`;
       }).join('');
+    }
+
+    async function retryNotification(id, recipient) {
+      const btn = document.getElementById('retry-btn-' + id);
+      if (btn) {
+        btn.disabled = true;
+        btn.innerText = 'Retrying...';
+        btn.style.opacity = '0.6';
+        btn.style.cursor = 'not-allowed';
+      }
+
+      try {
+        const res = await fetch('/api/subscribers/notifications/' + id + '/retry', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          alert('✓ Notification re-sent successfully to ' + recipient + '!');
+          await loadSubscribers();
+        } else {
+          alert('Retry failed: ' + (data.error || 'Delivery failed'));
+          await loadSubscribers();
+        }
+      } catch (err) {
+        alert('Network error during retry: ' + err.message);
+        if (btn) {
+          btn.disabled = false;
+          btn.innerText = '⟳ Retry';
+          btn.style.opacity = '1';
+          btn.style.cursor = 'pointer';
+        }
+      }
     }
 
     function filterSubscribers() {

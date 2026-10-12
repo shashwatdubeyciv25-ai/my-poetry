@@ -3425,15 +3425,29 @@
       tbody.innerHTML = list.map(sub => {
         let statusBadge = '';
         if (sub.status === 'active') {
-          statusBadge = '<span class="status-tag status-published">Active (सक्रिय)</span>';
+          statusBadge = '<span class="status-tag status-published" style="display: inline-flex; align-items: center; gap: 4px;">✓ Verified (सक्रिय)</span>';
         } else if (sub.status === 'pending') {
           statusBadge = '<span class="status-tag status-draft">Pending (प्रतीक्षारत)</span>';
         } else {
-          statusBadge = '<span class="status-tag" style="background: rgba(138,138,138,0.15); color: #888; border-color: rgba(138,138,138,0.3);">Unsubscribed</span>';
+          statusBadge = '<span class="status-tag" style="background: rgba(138,138,138,0.15); color: #888; border-color: rgba(138,138,138,0.3);">Unsubscribed (समाप्त)</span>';
         }
 
         const createdDate = sub.created_at ? new Date(sub.created_at).toLocaleDateString('hi-IN', { year: 'numeric', month: 'short', day: 'numeric' }) : '--';
-        const verifiedDate = sub.verified_at ? new Date(sub.verified_at).toLocaleDateString('hi-IN', { year: 'numeric', month: 'short', day: 'numeric' }) : (sub.status === 'active' ? '✓ Verified' : '--');
+        const verifiedDate = sub.verified_at ? new Date(sub.verified_at).toLocaleDateString('hi-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : (sub.status === 'active' ? '✓ Verified' : '--');
+
+        let actions = '<div style="display: flex; align-items: center; gap: 6px;">';
+        if (sub.status === 'pending') {
+          actions += `
+            <button class="action-btn" id="verify-btn-${escape(sub.id)}" onclick="verifySubscriber('${escape(sub.id)}', '${escape(sub.email)}')" title="Verify subscriber and send welcome email" style="color: #3fb950; font-weight: 600; font-size: 0.8rem; border: 1px solid rgba(63,185,80,0.4); border-radius: 4px; padding: 3px 8px; background: rgba(63,185,80,0.08); cursor: pointer; transition: all 0.2s;">
+              ✓ Verify
+            </button>
+          `;
+        }
+        actions += `
+          <button class="action-btn" onclick="deleteSubscriber('${escape(sub.id)}', '${escape(sub.email)}')" title="Remove subscriber" style="color: var(--danger); font-size: 0.85rem; padding: 3px 6px;">
+            🗑️
+          </button>
+        </div>`;
 
         return `
           <tr>
@@ -3441,14 +3455,56 @@
             <td>${statusBadge}</td>
             <td style="color: var(--text-muted); font-size: 0.82rem;">${createdDate}</td>
             <td style="color: var(--text-muted); font-size: 0.82rem;">${verifiedDate}</td>
-            <td>
-              <button class="action-btn" onclick="deleteSubscriber('${escape(sub.id)}', '${escape(sub.email)}')" title="Remove subscriber" style="color: var(--danger);">
-                🗑️
-              </button>
-            </td>
+            <td>${actions}</td>
           </tr>
         `;
       }).join('');
+    }
+
+    async function verifySubscriber(id, email) {
+      if (!confirm(`Verify this email and send the welcome email?\n\n${email}`)) {
+        return;
+      }
+
+      const btn = document.getElementById(`verify-btn-${id}`);
+      if (btn) {
+        btn.disabled = true;
+        btn.innerText = 'Verifying...';
+        btn.style.opacity = '0.6';
+        btn.style.cursor = 'not-allowed';
+      }
+
+      try {
+        const res = await fetch(`/api/subscribers/${id}/verify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          if (data.email_sent) {
+            alert(`✓ Subscriber verified successfully!\nWelcome email sent to ${email}.`);
+          } else {
+            alert(`✓ Subscriber verified successfully!\nNotice: Welcome email delivery could not be completed immediately (${data.email_error || 'Delivery queued/failed'}). You can retry sending it from the Recent Notification Dispatches log.`);
+          }
+          await loadSubscribers();
+        } else {
+          alert('Verification failed: ' + (data.error || 'Server error'));
+          if (btn) {
+            btn.disabled = false;
+            btn.innerText = '✓ Verify';
+            btn.style.opacity = '1';
+            btn.style.cursor = 'pointer';
+          }
+        }
+      } catch (err) {
+        alert('Network error during verification: ' + err.message);
+        if (btn) {
+          btn.disabled = false;
+          btn.innerText = '✓ Verify';
+          btn.style.opacity = '1';
+          btn.style.cursor = 'pointer';
+        }
+      }
     }
 
     function renderNotificationLogs(logs) {
@@ -3462,19 +3518,64 @@
 
       logBody.innerHTML = logs.map(log => {
         const sentDate = log.sent_at ? new Date(log.sent_at).toLocaleString('hi-IN', { dateStyle: 'short', timeStyle: 'short' }) : '--';
-        const statusBadge = log.status === 'sent'
-          ? '<span style="color: #3fb950; font-weight: 600; font-size: 0.8rem;">✓ Sent</span>'
-          : `<span style="color: var(--danger); font-weight: 600; font-size: 0.8rem;">✕ Failed (${escape(log.error_message || '')})</span>`;
+        let statusBadge = '';
+        if (log.status === 'sent') {
+          statusBadge = '<span style="color: #3fb950; font-weight: 600; font-size: 0.8rem;">✓ Sent</span>';
+        } else if (log.status === 'failed') {
+          statusBadge = `<span style="color: var(--danger); font-weight: 600; font-size: 0.8rem;" title="${escape(log.error_message || '')}">✕ Failed</span>`;
+        } else if (log.status === 'retrying') {
+          statusBadge = '<span style="color: var(--accent); font-weight: 600; font-size: 0.8rem;">⟳ Retrying</span>';
+        } else {
+          statusBadge = `<span style="color: var(--text-muted); font-weight: 600; font-size: 0.8rem;">${escape(log.status || 'Queued')}</span>`;
+        }
+
+        let retryAction = '';
+        if (log.status === 'failed') {
+          retryAction = `<button class="action-btn" id="retry-btn-${escape(log.id)}" onclick="retryNotification('${escape(log.id)}', '${escape(log.recipient_email)}')" title="Retry notification dispatch" style="color: var(--accent); font-weight: 600; font-size: 0.78rem; margin-left: 8px; border: 1px solid rgba(224,122,95,0.4); border-radius: 4px; padding: 2px 6px; background: rgba(224,122,95,0.08); cursor: pointer;">⟳ Retry</button>`;
+        }
 
         return `
           <tr>
             <td style="font-weight: 500; color: var(--text-main);">${escape(log.poem_title || log.writing_id)}</td>
             <td style="color: var(--text-muted); font-family: monospace; font-size: 0.82rem;">${escape(log.recipient_email)}</td>
-            <td>${statusBadge}</td>
+            <td><div style="display: flex; align-items: center;">${statusBadge}${retryAction}</div></td>
             <td style="color: var(--text-muted); font-size: 0.82rem;">${sentDate}</td>
           </tr>
         `;
       }).join('');
+    }
+
+    async function retryNotification(id, recipient) {
+      const btn = document.getElementById(`retry-btn-${id}`);
+      if (btn) {
+        btn.disabled = true;
+        btn.innerText = 'Retrying...';
+        btn.style.opacity = '0.6';
+        btn.style.cursor = 'not-allowed';
+      }
+
+      try {
+        const res = await fetch(`/api/subscribers/notifications/${id}/retry`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          alert(`✓ Notification re-sent successfully to ${recipient}!`);
+          await loadSubscribers();
+        } else {
+          alert('Retry failed: ' + (data.error || 'Delivery failed'));
+          await loadSubscribers();
+        }
+      } catch (err) {
+        alert('Network error during retry: ' + err.message);
+        if (btn) {
+          btn.disabled = false;
+          btn.innerText = '⟳ Retry';
+          btn.style.opacity = '1';
+          btn.style.cursor = 'pointer';
+        }
+      }
     }
 
     function filterSubscribers() {
