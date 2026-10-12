@@ -1697,22 +1697,93 @@ async function handleUpdateEmail(request, env) {
 /**
  * Helper to inspect email provider readiness and configuration
  */
-function getEmailProviderConfig(env) {
+async function getEmailProviderConfig(env) {
   let provider = 'none';
   if (env.RESEND_API_KEY) provider = 'resend';
   else if (env.SENDGRID_API_KEY) provider = 'sendgrid';
   else if (env.POSTMARK_SERVER_TOKEN) provider = 'postmark';
   else if (env.BREVO_API_KEY) provider = 'brevo';
 
-  const senderEmail = env.EMAIL_FROM || 'Ashabd <ashabdpoetry0@gmail.com>';
+  const defaultSender = provider === 'resend'
+    ? 'Ashabd <notifications@ashabd.in>'
+    : 'Ashabd <ashabdpoetry0@gmail.com>';
+
+  const senderEmail = env.EMAIL_FROM || defaultSender;
   const replyToAddress = env.EMAIL_REPLY_TO || 'ashabdpoetry0@gmail.com';
+
+  const plainSender = senderEmail.includes('<') 
+    ? (senderEmail.match(/<([^>]+)>/)?.[1] || senderEmail).trim() 
+    : senderEmail.trim();
+  const senderDomain = plainSender.includes('@') 
+    ? plainSender.split('@')[1].toLowerCase() 
+    : '';
+
+  let senderStatus = 'not_applicable';
+  let senderDetails = '';
+
+  if (provider === 'none') {
+    senderStatus = 'missing_config';
+    senderDetails = 'Cloudflare Worker secrets (RESEND_API_KEY, SENDGRID_API_KEY, POSTMARK_SERVER_TOKEN, or BREVO_API_KEY) are not configured.';
+  } else if (provider === 'resend') {
+    const publicDomains = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com', 'aol.com', 'proton.me', 'protonmail.com'];
+    if (publicDomains.includes(senderDomain)) {
+      senderStatus = 'unsupported_public_domain';
+      senderDetails = `Resend does not permit sending from public @${senderDomain} domains. Please set the EMAIL_FROM variable in Cloudflare to an address on your domain (e.g. Ashabd <notifications@ashabd.in>) or use "Ashabd <onboarding@resend.dev>" for testing. Subscriber replies will still go to ${replyToAddress}.`;
+    } else if (senderDomain === 'resend.dev') {
+      senderStatus = 'sandbox';
+      senderDetails = 'Resend sandbox sender (onboarding@resend.dev) is active. In this mode, Resend only delivers to the email address registered with your Resend account.';
+    } else {
+      // Query Resend domains API to check if custom domain is verified
+      try {
+        const res = await fetch('https://api.resend.com/domains', {
+          headers: {
+            'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+            'User-Agent': 'Ashabd-Poetry/1.0'
+          },
+          signal: AbortSignal.timeout(3500)
+        });
+
+        if (res.status === 401) {
+          senderStatus = 'invalid_key';
+          senderDetails = 'The configured RESEND_API_KEY is invalid or was rejected by Resend (HTTP 401 Unauthorized).';
+        } else if (res.ok) {
+          const resJson = await res.json().catch(() => ({}));
+          const domainList = Array.isArray(resJson?.data) ? resJson.data : [];
+          const domainEntry = domainList.find(d => d.name?.toLowerCase() === senderDomain);
+
+          if (domainEntry) {
+            if (domainEntry.status === 'verified') {
+              senderStatus = 'verified';
+              senderDetails = `Domain ${senderDomain} is verified on Resend and authorized for public delivery.`;
+            } else {
+              senderStatus = 'pending_dns';
+              senderDetails = `Domain ${senderDomain} is added on Resend, but DNS records (DKIM/SPF) are not yet verified (status: "${domainEntry.status}").`;
+            }
+          } else {
+            senderStatus = 'domain_not_added';
+            senderDetails = `Domain ${senderDomain} has not been added to your Resend account yet. Please add it at resend.com/domains and configure Cloudflare DNS.`;
+          }
+        } else {
+          senderStatus = 'check_error';
+          senderDetails = `Resend domains inspection returned HTTP ${res.status}.`;
+        }
+      } catch (checkErr) {
+        senderStatus = 'check_error';
+        senderDetails = `Unable to verify domain status with Resend: ${checkErr.message}`;
+      }
+    }
+  }
 
   return {
     configured: provider !== 'none',
     provider,
     sender: senderEmail,
+    plainSender,
+    senderDomain,
     replyTo: replyToAddress,
-    has_custom_from: Boolean(env.EMAIL_FROM)
+    has_custom_from: Boolean(env.EMAIL_FROM),
+    senderStatus,
+    senderDetails
   };
 }
 
@@ -1723,11 +1794,34 @@ function getEmailProviderConfig(env) {
  * Rejects simulation so failures are never falsely recorded as sent in the database.
  */
 async function sendTransactionalEmail(env, { to, subject, html, text, from, replyTo }) {
-  const senderEmail = from || env.EMAIL_FROM || 'Ashabd <ashabdpoetry0@gmail.com>';
+  const provider = env.RESEND_API_KEY ? 'resend'
+    : env.SENDGRID_API_KEY ? 'sendgrid'
+    : env.POSTMARK_SERVER_TOKEN ? 'postmark'
+    : env.BREVO_API_KEY ? 'brevo'
+    : 'none';
+
+  const defaultSender = provider === 'resend'
+    ? 'Ashabd <notifications@ashabd.in>'
+    : 'Ashabd <ashabdpoetry0@gmail.com>';
+
+  const senderEmail = from || env.EMAIL_FROM || defaultSender;
   const replyToAddress = replyTo || env.EMAIL_REPLY_TO || 'ashabdpoetry0@gmail.com';
+  const recipients = Array.isArray(to) ? to : [to];
 
   // 1. Resend API
   if (env.RESEND_API_KEY) {
+    const plainSender = senderEmail.includes('<') 
+      ? (senderEmail.match(/<([^>]+)>/)?.[1] || senderEmail).trim() 
+      : senderEmail.trim();
+
+    if (plainSender.toLowerCase().endsWith('@gmail.com')) {
+      throw new Error(
+        `Cannot send via Resend using "${plainSender}". Resend prohibits sending from public @gmail.com domains. ` +
+        `Please configure the EMAIL_FROM variable in Cloudflare to an authorized address on ashabd.in (e.g. Ashabd <notifications@ashabd.in>) ` +
+        `or use "Ashabd <onboarding@resend.dev>" for testing. Inquiries and replies will still go to ${replyToAddress}.`
+      );
+    }
+
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -1736,7 +1830,7 @@ async function sendTransactionalEmail(env, { to, subject, html, text, from, repl
       },
       body: JSON.stringify({
         from: senderEmail,
-        to: [to],
+        to: recipients,
         reply_to: replyToAddress,
         subject,
         html,
@@ -1755,8 +1849,10 @@ async function sendTransactionalEmail(env, { to, subject, html, text, from, repl
 
       let hint = '';
       const lower = errTxt.toLowerCase();
-      if (lower.includes('domain') || lower.includes('gmail.com') || lower.includes('verify')) {
-        hint = ' (Note: Resend requires a verified custom domain on ashabd.in. If sending as ashabdpoetry0@gmail.com, verify ashabd.in in Resend and set EMAIL_FROM to an address on ashabd.in, while keeping reply-to as ashabdpoetry0@gmail.com.)';
+      if (lower.includes('domain') || lower.includes('verify')) {
+        hint = ' (Note: Resend requires a verified custom domain on ashabd.in. If testing, set EMAIL_FROM to "Ashabd <onboarding@resend.dev>". For public delivery, verify ashabd.in in Resend and set EMAIL_FROM to an address on ashabd.in, keeping reply-to as ashabdpoetry0@gmail.com.)';
+      } else if (lower.includes('api_key') || res.status === 401) {
+        hint = ' (Check that RESEND_API_KEY is active and starts with "re_")';
       }
 
       throw new Error(`Resend API error (${res.status}): ${errTxt}${hint}`);
@@ -2568,7 +2664,7 @@ async function handleListSubscribersAdmin(request, env) {
       unsubscribed: unsubscribedCount,
       notifications_sent: deliveredCount
     },
-    email_service: getEmailProviderConfig(env),
+    email_service: await getEmailProviderConfig(env),
     subscribers: subscribers || [],
     recent_notifications: recentNotifications || []
   });
@@ -2622,8 +2718,6 @@ async function handleVerifySubscriberAdmin(subscriberId, request, env, ctx) {
   try {
     const dispatchResult = await sendTransactionalEmail(env, {
       to: subscriber.email,
-      from: env.EMAIL_FROM || 'Ashabd <ashabdpoetry0@gmail.com>',
-      replyTo: 'ashabdpoetry0@gmail.com',
       subject: 'Thank you for subscribing to Ashabd!',
       html: welcomeHtml,
       text: welcomeText
@@ -2721,8 +2815,6 @@ async function handleResendWelcomeAdmin(subscriberId, request, env, ctx) {
   try {
     const dispatchResult = await sendTransactionalEmail(env, {
       to: subscriber.email,
-      from: env.EMAIL_FROM || 'Ashabd <ashabdpoetry0@gmail.com>',
-      replyTo: 'ashabdpoetry0@gmail.com',
       subject: 'Thank you for subscribing to Ashabd!',
       html: welcomeHtml,
       text: welcomeText
@@ -2829,8 +2921,6 @@ async function handleRetryNotificationAdmin(notificationId, request, env, ctx) {
     try {
       const dispatchResult = await sendTransactionalEmail(env, {
         to: notif.recipient_email,
-        from: env.EMAIL_FROM || 'Ashabd <ashabdpoetry0@gmail.com>',
-        replyTo: 'ashabdpoetry0@gmail.com',
         subject: 'Thank you for subscribing to Ashabd!',
         html: welcomeHtml,
         text: welcomeText
@@ -2893,8 +2983,6 @@ async function handleRetryNotificationAdmin(notificationId, request, env, ctx) {
     try {
       const dispatchResult = await sendTransactionalEmail(env, {
         to: notif.recipient_email,
-        from: env.EMAIL_FROM || 'Ashabd <ashabdpoetry0@gmail.com>',
-        replyTo: 'ashabdpoetry0@gmail.com',
         subject: 'A new poem has arrived on Ashabd',
         html: emailHtml,
         text: emailText
@@ -3040,6 +3128,7 @@ async function handleSendTestPoemNotification(request, env) {
     body = await request.json();
   } catch {}
 
+  const testType = body.type === 'welcome' ? 'welcome' : 'poem';
   let targetEmail = (body.email || '').trim().toLowerCase();
   if (!targetEmail || !targetEmail.includes('@')) {
     const adminRecord = await db.prepare('SELECT email FROM admin_users WHERE username = ?').bind('admin').first();
@@ -3050,58 +3139,69 @@ async function handleSendTestPoemNotification(request, env) {
     return jsonResponse({ error: 'Please specify a target email address or configure your administrator email in Settings.' }, 400);
   }
 
-  const poem = await db.prepare(`
-    SELECT id, title, slug, subtitle, content, content_type
-    FROM writings
-    WHERE status = 'Published' AND content_type = 'Poetry'
-    ORDER BY COALESCE(published_at, created_at) DESC
-    LIMIT 1
-  `).first() || {
-    id: 'sample_poem',
-    title: 'मौन के पदचाप',
-    slug: 'maun-ke-padchaap',
-    subtitle: 'एक अप्रकाशित विचार',
-    content: 'शब्द जब मौन से संवाद करते हैं,\nतब कविता जन्म लेती है।\nअनकही बातें, अनसुलझे रहस्य,\nपन्नों पर स्याही बन बहते हैं।'
-  };
-
   const siteUrl = getSiteUrl(request, env);
-  const readUrl = `${siteUrl}/poems/${encodeURIComponent(poem.slug)}`;
   const unsubUrl = `${siteUrl}/unsubscribe?token=test_preview_token`;
 
-  const lines = (poem.content || '').split('\n').map(l => l.trim()).filter(Boolean);
-  const excerptLines = lines.slice(0, 6).join('<br>');
-  const excerptText = lines.slice(0, 6).join('\n');
+  let subject = '';
+  let emailHtml = '';
+  let emailText = '';
 
-  const emailHtml = renderPoemNotificationEmailHtml({
-    poemTitle: poem.title,
-    subtitle: poem.subtitle,
-    excerptHtml: excerptLines,
-    readUrl,
-    unsubscribeUrl: unsubUrl
-  });
-  const emailText = renderPoemNotificationEmailText({
-    poemTitle: poem.title,
-    subtitle: poem.subtitle,
-    excerptText,
-    readUrl,
-    unsubscribeUrl: unsubUrl
-  });
+  if (testType === 'welcome') {
+    subject = '[TEST PREVIEW] Thank you for subscribing to Ashabd!';
+    emailHtml = renderWelcomeEmailHtml({ unsubscribeUrl: unsubUrl });
+    emailText = renderWelcomeEmailText({ unsubscribeUrl: unsubUrl });
+  } else {
+    const poem = await db.prepare(`
+      SELECT id, title, slug, subtitle, content, content_type
+      FROM writings
+      WHERE status = 'Published' AND content_type = 'Poetry'
+      ORDER BY COALESCE(published_at, created_at) DESC
+      LIMIT 1
+    `).first() || {
+      id: 'sample_poem',
+      title: 'मौन के पदचाप',
+      slug: 'maun-ke-padchaap',
+      subtitle: 'एक अप्रकाशित विचार',
+      content: 'शब्द जब मौन से संवाद करते हैं,\nतब कविता जन्म लेती है।\nअनकही बातें, अनसुलझे रहस्य,\nपन्नों पर स्याही बन बहते हैं।'
+    };
+
+    const readUrl = `${siteUrl}/poems/${encodeURIComponent(poem.slug)}`;
+    const lines = (poem.content || '').split('\n').map(l => l.trim()).filter(Boolean);
+    const excerptLines = lines.slice(0, 6).join('<br>');
+    const excerptText = lines.slice(0, 6).join('\n');
+
+    subject = `[TEST PREVIEW] A new poem has arrived on Ashabd: ${poem.title}`;
+    emailHtml = renderPoemNotificationEmailHtml({
+      poemTitle: poem.title,
+      subtitle: poem.subtitle,
+      excerptHtml: excerptLines,
+      readUrl,
+      unsubscribeUrl: unsubUrl
+    });
+    emailText = renderPoemNotificationEmailText({
+      poemTitle: poem.title,
+      subtitle: poem.subtitle,
+      excerptText,
+      readUrl,
+      unsubscribeUrl: unsubUrl
+    });
+  }
 
   try {
     const res = await sendTransactionalEmail(env, {
       to: targetEmail,
-      from: env.EMAIL_FROM || 'Ashabd <ashabdpoetry0@gmail.com>',
-      replyTo: 'ashabdpoetry0@gmail.com',
-      subject: `[TEST PREVIEW] A new poem has arrived on Ashabd: ${poem.title}`,
+      subject,
       html: emailHtml,
       text: emailText
     });
 
+    const typeLabel = testType === 'welcome' ? 'welcome email' : 'poem notification';
     return jsonResponse({
       success: true,
       provider: res.provider,
       provider_message_id: res.messageId,
-      message: `परीक्षण सूचना ${targetEmail} पर सफलतापूर्वक प्रेषित (${res.provider}: ${res.messageId})!`
+      status: res.status,
+      message: `Test ${typeLabel} dispatched to ${targetEmail} via ${res.provider} (ID: ${res.messageId})!`
     });
   } catch (err) {
     return jsonResponse({ error: `Failed to send test email: ${err.message}` }, 500);
@@ -3169,8 +3269,6 @@ async function triggerPoemNotifications(env, poem, siteUrl) {
       try {
         const dispatchResult = await sendTransactionalEmail(env, {
           to: sub.email,
-          from: env.EMAIL_FROM || 'Ashabd <ashabdpoetry0@gmail.com>',
-          replyTo: 'ashabdpoetry0@gmail.com',
           subject: 'A new poem has arrived on Ashabd',
           html: emailHtml,
           text: emailText
@@ -6053,19 +6151,36 @@ function getAdminDashboardHtml() {
     </div>
   </div>
 
-  <!-- ==================== TEST POEM NOTIFICATION MODAL ==================== -->
+  <!-- ==================== TEST EMAIL NOTIFICATION MODAL ==================== -->
   <div id="testNotificationModal" class="modal-overlay">
     <div class="preview-modal-content" style="background: var(--surface); color: var(--text-main); border: 1px solid var(--surface-border); max-width: 500px; padding: 2rem;">
       <button class="preview-close-btn" style="color: var(--text-main); background: rgba(255,255,255,0.08);" onclick="closeTestPoemModal()">&times;</button>
-      <h3 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.4rem; color: var(--text-main);">Send Test Poem Notification</h3>
+      <h3 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.4rem; color: var(--text-main);">Send Test Email (परीक्षण ईमेल भेजें)</h3>
       <p style="font-size: 0.84rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 1.25rem;">
-        Dispatches a sample antique notification email to verify visual rendering and transactional email delivery.
+        Dispatches a sample antique notification or welcome email to verify visual rendering and transactional email delivery.
       </p>
 
       <form id="testNotificationForm" onsubmit="submitTestPoemNotification(event)">
         <div class="form-group" style="text-align: left; margin-bottom: 1rem;">
+          <label class="form-label" style="display: block; margin-bottom: 0.45rem; font-weight: 500;">Email Type (ईमेल प्रकार)</label>
+          <div style="display: flex; gap: 1.25rem;">
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.88rem;">
+              <input type="radio" name="testEmailType" value="welcome" checked>
+              <span>🎉 Welcome Email</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.88rem;">
+              <input type="radio" name="testEmailType" value="poem">
+              <span>📜 Poem Notification</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group" style="text-align: left; margin-bottom: 1rem;">
           <label class="form-label" for="testNotificationEmail">Recipient Email Address (प्राप्तकर्ता ईमेल)</label>
           <input type="email" id="testNotificationEmail" class="text-input" placeholder="admin@ashabd.in" required autocomplete="email">
+          <small style="display: block; font-size: 0.76rem; color: var(--text-muted); margin-top: 4px;">
+            Note: If using Resend in sandbox mode (<code>onboarding@resend.dev</code>), enter the email registered with your Resend account.
+          </small>
         </div>
         <div id="testNotificationFeedback" style="display: none; font-size: 0.84rem; line-height: 1.5; padding: 0.65rem 0.85rem; border-radius: var(--radius); margin-bottom: 1rem;"></div>
         <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
@@ -7783,12 +7898,141 @@ function getAdminDashboardHtml() {
             banner.style.background = 'rgba(239, 68, 68, 0.12)';
             banner.style.border = '1px solid rgba(239, 68, 68, 0.35)';
             banner.style.color = '#fca5a5';
-            banner.innerHTML = \`<strong>⚠️ No Email Provider Configured:</strong> Cloudflare Worker secrets (<code>RESEND_API_KEY</code>, <code>SENDGRID_API_KEY</code>, <code>POSTMARK_SERVER_TOKEN</code>, or <code>BREVO_API_KEY</code>) are not configured. Welcome emails and poem notifications cannot reach inboxes until a provider is connected in Cloudflare Settings → Variables and Secrets. (Intended sender: <code>ashabdpoetry0@gmail.com</code>).\`;
+            banner.innerHTML = \`
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.75rem;">
+                <div>
+                  <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                    <span>⚠️ Missing Configuration:</span> No Email Provider Configured
+                  </div>
+                  <div style="font-size: 0.85rem; line-height: 1.5; color: #fed7d7;">
+                    Cloudflare Worker secret <code>RESEND_API_KEY</code> is not configured.
+                    Welcome emails and new-poem alerts cannot reach inboxes until your Resend API key is connected.
+                  </div>
+                  <div style="font-size: 0.8rem; margin-top: 6px; color: #fbd38d;">
+                    💡 Set secret in terminal: <code>npx wrangler secret put RESEND_API_KEY</code> or via Cloudflare Dashboard &rarr; Workers &amp; Pages &rarr; my-poetry &rarr; Settings &rarr; Variables and Secrets.
+                  </div>
+                </div>
+                <div>
+                  <button type="button" onclick="openTestPoemModal()" class="action-btn" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.25); color: #fff; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 0.82rem;">
+                    🧪 Test Dispatch
+                  </button>
+                </div>
+              </div>
+            \`;
+          } else if (es.senderStatus === 'unsupported_public_domain') {
+            banner.style.background = 'rgba(245, 158, 11, 0.12)';
+            banner.style.border = '1px solid rgba(245, 158, 11, 0.4)';
+            banner.style.color = '#fde68a';
+            banner.innerHTML = \`
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.75rem;">
+                <div>
+                  <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                    <span>⚠️ Sender Configuration Required:</span> Resend Connected, but Sender Domain Unsupported
+                  </div>
+                  <div style="font-size: 0.85rem; line-height: 1.5; color: #fef3c7;">
+                    Resend cannot send from <code>\${escape(es.sender)}</code> because public email domains (<code>@\${escape(es.senderDomain)}</code>) cannot publish SPF/DKIM DNS records for third-party relays.
+                  </div>
+                  <div style="font-size: 0.8rem; margin-top: 6px; color: #fed7aa;">
+                    🔧 <strong>Action Required:</strong> Set <code>EMAIL_FROM</code> in Cloudflare to <code>Ashabd &lt;notifications@ashabd.in&gt;</code> (with domain verified on Resend) or <code>Ashabd &lt;onboarding@resend.dev&gt;</code> for testing. All reader replies will still go to <code>\${escape(es.replyTo)}</code>.
+                  </div>
+                </div>
+                <div>
+                  <button type="button" onclick="openTestPoemModal()" class="action-btn" style="background: rgba(245, 158, 11, 0.2); border: 1px solid rgba(245, 158, 11, 0.5); color: #fff; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 0.82rem;">
+                    🧪 Test Dispatch
+                  </button>
+                </div>
+              </div>
+            \`;
+          } else if (es.senderStatus === 'sandbox') {
+            banner.style.background = 'rgba(56, 189, 248, 0.1)';
+            banner.style.border = '1px solid rgba(56, 189, 248, 0.35)';
+            banner.style.color = '#bae6fd';
+            banner.innerHTML = \`
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.75rem;">
+                <div>
+                  <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                    <span>ℹ️ Resend Sandbox Mode Active:</span> <code>\${escape(es.sender)}</code>
+                  </div>
+                  <div style="font-size: 0.85rem; line-height: 1.5; color: #e0f2fe;">
+                    Resend is operating in developer sandbox mode (<code>onboarding@resend.dev</code>). Resend will deliver emails <strong>only to the email address registered with your Resend account</strong>. To deliver to public subscribers, add and verify <code>ashabd.in</code> in Resend and update <code>EMAIL_FROM</code>.
+                  </div>
+                  <div style="font-size: 0.8rem; margin-top: 4px; color: #93c5fd;">
+                    <strong>Reply-To:</strong> <code>\${escape(es.replyTo)}</code>
+                  </div>
+                </div>
+                <div>
+                  <button type="button" onclick="openTestPoemModal()" class="action-btn" style="background: rgba(56, 189, 248, 0.2); border: 1px solid rgba(56, 189, 248, 0.5); color: #fff; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 0.82rem;">
+                    🧪 Test Dispatch
+                  </button>
+                </div>
+              </div>
+            \`;
+          } else if (es.senderStatus === 'pending_dns' || es.senderStatus === 'domain_not_added') {
+            banner.style.background = 'rgba(245, 158, 11, 0.12)';
+            banner.style.border = '1px solid rgba(245, 158, 11, 0.4)';
+            banner.style.color = '#fde68a';
+            banner.innerHTML = \`
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.75rem;">
+                <div>
+                  <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                    <span>⚠️ Resend Domain Not Fully Verified:</span> <code>\${escape(es.senderDomain)}</code>
+                  </div>
+                  <div style="font-size: 0.85rem; line-height: 1.5; color: #fef3c7;">
+                    \${escape(es.senderDetails)}
+                  </div>
+                  <div style="font-size: 0.8rem; margin-top: 6px; color: #fed7aa;">
+                    🔧 Add DNS records (DKIM, SPF) in Cloudflare DNS for <code>\${escape(es.senderDomain)}</code> to authorize sending.
+                  </div>
+                </div>
+                <div>
+                  <button type="button" onclick="openTestPoemModal()" class="action-btn" style="background: rgba(245, 158, 11, 0.2); border: 1px solid rgba(245, 158, 11, 0.5); color: #fff; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 0.82rem;">
+                    🧪 Test Dispatch
+                  </button>
+                </div>
+              </div>
+            \`;
+          } else if (es.senderStatus === 'invalid_key') {
+            banner.style.background = 'rgba(239, 68, 68, 0.12)';
+            banner.style.border = '1px solid rgba(239, 68, 68, 0.35)';
+            banner.style.color = '#fca5a5';
+            banner.innerHTML = \`
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.75rem;">
+                <div>
+                  <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 4px;">
+                    ❌ Invalid Resend API Key (HTTP 401 Unauthorized)
+                  </div>
+                  <div style="font-size: 0.85rem; line-height: 1.5; color: #fed7d7;">
+                    The configured <code>RESEND_API_KEY</code> was rejected by Resend. Please verify your API key at resend.com/api-keys and update it in Cloudflare.
+                  </div>
+                </div>
+                <div>
+                  <button type="button" onclick="openTestPoemModal()" class="action-btn" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.25); color: #fff; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 0.82rem;">
+                    🧪 Test Dispatch
+                  </button>
+                </div>
+              </div>
+            \`;
           } else {
             banner.style.background = 'rgba(34, 197, 94, 0.08)';
             banner.style.border = '1px solid rgba(34, 197, 94, 0.25)';
             banner.style.color = '#86efac';
-            banner.innerHTML = \`<strong>🟢 Connected Email Provider:</strong> <span style="text-transform: capitalize; font-weight: 600;">\${escape(es.provider)}</span> &nbsp;|&nbsp; <strong>Sender:</strong> <code>\${escape(es.sender)}</code> &nbsp;|&nbsp; <strong>Reply-To:</strong> <code>\${escape(es.replyTo)}</code>\`;
+            banner.innerHTML = \`
+              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+                <div>
+                  <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 3px;">
+                    🟢 Connected Email Provider: <span style="text-transform: capitalize;">\${escape(es.provider)}</span> (Verified)
+                  </div>
+                  <div style="font-size: 0.83rem; color: #bbf7d0;">
+                    <strong>Sender:</strong> <code>\${escape(es.sender)}</code> &nbsp;|&nbsp; <strong>Reply-To:</strong> <code>\${escape(es.replyTo)}</code>
+                  </div>
+                </div>
+                <div>
+                  <button type="button" onclick="openTestPoemModal()" class="action-btn" style="background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.4); color: #86efac; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 0.82rem; font-weight: 600;">
+                    🧪 Send Test Email
+                  </button>
+                </div>
+              </div>
+            \`;
           }
         }
 
@@ -8105,6 +8349,8 @@ function getAdminDashboardHtml() {
       const emailInput = document.getElementById('testNotificationEmail');
       const feedback = document.getElementById('testNotificationFeedback');
       const btn = document.getElementById('sendTestPoemBtn');
+      const typeInput = document.querySelector('input[name="testEmailType"]:checked');
+      const emailType = typeInput ? typeInput.value : 'welcome';
 
       if (!emailInput || !feedback || !btn) return;
 
@@ -8119,7 +8365,7 @@ function getAdminDashboardHtml() {
         const res = await fetch('/api/subscribers/send-test-notification', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email })
+          body: JSON.stringify({ email, type: emailType })
         });
         const data = await res.json();
 
@@ -8128,7 +8374,8 @@ function getAdminDashboardHtml() {
           feedback.style.background = 'rgba(63, 185, 80, 0.14)';
           feedback.style.border = '1px solid rgba(63, 185, 80, 0.3)';
           feedback.style.color = '#3fb950';
-          feedback.innerText = '✅ ' + (data.message || 'Test notification dispatched successfully!');
+          feedback.innerText = '✅ ' + (data.message || 'Test email dispatched successfully!');
+          await loadSubscribers();
         } else {
           feedback.style.background = 'rgba(248, 81, 73, 0.14)';
           feedback.style.border = '1px solid rgba(248, 81, 73, 0.3)';

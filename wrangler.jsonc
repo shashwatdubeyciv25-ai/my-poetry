@@ -13,5 +13,9 @@
       "database_name": "ashabd-db",
       "database_id": "4bfd735c-4955-46b0-a1d5-d8caf792f798"
     }
-  ]
+  ],
+  "vars": {
+    "EMAIL_FROM": "Ashabd <notifications@ashabd.in>",
+    "EMAIL_REPLY_TO": "ashabdpoetry0@gmail.com"
+  }
 }

@@ -1686,19 +1686,36 @@
     </div>
   </div>
 
-  <!-- ==================== TEST POEM NOTIFICATION MODAL ==================== -->
+  <!-- ==================== TEST EMAIL NOTIFICATION MODAL ==================== -->
   <div id="testNotificationModal" class="modal-overlay">
     <div class="preview-modal-content" style="background: var(--surface); color: var(--text-main); border: 1px solid var(--surface-border); max-width: 500px; padding: 2rem;">
       <button class="preview-close-btn" style="color: var(--text-main); background: rgba(255,255,255,0.08);" onclick="closeTestPoemModal()">&times;</button>
-      <h3 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.4rem; color: var(--text-main);">Send Test Poem Notification</h3>
+      <h3 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.4rem; color: var(--text-main);">Send Test Email (परीक्षण ईमेल भेजें)</h3>
       <p style="font-size: 0.84rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 1.25rem;">
-        Dispatches a sample antique notification email to verify visual rendering and transactional email delivery.
+        Dispatches a sample antique notification or welcome email to verify visual rendering and transactional email delivery.
       </p>
 
       <form id="testNotificationForm" onsubmit="submitTestPoemNotification(event)">
         <div class="form-group" style="text-align: left; margin-bottom: 1rem;">
+          <label class="form-label" style="display: block; margin-bottom: 0.45rem; font-weight: 500;">Email Type (ईमेल प्रकार)</label>
+          <div style="display: flex; gap: 1.25rem;">
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.88rem;">
+              <input type="radio" name="testEmailType" value="welcome" checked>
+              <span>🎉 Welcome Email</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.88rem;">
+              <input type="radio" name="testEmailType" value="poem">
+              <span>📜 Poem Notification</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group" style="text-align: left; margin-bottom: 1rem;">
           <label class="form-label" for="testNotificationEmail">Recipient Email Address (प्राप्तकर्ता ईमेल)</label>
           <input type="email" id="testNotificationEmail" class="text-input" placeholder="admin@ashabd.in" required autocomplete="email">
+          <small style="display: block; font-size: 0.76rem; color: var(--text-muted); margin-top: 4px;">
+            Note: If using Resend in sandbox mode (<code>onboarding@resend.dev</code>), enter the email registered with your Resend account.
+          </small>
         </div>
         <div id="testNotificationFeedback" style="display: none; font-size: 0.84rem; line-height: 1.5; padding: 0.65rem 0.85rem; border-radius: var(--radius); margin-bottom: 1rem;"></div>
         <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
@@ -3416,12 +3433,141 @@
             banner.style.background = 'rgba(239, 68, 68, 0.12)';
             banner.style.border = '1px solid rgba(239, 68, 68, 0.35)';
             banner.style.color = '#fca5a5';
-            banner.innerHTML = `<strong>⚠️ No Email Provider Configured:</strong> Cloudflare Worker secrets (<code>RESEND_API_KEY</code>, <code>SENDGRID_API_KEY</code>, <code>POSTMARK_SERVER_TOKEN</code>, or <code>BREVO_API_KEY</code>) are not configured. Welcome emails and poem notifications cannot reach inboxes until a provider is connected in Cloudflare Settings → Variables and Secrets. (Intended sender: <code>ashabdpoetry0@gmail.com</code>).`;
+            banner.innerHTML = `
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.75rem;">
+                <div>
+                  <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                    <span>⚠️ Missing Configuration:</span> No Email Provider Configured
+                  </div>
+                  <div style="font-size: 0.85rem; line-height: 1.5; color: #fed7d7;">
+                    Cloudflare Worker secret <code>RESEND_API_KEY</code> is not configured.
+                    Welcome emails and new-poem alerts cannot reach inboxes until your Resend API key is connected.
+                  </div>
+                  <div style="font-size: 0.8rem; margin-top: 6px; color: #fbd38d;">
+                    💡 Set secret in terminal: <code>npx wrangler secret put RESEND_API_KEY</code> or via Cloudflare Dashboard &rarr; Workers &amp; Pages &rarr; my-poetry &rarr; Settings &rarr; Variables and Secrets.
+                  </div>
+                </div>
+                <div>
+                  <button type="button" onclick="openTestPoemModal()" class="action-btn" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.25); color: #fff; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 0.82rem;">
+                    🧪 Test Dispatch
+                  </button>
+                </div>
+              </div>
+            `;
+          } else if (es.senderStatus === 'unsupported_public_domain') {
+            banner.style.background = 'rgba(245, 158, 11, 0.12)';
+            banner.style.border = '1px solid rgba(245, 158, 11, 0.4)';
+            banner.style.color = '#fde68a';
+            banner.innerHTML = `
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.75rem;">
+                <div>
+                  <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                    <span>⚠️ Sender Configuration Required:</span> Resend Connected, but Sender Domain Unsupported
+                  </div>
+                  <div style="font-size: 0.85rem; line-height: 1.5; color: #fef3c7;">
+                    Resend cannot send from <code>${escape(es.sender)}</code> because public email domains (<code>@${escape(es.senderDomain)}</code>) cannot publish SPF/DKIM DNS records for third-party relays.
+                  </div>
+                  <div style="font-size: 0.8rem; margin-top: 6px; color: #fed7aa;">
+                    🔧 <strong>Action Required:</strong> Set <code>EMAIL_FROM</code> in Cloudflare to <code>Ashabd &lt;notifications@ashabd.in&gt;</code> (with domain verified on Resend) or <code>Ashabd &lt;onboarding@resend.dev&gt;</code> for testing. All reader replies will still go to <code>${escape(es.replyTo)}</code>.
+                  </div>
+                </div>
+                <div>
+                  <button type="button" onclick="openTestPoemModal()" class="action-btn" style="background: rgba(245, 158, 11, 0.2); border: 1px solid rgba(245, 158, 11, 0.5); color: #fff; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 0.82rem;">
+                    🧪 Test Dispatch
+                  </button>
+                </div>
+              </div>
+            `;
+          } else if (es.senderStatus === 'sandbox') {
+            banner.style.background = 'rgba(56, 189, 248, 0.1)';
+            banner.style.border = '1px solid rgba(56, 189, 248, 0.35)';
+            banner.style.color = '#bae6fd';
+            banner.innerHTML = `
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.75rem;">
+                <div>
+                  <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                    <span>ℹ️ Resend Sandbox Mode Active:</span> <code>${escape(es.sender)}</code>
+                  </div>
+                  <div style="font-size: 0.85rem; line-height: 1.5; color: #e0f2fe;">
+                    Resend is operating in developer sandbox mode (<code>onboarding@resend.dev</code>). Resend will deliver emails <strong>only to the email address registered with your Resend account</strong>. To deliver to public subscribers, add and verify <code>ashabd.in</code> in Resend and update <code>EMAIL_FROM</code>.
+                  </div>
+                  <div style="font-size: 0.8rem; margin-top: 4px; color: #93c5fd;">
+                    <strong>Reply-To:</strong> <code>${escape(es.replyTo)}</code>
+                  </div>
+                </div>
+                <div>
+                  <button type="button" onclick="openTestPoemModal()" class="action-btn" style="background: rgba(56, 189, 248, 0.2); border: 1px solid rgba(56, 189, 248, 0.5); color: #fff; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 0.82rem;">
+                    🧪 Test Dispatch
+                  </button>
+                </div>
+              </div>
+            `;
+          } else if (es.senderStatus === 'pending_dns' || es.senderStatus === 'domain_not_added') {
+            banner.style.background = 'rgba(245, 158, 11, 0.12)';
+            banner.style.border = '1px solid rgba(245, 158, 11, 0.4)';
+            banner.style.color = '#fde68a';
+            banner.innerHTML = `
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.75rem;">
+                <div>
+                  <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                    <span>⚠️ Resend Domain Not Fully Verified:</span> <code>${escape(es.senderDomain)}</code>
+                  </div>
+                  <div style="font-size: 0.85rem; line-height: 1.5; color: #fef3c7;">
+                    ${escape(es.senderDetails)}
+                  </div>
+                  <div style="font-size: 0.8rem; margin-top: 6px; color: #fed7aa;">
+                    🔧 Add DNS records (DKIM, SPF) in Cloudflare DNS for <code>${escape(es.senderDomain)}</code> to authorize sending.
+                  </div>
+                </div>
+                <div>
+                  <button type="button" onclick="openTestPoemModal()" class="action-btn" style="background: rgba(245, 158, 11, 0.2); border: 1px solid rgba(245, 158, 11, 0.5); color: #fff; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 0.82rem;">
+                    🧪 Test Dispatch
+                  </button>
+                </div>
+              </div>
+            `;
+          } else if (es.senderStatus === 'invalid_key') {
+            banner.style.background = 'rgba(239, 68, 68, 0.12)';
+            banner.style.border = '1px solid rgba(239, 68, 68, 0.35)';
+            banner.style.color = '#fca5a5';
+            banner.innerHTML = `
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.75rem;">
+                <div>
+                  <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 4px;">
+                    ❌ Invalid Resend API Key (HTTP 401 Unauthorized)
+                  </div>
+                  <div style="font-size: 0.85rem; line-height: 1.5; color: #fed7d7;">
+                    The configured <code>RESEND_API_KEY</code> was rejected by Resend. Please verify your API key at resend.com/api-keys and update it in Cloudflare.
+                  </div>
+                </div>
+                <div>
+                  <button type="button" onclick="openTestPoemModal()" class="action-btn" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.25); color: #fff; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 0.82rem;">
+                    🧪 Test Dispatch
+                  </button>
+                </div>
+              </div>
+            `;
           } else {
             banner.style.background = 'rgba(34, 197, 94, 0.08)';
             banner.style.border = '1px solid rgba(34, 197, 94, 0.25)';
             banner.style.color = '#86efac';
-            banner.innerHTML = `<strong>🟢 Connected Email Provider:</strong> <span style="text-transform: capitalize; font-weight: 600;">${escape(es.provider)}</span> &nbsp;|&nbsp; <strong>Sender:</strong> <code>${escape(es.sender)}</code> &nbsp;|&nbsp; <strong>Reply-To:</strong> <code>${escape(es.replyTo)}</code>`;
+            banner.innerHTML = `
+              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+                <div>
+                  <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 3px;">
+                    🟢 Connected Email Provider: <span style="text-transform: capitalize;">${escape(es.provider)}</span> (Verified)
+                  </div>
+                  <div style="font-size: 0.83rem; color: #bbf7d0;">
+                    <strong>Sender:</strong> <code>${escape(es.sender)}</code> &nbsp;|&nbsp; <strong>Reply-To:</strong> <code>${escape(es.replyTo)}</code>
+                  </div>
+                </div>
+                <div>
+                  <button type="button" onclick="openTestPoemModal()" class="action-btn" style="background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.4); color: #86efac; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 0.82rem; font-weight: 600;">
+                    🧪 Send Test Email
+                  </button>
+                </div>
+              </div>
+            `;
           }
         }
 
@@ -3738,6 +3884,8 @@
       const emailInput = document.getElementById('testNotificationEmail');
       const feedback = document.getElementById('testNotificationFeedback');
       const btn = document.getElementById('sendTestPoemBtn');
+      const typeInput = document.querySelector('input[name="testEmailType"]:checked');
+      const emailType = typeInput ? typeInput.value : 'welcome';
 
       if (!emailInput || !feedback || !btn) return;
 
@@ -3752,7 +3900,7 @@
         const res = await fetch('/api/subscribers/send-test-notification', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email })
+          body: JSON.stringify({ email, type: emailType })
         });
         const data = await res.json();
 
@@ -3761,7 +3909,8 @@
           feedback.style.background = 'rgba(63, 185, 80, 0.14)';
           feedback.style.border = '1px solid rgba(63, 185, 80, 0.3)';
           feedback.style.color = '#3fb950';
-          feedback.innerText = '✅ ' + (data.message || 'Test notification dispatched successfully!');
+          feedback.innerText = '✅ ' + (data.message || 'Test email dispatched successfully!');
+          await loadSubscribers();
         } else {
           feedback.style.background = 'rgba(248, 81, 73, 0.14)';
           feedback.style.border = '1px solid rgba(248, 81, 73, 0.3)';
