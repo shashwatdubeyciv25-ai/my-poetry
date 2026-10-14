@@ -172,6 +172,41 @@ html, body {
   margin: 0 auto;
 }
 
+/* ---------------- Clickable Sacred Word Link ---------------- */
+.sacred-word-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 0;
+  margin: 0 auto;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sacred-word-link picture {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+}
+
+.sacred-word-link .sacred-word-img {
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-user-drag: none;
+}
+
+.sacred-word-link:focus-visible {
+  outline: 2px dashed rgba(43, 24, 13, 0.45);
+  outline-offset: 6px;
+  border-radius: 4px;
+}
+
 /* Screen-reader accessibility for sacred word */
 .sr-only {
   position: absolute;
