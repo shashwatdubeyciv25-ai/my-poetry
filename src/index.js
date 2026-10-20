@@ -73,6 +73,21 @@ export default {
       }
 
       // ------------------------------------------------------------------------
+      // 2b. ROUTE GROUP: Public Poem Reactions (/api/poems/:id/reaction, /api/writings/:id/reaction)
+      // ------------------------------------------------------------------------
+      const reactionMatch = pathname.match(/^\/api\/(?:public\/writings|writings|poems)\/([a-zA-Z0-9_\-]+)\/reaction$/);
+      if (reactionMatch) {
+        const idOrSlug = decodeURIComponent(reactionMatch[1]);
+        if (request.method === 'POST') {
+          return handlePoemReactionSubmit(idOrSlug, request, env);
+        }
+        if (request.method === 'GET') {
+          return handleGetPoemReactions(idOrSlug, request, env);
+        }
+        return jsonResponse({ error: 'Method not allowed' }, 405);
+      }
+
+      // ------------------------------------------------------------------------
       // 3. ROUTE GROUP: Admin Content Management APIs (/api/writings/*)
       // ------------------------------------------------------------------------
       if (pathname.startsWith('/api/writings')) {
@@ -508,6 +523,82 @@ async function ensureSubscribersTable(db) {
   } catch (e) {
     console.warn('ensureSubscribersTable notice:', e?.message || e);
   }
+}
+
+let reactionsTableEnsured = false;
+async function ensurePoemReactionsTable(db) {
+  if (!db || reactionsTableEnsured) return;
+  try {
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS poem_reactions (
+        id TEXT PRIMARY KEY,
+        writing_id TEXT NOT NULL,
+        visitor_id TEXT NOT NULL,
+        reaction TEXT NOT NULL,
+        ip_hash TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    `).run();
+
+    try {
+      await db.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_poem_reactions_writing_visitor ON poem_reactions(writing_id, visitor_id)`).run();
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_poem_reactions_writing_reaction ON poem_reactions(writing_id, reaction)`).run();
+    } catch (_) {}
+
+    reactionsTableEnsured = true;
+  } catch (e) {
+    console.warn('ensurePoemReactionsTable notice:', e?.message || e);
+  }
+}
+
+const REACTION_COOKIE_NAME = 'ashabd_reaction_uid';
+
+function getReactionVisitorId(request) {
+  const cookieHeader = request.headers.get('Cookie') || '';
+  const cookies = parseCookies(cookieHeader);
+  const existingCookie = cookies[REACTION_COOKIE_NAME];
+  const headerToken = request.headers.get('x-reaction-visitor-id');
+  const candidate = headerToken || existingCookie;
+
+  if (candidate && /^[a-zA-Z0-9_\-]{16,64}$/.test(candidate)) {
+    return { visitorId: candidate, isNew: false };
+  }
+
+  const array = new Uint8Array(16);
+  crypto.getRandomValues(array);
+  const newId = Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
+  return { visitorId: newId, isNew: true };
+}
+
+async function getReactionIpHash(request, env) {
+  const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || '127.0.0.1';
+  const salt = env.ANALYTICS_SALT || env.SESSION_SECRET || 'ashabd-reaction-salt-2026';
+  const data = new TextEncoder().encode(`${ip}|${salt}`);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hashBuffer)).slice(0, 8).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+const reactionRateLimitWindow = new Map();
+
+function isReactionRateLimited(ipHash, now) {
+  const windowMs = 30000;
+  const maxRequests = 25;
+  const timestamps = reactionRateLimitWindow.get(ipHash) || [];
+  const recent = timestamps.filter(t => now - t < windowMs);
+  if (recent.length >= maxRequests) {
+    return true;
+  }
+  recent.push(now);
+  reactionRateLimitWindow.set(ipHash, recent);
+  if (reactionRateLimitWindow.size > 2000) {
+    for (const [k, v] of reactionRateLimitWindow.entries()) {
+      if (!v.some(t => now - t < windowMs)) {
+        reactionRateLimitWindow.delete(k);
+      }
+    }
+  }
+  return false;
 }
 
 /* ==========================================================================
@@ -3903,6 +3994,182 @@ async function handlePublicWritingsList(request, env) {
 }
 
 /**
+ * Submit or update a visitor reaction (like / dislike / toggle) for a poem
+ */
+async function handlePoemReactionSubmit(idOrSlug, request, env) {
+  const db = env.DB || env['ashabd-db'];
+  if (!db) {
+    return jsonResponse({ error: 'Database not available' }, 503);
+  }
+
+  const now = Date.now();
+  const ipHash = await getReactionIpHash(request, env);
+
+  if (isReactionRateLimited(ipHash, now)) {
+    return jsonResponse({ error: 'कृपया कुछ क्षण प्रतीक्षा करें (Too many requests. Please wait a moment).' }, 429);
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch (_) {
+    return jsonResponse({ error: 'Invalid JSON payload' }, 400);
+  }
+
+  const requestedReaction = body?.reaction;
+  if (requestedReaction !== 'like' && requestedReaction !== 'dislike' && requestedReaction !== null && requestedReaction !== 'remove') {
+    return jsonResponse({ error: "Reaction must be 'like', 'dislike', or null" }, 400);
+  }
+
+  await ensureWritingsTable(db);
+  await ensurePoemReactionsTable(db);
+
+  // Resolve stable writing ID from UUID or slug
+  const writing = await db.prepare(`
+    SELECT id, status FROM writings WHERE (id = ? OR slug = ?) AND status = 'Published'
+  `).bind(idOrSlug, idOrSlug).first();
+
+  if (!writing) {
+    return jsonResponse({ error: 'Poem not found or not published' }, 404);
+  }
+
+  const writingId = writing.id;
+  const { visitorId, isNew } = getReactionVisitorId(request);
+
+  // Look up existing reaction for this visitor and poem
+  const existing = await db.prepare(`
+    SELECT id, reaction FROM poem_reactions WHERE writing_id = ? AND visitor_id = ?
+  `).bind(writingId, visitorId).first();
+
+  let finalReaction = null;
+  if (requestedReaction === 'remove' || requestedReaction === null) {
+    finalReaction = null;
+  } else if (existing && existing.reaction === requestedReaction) {
+    // Visitor clicked the active reaction again -> toggle off
+    finalReaction = null;
+  } else {
+    // Set or switch reaction ('like' or 'dislike')
+    finalReaction = requestedReaction;
+  }
+
+  if (finalReaction === null) {
+    if (existing) {
+      await db.prepare(`
+        DELETE FROM poem_reactions WHERE writing_id = ? AND visitor_id = ?
+      `).bind(writingId, visitorId).run();
+    }
+  } else {
+    const reactionId = existing?.id || 'pr_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
+    await db.prepare(`
+      INSERT INTO poem_reactions (id, writing_id, visitor_id, reaction, ip_hash, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(writing_id, visitor_id) DO UPDATE SET
+        reaction = excluded.reaction,
+        ip_hash = excluded.ip_hash,
+        updated_at = excluded.updated_at
+    `).bind(reactionId, writingId, visitorId, finalReaction, ipHash, now, now).run();
+  }
+
+  // Calculate fresh actual counts from database
+  const stats = await db.prepare(`
+    SELECT 
+      COUNT(CASE WHEN reaction = 'like' THEN 1 END) as likes,
+      COUNT(CASE WHEN reaction = 'dislike' THEN 1 END) as dislikes
+    FROM poem_reactions
+    WHERE writing_id = ?
+  `).bind(writingId).first();
+
+  const resData = {
+    success: true,
+    writing_id: writingId,
+    likes: stats?.likes || 0,
+    dislikes: stats?.dislikes || 0,
+    user_reaction: finalReaction
+  };
+
+  const responseHeaders = new Headers({
+    'Content-Type': 'application/json',
+    'Cache-Control': 'no-cache, no-store, must-revalidate'
+  });
+
+  if (isNew) {
+    responseHeaders.append(
+      'Set-Cookie',
+      `${REACTION_COOKIE_NAME}=${visitorId}; Path=/; Max-Age=31536000; SameSite=Lax; Secure; HttpOnly`
+    );
+  }
+
+  return new Response(JSON.stringify(resData), {
+    status: 200,
+    headers: responseHeaders
+  });
+}
+
+/**
+ * Get reaction counts and current visitor reaction
+ */
+async function handleGetPoemReactions(idOrSlug, request, env) {
+  const db = env.DB || env['ashabd-db'];
+  if (!db) {
+    return jsonResponse({ error: 'Database not available' }, 503);
+  }
+
+  await ensureWritingsTable(db);
+  await ensurePoemReactionsTable(db);
+
+  const writing = await db.prepare(`
+    SELECT id, status FROM writings WHERE (id = ? OR slug = ?) AND status = 'Published'
+  `).bind(idOrSlug, idOrSlug).first();
+
+  if (!writing) {
+    return jsonResponse({ error: 'Poem not found or not published' }, 404);
+  }
+
+  const writingId = writing.id;
+  const { visitorId, isNew } = getReactionVisitorId(request);
+
+  const stats = await db.prepare(`
+    SELECT 
+      COUNT(CASE WHEN reaction = 'like' THEN 1 END) as likes,
+      COUNT(CASE WHEN reaction = 'dislike' THEN 1 END) as dislikes
+    FROM poem_reactions
+    WHERE writing_id = ?
+  `).bind(writingId).first();
+
+  let userReaction = null;
+  if (!isNew) {
+    const existing = await db.prepare(`
+      SELECT reaction FROM poem_reactions WHERE writing_id = ? AND visitor_id = ?
+    `).bind(writingId, visitorId).first();
+    userReaction = existing?.reaction || null;
+  }
+
+  const resData = {
+    writing_id: writingId,
+    likes: stats?.likes || 0,
+    dislikes: stats?.dislikes || 0,
+    user_reaction: userReaction
+  };
+
+  const responseHeaders = new Headers({
+    'Content-Type': 'application/json',
+    'Cache-Control': 'no-cache, no-store, must-revalidate'
+  });
+
+  if (isNew) {
+    responseHeaders.append(
+      'Set-Cookie',
+      `${REACTION_COOKIE_NAME}=${visitorId}; Path=/; Max-Age=31536000; SameSite=Lax; Secure; HttpOnly`
+    );
+  }
+
+  return new Response(JSON.stringify(resData), {
+    status: 200,
+    headers: responseHeaders
+  });
+}
+
+/**
  * Public SSR Page for /poetry/:slug and /writing/:slug
  */
 async function handlePublicPoemPage(slug, request, env) {
@@ -3933,13 +4200,48 @@ async function handlePublicPoemPage(slug, request, env) {
       });
     }
 
-    const html = renderPoemHtml(writing);
+    await ensurePoemReactionsTable(db);
+    const { visitorId, isNew } = getReactionVisitorId(request);
+
+    // Fetch actual reactions for this poem
+    const stats = await db.prepare(`
+      SELECT 
+        COUNT(CASE WHEN reaction = 'like' THEN 1 END) as likes,
+        COUNT(CASE WHEN reaction = 'dislike' THEN 1 END) as dislikes
+      FROM poem_reactions
+      WHERE writing_id = ?
+    `).bind(writing.id).first();
+
+    let userReaction = null;
+    if (!isNew) {
+      const userRow = await db.prepare(`
+        SELECT reaction FROM poem_reactions WHERE writing_id = ? AND visitor_id = ?
+      `).bind(writing.id, visitorId).first();
+      userReaction = userRow?.reaction || null;
+    }
+
+    const html = renderPoemHtml(writing, {
+      likesCount: stats?.likes || 0,
+      dislikesCount: stats?.dislikes || 0,
+      userReaction,
+      visitorId
+    });
+
+    const headers = new Headers({
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-cache, no-store, must-revalidate'
+    });
+
+    if (isNew) {
+      headers.append(
+        'Set-Cookie',
+        `${REACTION_COOKIE_NAME}=${visitorId}; Path=/; Max-Age=31536000; SameSite=Lax; Secure; HttpOnly`
+      );
+    }
+
     return new Response(html, {
       status: 200,
-      headers: {
-        'Content-Type': 'text/html; charset=utf-8',
-        'Cache-Control': 'no-cache, no-store, must-revalidate'
-      }
+      headers
     });
   } catch (err) {
     console.error('Public poem query error:', err);
@@ -4028,13 +4330,16 @@ function formatContentType(type) {
   return type;
 }
 
-function renderPoemHtml(poem) {
+function renderPoemHtml(poem, reactionData = {}) {
   const safeTitle = escapeHtml(poem.title);
   const safeSubtitle = poem.subtitle ? escapeHtml(poem.subtitle) : '';
   const safeContent = escapeHtml(poem.content);
   const safeType = escapeHtml(formatContentType(poem.content_type));
   const dateStr = formatDate(poem.published_at || poem.created_at);
   const tagsList = poem.tags ? poem.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
+  const likesCount = Number(reactionData.likesCount) || 0;
+  const dislikesCount = Number(reactionData.dislikesCount) || 0;
+  const userReaction = reactionData.userReaction || null;
 
   return `<!DOCTYPE html>
 <html lang="hi">
@@ -4294,10 +4599,141 @@ function renderPoemHtml(poem) {
     }
     .ink-link:hover { opacity: 1; color: var(--ink-primary); }
 
+    /* Poem Reactions (Like / Dislike) */
+    .poem-reactions-section {
+      text-align: center;
+      margin: 2.8rem 0 3.2rem;
+      position: relative;
+      z-index: 5;
+    }
+
+    .reactions-divider {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1.25rem;
+      margin-bottom: 1.6rem;
+      opacity: 0.6;
+    }
+
+    .reactions-divider .divider-line {
+      height: 1px;
+      width: 50px;
+      background: linear-gradient(90deg, transparent, var(--ink-faint), transparent);
+    }
+
+    .reactions-divider .divider-ornament {
+      font-size: 0.95rem;
+      color: var(--ink-muted);
+    }
+
+    .reactions-toolbar {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      padding: 0.35rem 0.8rem;
+      background: rgba(86, 46, 23, 0.04);
+      border: 1px solid rgba(86, 46, 23, 0.16);
+      border-radius: 28px;
+      box-shadow: inset 0 1px 2px rgba(34, 19, 9, 0.04);
+    }
+
+    .reaction-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--ink-secondary);
+      padding: 0.45rem 0.95rem;
+      border-radius: 20px;
+      font-family: 'Tiro Devanagari Hindi', 'Noto Serif Devanagari', Georgia, serif;
+      font-size: 0.88rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      outline: none;
+    }
+
+    .reaction-btn .reaction-icon {
+      width: 17px;
+      height: 17px;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), stroke 0.2s ease, fill 0.2s ease;
+    }
+
+    .reaction-btn .reaction-count {
+      font-size: 0.88rem;
+      font-variant-numeric: tabular-nums;
+      font-family: inherit;
+      color: var(--ink-primary);
+      min-width: 0.8rem;
+    }
+
+    .reaction-btn:hover {
+      color: var(--ink-primary);
+      background: rgba(86, 46, 23, 0.07);
+      border-color: rgba(86, 46, 23, 0.18);
+    }
+
+    .reaction-btn:hover .reaction-icon {
+      transform: scale(1.12);
+    }
+
+    .reaction-btn.active {
+      background: rgba(43, 24, 13, 0.12);
+      border-color: rgba(43, 24, 13, 0.35);
+      color: var(--ink-primary);
+      font-weight: 600;
+    }
+
+    .reaction-btn.active .reaction-icon {
+      stroke: var(--ink-primary);
+      fill: rgba(43, 24, 13, 0.20);
+    }
+
+    .reaction-btn:active {
+      transform: scale(0.96);
+    }
+
+    .reaction-btn:focus-visible {
+      outline: 2px dashed rgba(86, 46, 23, 0.45);
+      outline-offset: 3px;
+    }
+
+    .reaction-btn:disabled {
+      opacity: 0.65;
+      cursor: default;
+    }
+
+    .reactions-separator {
+      color: var(--ink-faint);
+      font-size: 1.1rem;
+      line-height: 1;
+      user-select: none;
+      opacity: 0.7;
+    }
+
+    .reaction-feedback {
+      min-height: 1.3rem;
+      font-size: 0.78rem;
+      color: var(--ink-muted);
+      font-style: italic;
+      margin-top: 0.5rem;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
     @media (max-width: 600px) {
       body { padding: 1.5rem 1rem 3rem; }
       .poem-title { font-size: 2.1rem; }
       .poem-content { font-size: 1.15rem; line-height: 1.95; }
+      .reactions-toolbar { padding: 0.3rem 0.6rem; gap: 0.5rem; }
+      .reaction-btn { padding: 0.4rem 0.75rem; font-size: 0.84rem; }
     }
   </style>
 </head>
@@ -4329,6 +4765,50 @@ function renderPoemHtml(poem) {
         ${tagsList.map(t => `<span class="ink-tag">#${escapeHtml(t)}</span>`).join('')}
       </div>` : ''}
 
+      <!-- Like / Dislike Poem Reactions -->
+      <section class="poem-reactions-section" aria-label="रचना प्रतिक्रिया">
+        <div class="reactions-divider" aria-hidden="true">
+          <span class="divider-line"></span>
+          <span class="divider-ornament">❦</span>
+          <span class="divider-line"></span>
+        </div>
+
+        <div class="reactions-toolbar" role="group" aria-label="Like or dislike this poem">
+          <button 
+            type="button" 
+            class="reaction-btn reaction-btn-like ${userReaction === 'like' ? 'active' : ''}" 
+            id="reactionLikeBtn" 
+            data-reaction="like" 
+            aria-pressed="${userReaction === 'like' ? 'true' : 'false'}"
+            aria-label="पसंद करें (Like) - ${likesCount} पसंद"
+            title="पसंद (Like)"
+          >
+            <svg class="reaction-icon" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path>
+            </svg>
+            <span class="reaction-count" id="likeCount">${likesCount}</span>
+          </button>
+
+          <span class="reactions-separator" aria-hidden="true">·</span>
+
+          <button 
+            type="button" 
+            class="reaction-btn reaction-btn-dislike ${userReaction === 'dislike' ? 'active' : ''}" 
+            id="reactionDislikeBtn" 
+            data-reaction="dislike" 
+            aria-pressed="${userReaction === 'dislike' ? 'true' : 'false'}"
+            aria-label="नापसंद करें (Dislike) - ${dislikesCount} नापसंद"
+            title="नापसंद (Dislike)"
+          >
+            <svg class="reaction-icon" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"></path>
+            </svg>
+            <span class="reaction-count" id="dislikeCount">${dislikesCount}</span>
+          </button>
+        </div>
+        <div class="reaction-feedback" id="reactionFeedback" aria-live="polite"></div>
+      </section>
+
       <footer class="manuscript-colophon">
         <span class="colophon-symbol">❧</span>
         <div class="social-links">
@@ -4344,6 +4824,122 @@ function renderPoemHtml(poem) {
     </article>
   </main>
   <script src="/analytics.js" defer></script>
+  <script>
+    (function () {
+      const poemId = ${JSON.stringify(poem.id)};
+      const likeBtn = document.getElementById('reactionLikeBtn');
+      const dislikeBtn = document.getElementById('reactionDislikeBtn');
+      const likeCountEl = document.getElementById('likeCount');
+      const dislikeCountEl = document.getElementById('dislikeCount');
+      const feedbackEl = document.getElementById('reactionFeedback');
+      if (!likeBtn || !dislikeBtn) return;
+
+      let inFlight = false;
+      let feedbackTimeout = null;
+
+      function notifyFeedback(text) {
+        if (!feedbackEl) return;
+        feedbackEl.textContent = text;
+        feedbackEl.style.opacity = '1';
+        if (feedbackTimeout) clearTimeout(feedbackTimeout);
+        feedbackTimeout = setTimeout(function () {
+          feedbackEl.style.opacity = '0';
+        }, 2800);
+      }
+
+      function applyUi(activeType, likes, dislikes) {
+        if (activeType === 'like') {
+          likeBtn.classList.add('active');
+          likeBtn.setAttribute('aria-pressed', 'true');
+          dislikeBtn.classList.remove('active');
+          dislikeBtn.setAttribute('aria-pressed', 'false');
+        } else if (activeType === 'dislike') {
+          dislikeBtn.classList.add('active');
+          dislikeBtn.setAttribute('aria-pressed', 'true');
+          likeBtn.classList.remove('active');
+          likeBtn.setAttribute('aria-pressed', 'false');
+        } else {
+          likeBtn.classList.remove('active');
+          likeBtn.setAttribute('aria-pressed', 'false');
+          dislikeBtn.classList.remove('active');
+          dislikeBtn.setAttribute('aria-pressed', 'false');
+        }
+
+        if (typeof likes === 'number' && likeCountEl) {
+          likeCountEl.textContent = likes;
+          likeBtn.setAttribute('aria-label', 'पसंद करें (Like) - ' + likes + ' पसंद');
+        }
+        if (typeof dislikes === 'number' && dislikeCountEl) {
+          dislikeCountEl.textContent = dislikes;
+          dislikeBtn.setAttribute('aria-label', 'नापसंद करें (Dislike) - ' + dislikes + ' नापसंद');
+        }
+      }
+
+      async function triggerReaction(type) {
+        if (inFlight) return;
+        inFlight = true;
+        likeBtn.disabled = true;
+        dislikeBtn.disabled = true;
+
+        const currentActive = likeBtn.classList.contains('active') ? 'like'
+                            : dislikeBtn.classList.contains('active') ? 'dislike'
+                            : null;
+        const curLikes = parseInt(likeCountEl ? likeCountEl.textContent : '0', 10) || 0;
+        const curDislikes = parseInt(dislikeCountEl ? dislikeCountEl.textContent : '0', 10) || 0;
+
+        const targetReaction = (currentActive === type) ? null : type;
+        let optLikes = curLikes;
+        let optDislikes = curDislikes;
+
+        if (currentActive === 'like') optLikes = Math.max(0, optLikes - 1);
+        if (currentActive === 'dislike') optDislikes = Math.max(0, optDislikes - 1);
+        if (targetReaction === 'like') optLikes += 1;
+        if (targetReaction === 'dislike') optDislikes += 1;
+
+        applyUi(targetReaction, optLikes, optDislikes);
+
+        try {
+          const res = await fetch('/api/poems/' + encodeURIComponent(poemId) + '/reaction', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
+            body: JSON.stringify({ reaction: targetReaction })
+          });
+
+          if (!res.ok) {
+            const errData = await res.json().catch(function () { return {}; });
+            throw new Error(errData.error || ('Server error (' + res.status + ')'));
+          }
+
+          const data = await res.json();
+          if (data && data.success) {
+            applyUi(data.user_reaction, data.likes, data.dislikes);
+            if (data.user_reaction === 'like') {
+              notifyFeedback('धन्यवाद! आपकी पसंद दर्ज कर ली गई है।');
+            } else if (data.user_reaction === 'dislike') {
+              notifyFeedback('आपकी प्रतिक्रिया दर्ज कर ली गई है।');
+            } else {
+              notifyFeedback('प्रतिक्रिया हटा दी गई।');
+            }
+          } else {
+            throw new Error((data && data.error) ? data.error : 'Action failed');
+          }
+        } catch (err) {
+          applyUi(currentActive, curLikes, curDislikes);
+          notifyFeedback(err.message || 'प्रतिक्रिया सहेजने में त्रुटि हुई।');
+        } finally {
+          inFlight = false;
+          likeBtn.disabled = false;
+          dislikeBtn.disabled = false;
+        }
+      }
+
+      likeBtn.addEventListener('click', function () { triggerReaction('like'); });
+      dislikeBtn.addEventListener('click', function () { triggerReaction('dislike'); });
+    })();
+  </script>
 </body>
 </html>`;
 }
