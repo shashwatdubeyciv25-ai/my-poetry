@@ -245,105 +245,147 @@
 
 /**
  * ==========================================================================
- * Ashabd (अशब्द) — 3D Ancient Notice Board & Subscription Interactive Engine
+ * Ashabd (अशब्द) — Ancient Notice Board & Aged Parchment Subscription Popup
  * ==========================================================================
  */
-(function initNoticeBoard() {
+(function initSubscriptionPopup() {
   'use strict';
 
   function setup() {
     const promptSheet = document.getElementById('paperPromptSheet');
-    const formSheet = document.getElementById('paperFormSheet');
-    const closeBtn = document.getElementById('paperCloseBtn');
-    const emailInput = document.getElementById('subscriberEmail');
-    const submitBtn = document.getElementById('subscribeSubmitBtn');
-    const feedback = document.getElementById('subscribeFeedback');
-    const form = document.getElementById('subscribeForm');
+    const overlay = document.getElementById('subscriptionPopupOverlay');
+    const modal = document.getElementById('subscriptionPopupModal');
+    const closeBtn = document.getElementById('popupCloseBtn');
+    const doneBtn = document.getElementById('popupDoneBtn');
+    const formView = document.getElementById('popupFormView');
+    const successView = document.getElementById('popupSuccessView');
+    const form = document.getElementById('popupSubscribeForm');
+    const emailInput = document.getElementById('popupEmailInput');
+    const submitBtn = document.getElementById('popupSubmitBtn');
+    const feedback = document.getElementById('popupFeedback');
+    const successHi = document.getElementById('popupSuccessHi');
+    const successEn = document.getElementById('popupSuccessEn');
+    const successMessage = document.getElementById('popupSuccessMessage');
 
-    if (!promptSheet || !formSheet) return;
+    if (!promptSheet || !overlay || !modal) return;
 
-    let isAnimating = false;
+    let lastFocusedElement = null;
+    let isSubmitting = false;
 
-    // Trigger the paper-falling tumble animation and reveal subscription form
-    function triggerPaperFall() {
-      if (isAnimating) return;
-      isAnimating = true;
+    // Open popup modal over homepage
+    function openPopup() {
+      lastFocusedElement = document.activeElement;
+      overlay.classList.add('popup-open');
+      overlay.setAttribute('aria-hidden', 'false');
+      promptSheet.setAttribute('aria-expanded', 'true');
+      document.body.classList.add('popup-scroll-locked');
 
-      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-      if (prefersReducedMotion) {
-        promptSheet.style.display = 'none';
-        formSheet.style.display = 'block';
-        formSheet.setAttribute('aria-hidden', 'false');
-        formSheet.classList.add('paper-revealed');
-        isAnimating = false;
-        if (emailInput) setTimeout(() => emailInput.focus(), 60);
-        return;
+      // Focus email input or done button immediately & in next frame
+      if (successView && successView.style.display === 'flex') {
+        if (doneBtn) {
+          doneBtn.focus();
+          setTimeout(() => doneBtn.focus(), 50);
+        }
+      } else if (emailInput) {
+        emailInput.focus();
+        setTimeout(() => emailInput.focus(), 50);
       }
-
-      promptSheet.classList.add('paper-falling');
-
-      // Tumble animation duration is 0.75s; transition to revealed form at 0.55s
-      setTimeout(() => {
-        promptSheet.style.display = 'none';
-        promptSheet.classList.remove('paper-falling');
-
-        formSheet.style.display = 'block';
-        formSheet.setAttribute('aria-hidden', 'false');
-        formSheet.classList.remove('paper-revealed');
-        void formSheet.offsetWidth; // Force DOM reflow
-        formSheet.classList.add('paper-revealed');
-
-        isAnimating = false;
-        if (emailInput) setTimeout(() => emailInput.focus(), 80);
-      }, 550);
     }
 
-    // Dismiss subscription form and pin prompt paper back in place
-    function closeFormSheet() {
-      formSheet.classList.remove('paper-revealed');
-      formSheet.style.display = 'none';
-      formSheet.setAttribute('aria-hidden', 'true');
+    // Close popup modal and restore focus
+    function closePopup() {
+      overlay.classList.remove('popup-open');
+      overlay.setAttribute('aria-hidden', 'true');
+      promptSheet.setAttribute('aria-expanded', 'false');
+      document.body.classList.remove('popup-scroll-locked');
 
-      promptSheet.style.display = 'block';
-      promptSheet.classList.remove('paper-falling');
-
-      const formView = document.getElementById('paperFormView');
-      const successView = document.getElementById('paperSuccessView');
-      if (formView) formView.style.display = 'block';
-      if (successView) successView.style.display = 'none';
-
+      // Clear any transient error message
       if (feedback) {
         feedback.style.display = 'none';
-        feedback.className = 'paper-feedback-msg';
+        feedback.className = 'popup-feedback-msg';
         feedback.textContent = '';
       }
-      if (emailInput) emailInput.value = '';
+
+      // Return focus to trigger element
+      if (lastFocusedElement && typeof lastFocusedElement.focus === 'function') {
+        lastFocusedElement.focus();
+      } else if (promptSheet) {
+        promptSheet.focus();
+      }
     }
 
-    // Prompt paper click and keyboard events
-    promptSheet.addEventListener('click', triggerPaperFall);
+    // Notice board prompt sheet click & keyboard activation
+    promptSheet.addEventListener('click', (e) => {
+      e.preventDefault();
+      openPopup();
+    });
+
     promptSheet.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
         e.preventDefault();
-        triggerPaperFall();
+        openPopup();
       }
     });
 
-    // Close button
+    // Close button (× in top corner)
     if (closeBtn) {
       closeBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        closeFormSheet();
+        e.preventDefault();
+        closePopup();
       });
     }
 
-    let isSubmitting = false;
+    // Done button on success view
+    if (doneBtn) {
+      doneBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        closePopup();
+      });
+    }
 
-    // Global form submission handler
-    window.handleSubscriptionSubmit = async function (event) {
+    // Click outside popup parchment (on darkened overlay) to dismiss
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        closePopup();
+      }
+    });
+
+    // Keyboard handlers: Escape to close and Tab focus trap
+    window.addEventListener('keydown', (e) => {
+      if (!overlay.classList.contains('popup-open')) return;
+
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closePopup();
+        return;
+      }
+
+      if (e.key === 'Tab') {
+        const focusable = Array.from(modal.querySelectorAll(
+          'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )).filter(el => el.offsetParent !== null || (el.getClientRects && el.getClientRects().length > 0));
+        if (!focusable.length) return;
+
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
+    });
+
+    // Form submission handler
+    window.handlePopupSubscribe = async function (event) {
       if (event && event.preventDefault) event.preventDefault();
-
       if (isSubmitting) return;
       if (!emailInput || !submitBtn || !feedback) return;
 
@@ -351,7 +393,7 @@
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
       if (!email || !emailRegex.test(email)) {
-        feedback.className = 'paper-feedback-msg feedback-error';
+        feedback.className = 'popup-feedback-msg feedback-error';
         feedback.textContent = 'Please enter a valid email address.';
         feedback.style.display = 'block';
         emailInput.focus();
@@ -377,38 +419,31 @@
         const data = await response.json();
 
         if (response.ok && data.success) {
-          const formView = document.getElementById('paperFormView');
-          const successView = document.getElementById('paperSuccessView');
-          const successHi = document.getElementById('paperSuccessHi');
-          const successEn = document.getElementById('paperSuccessEn');
-          const successBody = document.getElementById('paperSuccessBody');
-
-          if (successHi && successEn && successBody) {
+          if (successHi && successEn && successMessage) {
             successHi.textContent = 'धन्यवाद!';
-            successEn.textContent = '(Thank You!)';
+            successEn.textContent = 'Thank you for subscribing';
             if (data.already_active) {
-              successBody.textContent = 'You are already subscribed to Ashabd (आप पहले से ही जुड़े हैं)।';
+              successMessage.textContent = 'You are already subscribed to Ashabd (आप पहले से ही जुड़े हैं)।';
             } else {
-              successBody.textContent = 'Please check your email to confirm your subscription.';
+              successMessage.textContent = 'Please check your email to confirm your subscription.';
             }
           }
 
           if (formView) formView.style.display = 'none';
           if (successView) {
-            successView.style.display = 'block';
-            successView.classList.remove('paper-fade-in');
-            void successView.offsetWidth;
-            successView.classList.add('paper-fade-in');
+            successView.style.display = 'flex';
           }
-
+          if (doneBtn) {
+            setTimeout(() => doneBtn.focus(), 60);
+          }
           emailInput.value = '';
         } else {
-          feedback.className = 'paper-feedback-msg feedback-error';
+          feedback.className = 'popup-feedback-msg feedback-error';
           feedback.textContent = data.error || 'Something went wrong. Please try again.';
           feedback.style.display = 'block';
         }
       } catch (err) {
-        feedback.className = 'paper-feedback-msg feedback-error';
+        feedback.className = 'popup-feedback-msg feedback-error';
         feedback.textContent = 'Network error. Please check your connection.';
         feedback.style.display = 'block';
       } finally {
@@ -418,15 +453,8 @@
       }
     };
 
-    function escapeHtml(str) {
-      if (!str) return '';
-      return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-    }
+    // Backwards-compatibility alias
+    window.handleSubscriptionSubmit = window.handlePopupSubscribe;
   }
 
   if (document.readyState === 'loading') {

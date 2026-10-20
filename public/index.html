@@ -114,7 +114,7 @@
         <!-- Paper Pinned Zone on Board -->
         <div class="paper-pin-zone" id="paperPinZone">
           <!-- Initial Prompt Paper ("Click to Subscribe") -->
-          <div class="pinned-paper-sheet" id="paperPromptSheet" role="button" tabindex="0" aria-label="Click to subscribe to new poems" title="Click to subscribe">
+          <div class="pinned-paper-sheet" id="paperPromptSheet" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" aria-label="Click to subscribe to new poems" title="Click to subscribe">
             <picture class="paper-bg-picture">
               <source srcset="pinned_paper.webp" type="image/webp">
               <img src="pinned_paper.png" alt="" class="paper-bg-img" draggable="false" aria-hidden="true">
@@ -133,45 +133,7 @@
             </div>
           </div>
 
-          <!-- Active Form Paper ("Stay Connected") - Revealed after first paper falls -->
-          <div class="pinned-paper-sheet paper-form-sheet" id="paperFormSheet" style="display: none;" aria-hidden="true">
-            <picture class="paper-bg-picture">
-              <source srcset="pinned_paper.webp" type="image/webp">
-              <img src="pinned_paper.png" alt="" class="paper-bg-img" draggable="false" aria-hidden="true">
-            </picture>
-            <div class="paper-inner-content">
-              <button type="button" class="paper-close-btn" id="paperCloseBtn" aria-label="Close subscription form" title="Close form">&times;</button>
-
-              <!-- State A: Subscription Form View -->
-              <div id="paperFormView" class="paper-view-container paper-form-view">
-                <h3 class="paper-form-title">Stay Connected</h3>
-                <p class="paper-form-desc">Receive a note when a new poem arrives.</p>
-
-                <form id="subscribeForm" class="paper-subscription-form" onsubmit="handleSubscriptionSubmit(event)">
-                  <div class="paper-input-group">
-                    <input type="email" id="subscriberEmail" class="paper-input" placeholder="Your email address" required autocomplete="email" aria-label="Your email address" spellcheck="false">
-                  </div>
-                  <button type="submit" id="subscribeSubmitBtn" class="paper-submit-btn">
-                    <span>Subscribe</span>
-                  </button>
-                </form>
-
-                <div id="subscribeFeedback" class="paper-feedback-msg" style="display: none;" role="alert"></div>
-              </div>
-
-              <!-- State B: Opaque Aged-Paper Thank-You Panel View -->
-              <div id="paperSuccessView" class="paper-view-container paper-success-view" style="display: none;" role="status">
-                <div class="paper-success-card">
-                  <h3 class="paper-success-heading" id="paperSuccessHeading">
-                    <span class="paper-success-hi" id="paperSuccessHi">धन्यवाद!</span>
-                    <span class="paper-success-en" id="paperSuccessEn">(Thank You!)</span>
-                  </h3>
-                  <p class="paper-success-body" id="paperSuccessBody">Please check your email to confirm your subscription.</p>
-                </div>
-              </div>
-            </div>
           </div>
-        </div>
       </div>
     </aside>
 
@@ -225,6 +187,68 @@
       </div>
     </footer>
   </main>
+
+  <!-- Elegant Aged Parchment Subscription Popup Modal -->
+  <div class="subscription-popup-overlay" id="subscriptionPopupOverlay" role="dialog" aria-modal="true" aria-labelledby="subscriptionPopupTitle" aria-hidden="true">
+      <div class="subscription-popup-parchment" id="subscriptionPopupModal">
+        <!-- Close Button in Top Corner -->
+        <button type="button" class="subscription-popup-close" id="popupCloseBtn" aria-label="Close subscription popup" title="Close popup">&times;</button>
+
+        <!-- Antique Decorative Flourish -->
+        <div class="popup-flourish-top" aria-hidden="true">
+          <svg viewBox="0 0 120 18" width="76" height="12" fill="currentColor">
+            <path d="M60 1 C54 7 42 9 30 9 C18 9 6 6 0 9 C6 12 18 9 30 9 C42 9 54 11 60 17 C66 11 78 9 90 9 C102 9 114 12 120 9 C114 6 102 9 90 9 C78 9 66 7 60 1 Z"/>
+          </svg>
+        </div>
+
+        <!-- State 1: Active Subscription Form -->
+        <div class="popup-view" id="popupFormView">
+          <h2 class="popup-title" id="subscriptionPopupTitle">Subscribe to Ashabd</h2>
+          <p class="popup-subtext">Receive a note whenever a new poem is published.</p>
+
+          <form id="popupSubscribeForm" class="popup-form" novalidate onsubmit="handlePopupSubscribe(event)">
+            <div class="popup-field">
+              <label for="popupEmailInput" class="popup-label">Email address</label>
+              <input
+                type="email"
+                id="popupEmailInput"
+                name="email"
+                class="popup-input"
+                placeholder="Enter your email address"
+                required
+                autocomplete="email"
+                spellcheck="false"
+              >
+            </div>
+
+            <button type="submit" id="popupSubmitBtn" class="popup-submit-btn">
+              <span>Subscribe</span>
+            </button>
+          </form>
+
+          <div id="popupFeedback" class="popup-feedback-msg" style="display: none;" role="alert"></div>
+
+          <p class="popup-privacy">Only new poems. No spam.</p>
+        </div>
+
+        <!-- State 2: Thank-You / Success View -->
+        <div class="popup-view popup-success-view" id="popupSuccessView" style="display: none;" role="status">
+          <div class="popup-success-icon" aria-hidden="true">✦</div>
+          <h2 class="popup-title popup-success-title" id="popupSuccessTitle">
+            <span class="popup-success-hi" id="popupSuccessHi">धन्यवाद!</span>
+            <span class="popup-success-en" id="popupSuccessEn">Thank you for subscribing</span>
+          </h2>
+          <p class="popup-subtext popup-success-message" id="popupSuccessMessage">
+            Please check your email to confirm your subscription.
+          </p>
+          <div class="popup-success-actions">
+            <button type="button" class="popup-done-btn" id="popupDoneBtn">
+              <span>Done</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
 
 
 
